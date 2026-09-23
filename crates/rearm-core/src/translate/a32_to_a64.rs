@@ -352,6 +352,16 @@ pub fn translate_a32(ins: &Ins, pc: u32, out: &mut A64) -> Result<bool, Translat
         }
         Ins::Crc32 { .. } => return Ok(false),
 
+        // ======== atomics ========
+        Ins::ExclLoad { size, rt, rn } => {
+            let sz = match size { Size::B8 => 0u8, Size::H16 => 1, Size::W32 => 2, _ => 3 };
+            out.ldxr(sz, x(*rt), x(*rn));
+        }
+        Ins::ExclStore { size, rs, rt, rn } => {
+            let sz = match size { Size::B8 => 0u8, Size::H16 => 1, Size::W32 => 2, _ => 3 };
+            out.stxr(sz, x(*rs), x(*rt), x(*rn));
+        }
+
         // ======== VFP scalar ========
         Ins::VfpBin { op, d, n, m, dbl } => {
             let (rn, rm_, rd) = (*n as XR, *m as XR, *d as XR);
