@@ -66,6 +66,10 @@ pub fn encode_a32(ins: &Ins) -> Result<u32, EncodeErr> {
             (Cond::Al.bits() as u32) << 28 | (sel << 21) | ((*s as u32) << 20)
                 | ((*rdhi as u32) << 16) | ((*rdlo as u32) << 12) | ((*rm as u32) << 8) | (0b1001 << 4) | *rn as u32
         }
+        Ins::Umaal { rdlo, rdhi, rn, rm } => {
+            (Cond::Al.bits() as u32) << 28 | (0b010 << 21)
+                | ((*rdhi as u32) << 16) | ((*rdlo as u32) << 12) | ((*rm as u32) << 8) | (0b1001 << 4) | *rn as u32
+        }
         Ins::Smulxy { rd, rn, rm, x, y } => {
             (Cond::Al.bits() as u32) << 28 | (0b10110 << 20)
                 | ((*rd as u32) << 12) | ((*rm as u32) << 8)
@@ -87,6 +91,10 @@ pub fn encode_a32(ins: &Ins) -> Result<u32, EncodeErr> {
                 | ((0b1000 | (y.bit() as u32) << 2) << 4) | *rn as u32
         }
         Ins::Smuad { rd, rn, rm, x } => smuad_family(0b10000, 0b0001 | (*x as u32) << 1, *rd, 0xF, *rm, *rn),
+        Ins::Smmul { rd, rn, rm, ra, sub, round } => {
+            let op2 = if *sub { 0b1101u32 } else { 0b0001u32 } | (*round as u32) << 1;
+            smuad_family(0b10101, op2, *rd, ra.unwrap_or(0xF), *rm, *rn)
+        }
         Ins::Smlad { rd, rn, rm, ra, x } => smuad_family(0b10000, 0b0001 | (*x as u32) << 1, *rd, *ra, *rm, *rn),
         Ins::Smusd { rd, rn, rm, x } => smuad_family(0b10000, 0b0101 | (*x as u32) << 1, *rd, 0xF, *rm, *rn),
         Ins::Smlsd { rd, rn, rm, ra, x } => smuad_family(0b10000, 0b0101 | (*x as u32) << 1, *rd, *ra, *rm, *rn),
@@ -100,6 +108,7 @@ pub fn encode_a32(ins: &Ins) -> Result<u32, EncodeErr> {
         Ins::Qsub { rd, rn, rm } => qfam(0b1001, *rd, *rn, *rm),
         Ins::Qdadd { rd, rn, rm } => qfam(0b1010, *rd, *rn, *rm),
         Ins::Qdsub { rd, rn, rm } => qfam(0b1011, *rd, *rn, *rm),
+        Ins::Clrex => 0xF57F_F01F,
         Ins::Bx { rm } => 0xE12F_FF10 | *rm as u32,
         Ins::Bxj { rm } => 0xE12F_FF20 | *rm as u32,
         Ins::BlxReg { rm } => 0xE12F_FF30 | *rm as u32,
@@ -229,22 +238,26 @@ pub fn encode_a32(ins: &Ins) -> Result<u32, EncodeErr> {
         Ins::Clz { rd, rm } => (Cond::Al.bits() as u32) << 28 | (0b10110 << 20) | (0xF << 16) | ((*rd as u32) << 12) | (0xF << 8) | (0b0001 << 4) | *rm as u32,
         Ins::Rbit { rd, rm } => (Cond::Al.bits() as u32) << 28 | (0b011 << 25) | (0b01111 << 20) | (0xF << 16) | ((*rd as u32) << 12) | (0xF << 8) | (0b0011 << 4) | *rm as u32,
         Ins::Sbfx { rd, rn, lsb, width } => {
-            (Cond::Al.bits() as u32) << 28 | (0b011 << 25) | (0b11010 << 20)
-                | (((*width - 1) as u32) << 16) | ((*rd as u32) << 12) | ((*lsb as u32) << 7) | (0b0101 << 4) | *rn as u32
+            (Cond::Al.bits() as u32) << 28 | (0b011 << 25) | (0b1101 << 21)
+                | (((*width - 1) as u32 & 0x1F) << 16) | ((*rd as u32) << 12) | ((*lsb as u32) << 7) | (0b0101 << 4) | *rn as u32
         }
         Ins::Ubfx { rd, rn, lsb, width } => {
-            (Cond::Al.bits() as u32) << 28 | (0b011 << 25) | (0b11110 << 20)
-                | (((*width - 1) as u32) << 16) | ((*rd as u32) << 12) | ((*lsb as u32) << 7) | (0b0101 << 4) | *rn as u32
+            (Cond::Al.bits() as u32) << 28 | (0b011 << 25) | (0b1111 << 21)
+                | (((*width - 1) as u32 & 0x1F) << 16) | ((*rd as u32) << 12) | ((*lsb as u32) << 7) | (0b0101 << 4) | *rn as u32
         }
         Ins::Bfc { rd, lsb, width } => {
             let msb = *lsb + *width - 1;
-            (Cond::Al.bits() as u32) << 28 | (0b011 << 25) | (0b11100 << 20)
-                | (msb as u32) << 16 | ((*rd as u32) << 12) | ((*lsb as u32) << 7) | (0b0001 << 4) | 0xF
+            (Cond::Al.bits() as u32) << 28 | (0b011 << 25) | (0b1110 << 21)
+                | (msb as u32 & 0x1F) << 16 | ((*rd as u32) << 12) | ((*lsb as u32) << 7) | (0b0001 << 4) | 0xF
         }
         Ins::Bfi { rd, rn, lsb, width } => {
             let msb = *lsb + *width - 1;
-            (Cond::Al.bits() as u32) << 28 | (0b011 << 25) | (0b11100 << 20)
-                | (msb as u32) << 16 | ((*rd as u32) << 12) | ((*lsb as u32) << 7) | (0b0001 << 4) | *rn as u32
+            (Cond::Al.bits() as u32) << 28 | (0b011 << 25) | (0b1110 << 21)
+                | (msb as u32 & 0x1F) << 16 | ((*rd as u32) << 12) | ((*lsb as u32) << 7) | (0b0001 << 4) | *rn as u32
+        }
+        Ins::Udf { imm } => {
+            (Cond::Al.bits() as u32) << 28 | (0b0111_1111 << 20)
+                | (((*imm as u32) >> 4) << 8) | (0xF << 4) | (*imm as u32 & 0xF)
         }
         Ins::Extend { op, rd, rn, rm, rot } => {
             let (op1, add) = match op {

@@ -132,9 +132,15 @@ fn encode_one(op: &NeonOp, dt: Dt, q: bool, d: VIdx, n: VIdx, m: VIdx, imm: u8) 
     use NeonOp::*;
 
     // ======== 3-same ========
+    // SHIFT-BY-REGISTER family (opc 4/5): Vn at (3:0)+M, Vm at (19:16)+N (ARM ARM quirk).
     let same = |u: bool, opc: u32, op4: bool| -> u32 {
-        base(u) | (d4 << 22) | (sz << 20) | (vn << 16) | (vd << 12) | (opc << 8)
-            | (n5 << 7) | (q << 6) | (m5 << 5) | ((op4 as u32) << 4) | vm
+        let (f19_16, n7, f3_0, m5v) = if opc == 4 || opc == 5 {
+            (vm, m5, vn, n5) // swapped: n → (3:0)+M, m → (19:16)+N
+        } else {
+            (vn, n5, vm, m5)
+        };
+        base(u) | (d4 << 22) | (sz << 20) | (f19_16 << 16) | (vd << 12) | (opc << 8)
+            | (n7 << 7) | (q << 6) | (m5v << 5) | ((op4 as u32) << 4) | f3_0
     };
     let same_no_sz = |u: bool, opc: u32, op4: bool, szx: u32| -> u32 {
         base(u) | (d4 << 22) | (szx << 20) | (vn << 16) | (vd << 12) | (opc << 8)
@@ -161,11 +167,11 @@ fn encode_one(op: &NeonOp, dt: Dt, q: bool, d: VIdx, n: VIdx, m: VIdx, imm: u8) 
         (Min, Dt::F32) => Some(((false, 15, false), 2)),
         (Recps, Dt::F32) => Some(((false, 15, true), 0)),
         (Rsqrts, Dt::F32) => Some(((false, 15, true), 2)),
-        (Add, Dt::F64) => Some(((false, 11, false), 1)),
         (AddP, Dt::F32) => Some(((true, 13, false), 0)),
         (Mul, Dt::F32) => Some(((true, 13, true), 0)),
-        (CmpGt, Dt::F32) => Some(((true, 14, false), 0)),
-        (CmpGe, Dt::F32) => Some(((true, 14, false), 2)),
+        (CmpGt, Dt::F32) => Some(((true, 14, false), 2)),   // vcgt.f32 [sz=10]
+        (CmpGe, Dt::F32) => Some(((true, 14, false), 0)),    // vcge.f32 [sz=00]
+        (AbsDiff, Dt::F32) => Some(((true, 13, false), 2)),  // vabd.f32
         (MaxP, Dt::F32) => Some(((true, 15, false), 0)),
         (MinP, Dt::F32) => Some(((true, 15, false), 2)),
         _ => None,
@@ -206,6 +212,8 @@ fn encode_one(op: &NeonOp, dt: Dt, q: bool, d: VIdx, n: VIdx, m: VIdx, imm: u8) 
         Min => Some((true, 6, true)),
         AbsDiff if imm == 0 && !matches!(dt, Dt::U8|Dt::U16|Dt::U32) => Some((false, 7, false)),
         AbsDiff if imm == 0 => Some((true, 7, false)),
+        Aba if !matches!(dt, Dt::U8|Dt::U16|Dt::U32) => Some((false, 7, true)),
+        Aba => Some((true, 7, true)),
         Add => Some((false, 8, false)),
         Sub => Some((true, 8, false)),
         Tst => Some((false, 8, true)),
@@ -219,7 +227,8 @@ fn encode_one(op: &NeonOp, dt: Dt, q: bool, d: VIdx, n: VIdx, m: VIdx, imm: u8) 
         MinP if !matches!(dt, Dt::U8|Dt::U16|Dt::U32) => Some((false, 10, true)),
         MinP => Some((true, 10, true)),
         AddP => Some((false, 11, true)),
-        QdmulH => Some((true, 11, false)),
+        QdmulH if !matches!(dt, Dt::U8|Dt::U16|Dt::U32) => Some((false, 11, false)),
+        Qrdmulh if !matches!(dt, Dt::U8|Dt::U16|Dt::U32) => Some((true, 11, false)),
         _ => None,
     };
     if let Some((u, opc, op4)) = int {

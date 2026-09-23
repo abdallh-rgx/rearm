@@ -53,11 +53,21 @@ pub fn decode_neon_data(word: u32) -> Result<Ins, DecodeErr> {
     let op4 = bit(word, 4);
     let vm4 = bits(word, 3, 0);
     let vd = ((d4 as u32) << 4 | vd4) as VIdx;
-    let vm = ((m5 as u32) << 4 | vm4) as VIdx;
+    let vm_orig = ((m5 as u32) << 4 | vm4) as VIdx; // standard Vm for non-3-same sections
+    let vm = vm_orig;
 
     if !g23 {
         // ======== 3-same ========
-        let n = ((b7 as u32) << 4 | f19_16) as VIdx;
+        // SHIFT-BY-REGISTER family (VSHL/VQSHL/VRSHL/VQRSHL, opc 4/5) has N/M
+        // fields SWAPPED vs other 3-same ops (ARM ARM quirk; LLVM-verified:
+        // vshl.s64 d0,d1,d2 = 0xf2320401 → Vn at bits(3:0), Vm at bits(19:16)).
+        let shift_reg_family = bits(word, 11, 8) == 4 || bits(word, 11, 8) == 5;
+        let (n, m_src) = if shift_reg_family {
+            (((m5 as u32) << 4 | vm4) as VIdx, ((b7 as u32) << 4 | f19_16) as VIdx)
+        } else {
+            (((b7 as u32) << 4 | f19_16) as VIdx, ((m5 as u32) << 4 | vm4) as VIdx)
+        };
+        let vm = m_src;
         use NeonOp::*;
         // logical family (opc=1, op=1)
         if opc == 1 && op4 {
@@ -68,25 +78,28 @@ pub fn decode_neon_data(word: u32) -> Result<Ins, DecodeErr> {
             };
             return Ok(Ins::Neon { op, dt: Dt::I8, q, d: vd, n, m: vm, imm: 0, index: 0 });
         }
-        // FP families (opc 11..15)
-        if (11..=15).contains(&opc) {
-            let fdt = if sz == 1 { Dt::F64 } else { Dt::F32 };
-            let sub = sz == 2;
+        // FP families (opc 12..=15) — A32 NEON FP is f32-only (f64 vector ops
+        // don't exist in A32; those are VFP scalar, decoded elsewhere).
+        // LLVM-verified: vadd.f32=f2000d02, vsub=f2210d02, vceq=f2010e02,
+        // vcge=f3010e02, vcgt=f3210e02 (U=1: sz00=ge, sz10=gt!), vabd.f32=f3210d02.
+        if (12..=15).contains(&opc) {
+            let fdt = Dt::F32;
+            let sub = sz >= 2; // bit21: add/sub, eq / ge-vs-gt, max/min selector
             let op = match (u, opc, op4, sub) {
-                (false, 11, false, _) if sz == 1 => Add,   // vadd.f64
                 (false, 13, false, false) => Add,           // vadd.f32
                 (false, 13, false, true) => Sub,            // vsub.f32
                 (false, 13, true, false) => Mla,            // vmla.f32
                 (false, 13, true, true) => Mls,             // vmls.f32
+                (true, 13, false, false) => AddP,            // vpadd.f32
+                (true, 13, false, true) => AbsDiff,         // vabd.f32
+                (true, 13, true, false) => Mul,              // vmul.f32
                 (false, 14, false, false) => CmpEq,         // vceq.f32
+                (true, 14, false, false) => CmpGe,          // vcge.f32  [sz=00]
+                (true, 14, false, true) => CmpGt,           // vcgt.f32  [sz=10]
                 (false, 15, false, false) => Max,           // vmax.f32
                 (false, 15, false, true) => Min,            // vmin.f32
                 (false, 15, true, false) => Recps,          // vrecps
                 (false, 15, true, true) => Rsqrts,          // vrsqrts
-                (true, 13, false, false) => AddP,            // vpadd.f32
-                (true, 13, true, false) => Mul,              // vmul.f32
-                (true, 14, false, false) => CmpGt,          // vcgt.f32
-                (true, 14, false, true) => CmpGe,           // vcge.f32
                 (true, 15, false, false) => MaxP,            // vpmax.f32
                 (true, 15, false, true) => MinP,             // vpmin.f32
                 _ => return Ok(Ins::Unsupported { group: "neon-3same-fp" }),
@@ -108,12 +121,14 @@ pub fn decode_neon_data(word: u32) -> Result<Ins, DecodeErr> {
             (false, 6, false) => Max,     // vmax.s
             (false, 6, true) => Min,      // vmin.s
             (false, 7, false) => AbsDiff,  // vabd.s
+            (false, 7, true) => Aba,       // vaba.s (LLVM: vaba.s32 = f2210712)
             (false, 8, false) => Add,     // vadd
             (false, 8, true) => Tst,      // vtst
             (false, 9, false) => Mla,     // vmla
             (false, 9, true) => Mul,      // vmul
             (false, 10, false) => MaxP,   // vpmax.s
             (false, 10, true) => MinP,    // vpmin.s
+            (false, 11, false) => QdmulH,  // vqdmulh.s (LLVM: vqdmulh.s16 = f2110b02)
             (false, 11, true) => AddP,    // vpadd
             (true, 0, false) => AddHn,   // vhadd.u
             (true, 0, true) => QAdd,      // vqadd.u
@@ -128,16 +143,19 @@ pub fn decode_neon_data(word: u32) -> Result<Ins, DecodeErr> {
             (true, 6, false) => Max,      // vmax.u
             (true, 6, true) => Min,       // vmin.u
             (true, 7, false) => AbsDiff,  // vabd.u
+            (true, 7, true) => Aba,       // vaba.u
             (true, 8, false) => Sub,      // vsub
             (true, 8, true) => CmpEq,     // vceq
             (true, 9, false) => Mls,      // vmls
             (true, 9, true) if sz == 0 => MulP, // vmul.p8
             (true, 10, false) => MaxP,    // vpmax.u
             (true, 10, true) => MinP,     // vpmin.u
-            (true, 11, false) => QdmulH,  // vqrdmulh
+            (true, 11, false) => Qrdmulh,  // vqrdmulh.s (LLVM: vqrdmulh.s16 = f3110b02)
             _ => return Ok(Ins::Unsupported { group: "neon-3same" }),
         };
-        let dt = i_dt(sz, u);
+        // vqdmulh/vqrdmulh always operate on SIGNED 16/32-bit sources;
+        // U selects rounding variant, not signedness.
+        let dt = if matches!(op, QdmulH | Qrdmulh) { i_dt(sz, false) } else { i_dt(sz, u) };
         return Ok(Ins::Neon { op, dt, q, d: vd, n, m: vm, imm: 0, index: 0 });
     }
 

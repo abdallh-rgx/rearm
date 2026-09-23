@@ -123,7 +123,8 @@ impl A64 {
     /// SBFM/UBFM/BFM common: opc 10=SBFM 00=BFM(UBFM shares opc 00 with N=0? no: UBFM opc=10?)
     /// UBFM: sf opc=10? — per corpus: asr x0,x1,#7 = 9347fc20 (SBFM), lsr = d347fc20 (UBFM), lsl = d379e020 (UBFM)
     pub fn bfm(&mut self, sf: bool, opc: u8, immr: u8, imms: u8, rn: XR, rd: XR) {
-        self.e(((sf as u32) << 31) | ((opc as u32) << 29) | (0x26 << 23)
+        // N bit (bit22) must equal sf — LLVM-verified: lsr x17,x16,#32 = 0xd360fe11.
+        self.e(((sf as u32) << 31) | ((opc as u32) << 29) | (0x26 << 23) | ((sf as u32) << 22)
             | ((immr as u32) << 16) | ((imms as u32) << 10) | (rn as u32) << 5 | rd as u32);
     }
     pub fn lsl_imm(&mut self, sf: bool, rn: XR, rd: XR, amount: u8) {
@@ -252,6 +253,16 @@ impl A64 {
         self.e((1u32 << 31) | ((u as u32) << 23) | (0x1B << 24) | (1u32 << 22)
             | ((rm as u32) << 16) | (31u32 << 10) | (rn as u32) << 5 | rd as u32);
     }
+    /// ADD (extended register, 64-bit dest): add Xd, Xn, Wm, uxtw.
+    /// LLVM-verified: add x1, x2, w3, uxtw = 0x8b234041 (bit21 set; option=010 at 15:13).
+    pub fn add_uxtw(&mut self, rn: XR, rm: XR, rd: XR) {
+        self.e(0x8B00_0000 | (1 << 21) | ((rm as u32) << 16) | (0b010 << 13) | ((rn as u32) << 5) | rd as u32);
+    }
+    /// UMULL: Xd = Wa * Wb. LLVM-verified: umull x16,w14,w10 = 0x9baa7dd0
+    /// (= UMADDL with Ra = xzr; u=bit23, bit21 long-form, markers 11111 at 14:10).
+    pub fn umull(&mut self, rm: XR, rn: XR, rd: XR) {
+        self.maddl(true, false, rm, 31, rn, rd);
+    }
 
     // ==================== loads/stores ====================
     /// LDR/STR unsigned imm: size 00=8b 01=16b 10=32b 11=64b; opc 00=store 01=load
@@ -278,12 +289,23 @@ impl A64 {
             | ((rt2 as u32) << 10) | (rn as u32) << 5 | rt as u32);
     }
     pub fn ldxr(&mut self, size: u8, rt: XR, rn: XR) {
-        self.e(((size as u32) << 30) | (0x08 << 24) | (0x1F << 16) | (0x1F << 10)
+        self.e(((size as u32) << 30) | (0x08 << 24) | (1 << 22) | (0x1F << 16) | (0x1F << 10)
             | (rn as u32) << 5 | rt as u32);
     }
     pub fn stxr(&mut self, size: u8, rs: XR, rt: XR, rn: XR) {
         self.e(((size as u32) << 30) | (0x08 << 24)
-            | ((rs as u32) << 16) | (rn as u32) << 5 | rt as u32);
+            | ((rs as u32) << 16) | (0x1F << 10) | (rn as u32) << 5 | rt as u32);
+    }
+    /// LLVM-verified: ldxp w1,w2,[x3] = 0x887f0861; ldxp x1,x2 = 0xc87f0861.
+    /// Bit22 = L (load), bit21 = pair; Rs-marker 11111 at (20:16).
+    pub fn ldxp(&mut self, size: u8, rt2: XR, rn: XR, rt: XR) {
+        self.e(((size as u32) << 30) | (0x08 << 24) | (1 << 22) | (1 << 21) | (0x1F << 16)
+            | ((rt2 as u32) << 10) | (rn as u32) << 5 | rt as u32);
+    }
+    /// LLVM-verified: stxp w0,w1,w2,[x3] = 0x88200861; stxp x-form 0xc8...
+    pub fn stxp(&mut self, size: u8, rs: XR, rt2: XR, rn: XR, rt: XR) {
+        self.e(((size as u32) << 30) | (0x08 << 24) | (1 << 21)
+            | ((rs as u32) << 16) | ((rt2 as u32) << 10) | (rn as u32) << 5 | rt as u32);
     }
 
     // ==================== misc ====================
@@ -294,19 +316,21 @@ impl A64 {
 
     // ==================== scalar FP (data-proc 1 source) ====================
     // Encoding: 0001 1110 type(2) opcode(5) 10000 Rn Rd
-    pub fn fp1(&mut self, dbl: bool, opcode: u8, rn: XR, rd: XR) {
+    pub fn fp1(&mut self, dbl: bool, opcode: u32, rn: XR, rd: XR) {
+        // LLVM-verified layout: opcode is 2 bits at (16:15):
+        // fmov=00 fabs=01 fneg=10 fsqrt=11 (fabs d0,d1 = 0x1e60c020).
         let ty = if dbl { 1u32 } else { 0 };
-        self.e(0x1E204000 | (ty << 22) | ((opcode as u32) << 15)
+        self.e(0x1E204000 | (ty << 22) | ((opcode & 3) << 15)
             | ((rn as u32) << 5) | rd as u32);
     }
-    /// FMOV (register): fp1 opcode 00001
-    pub fn fmov_reg(&mut self, dbl: bool, rn: XR, rd: XR) { self.fp1(dbl, 0x01, rn, rd); }
-    /// FABS: fp1 opcode 00010
-    pub fn fabs(&mut self, dbl: bool, rn: XR, rd: XR) { self.fp1(dbl, 0x02, rn, rd); }
-    /// FNEG: fp1 opcode 00011
-    pub fn fneg(&mut self, dbl: bool, rn: XR, rd: XR) { self.fp1(dbl, 0x03, rn, rd); }
-    /// FSQRT: fp1 opcode 10111
-    pub fn fsqrt(&mut self, dbl: bool, rn: XR, rd: XR) { self.fp1(dbl, 0x17, rn, rd); }
+    /// FMOV (register): fp1 opcode 00
+    pub fn fmov_reg(&mut self, dbl: bool, rn: XR, rd: XR) { self.fp1(dbl, 0x0, rn, rd); }
+    /// FABS: fp1 opcode 01 (fabs d0,d1 = 0x1e60c020)
+    pub fn fabs(&mut self, dbl: bool, rn: XR, rd: XR) { self.fp1(dbl, 0x1, rn, rd); }
+    /// FNEG: fp1 opcode 10 (fneg d0,d1 = 0x1e614020)
+    pub fn fneg(&mut self, dbl: bool, rn: XR, rd: XR) { self.fp1(dbl, 0x2, rn, rd); }
+    /// FSQRT: fp1 opcode 11 (fsqrt d0,d1 = 0x1e61c020)
+    pub fn fsqrt(&mut self, dbl: bool, rn: XR, rd: XR) { self.fp1(dbl, 0x3, rn, rd); }
 
     // ==================== scalar FP (data-proc 2 source) ====================
     // Encoding: 0001 1110 type(2) 1 Rm opcode(4) 10 Rn Rd
@@ -323,73 +347,80 @@ impl A64 {
     pub fn fadd(&mut self, dbl: bool, rm: XR, rn: XR, rd: XR) { self.fp2(dbl, 0x2, rm, rn, rd); }
     /// FSUB: fp2 opcode 0011
     pub fn fsub(&mut self, dbl: bool, rm: XR, rn: XR, rd: XR) { self.fp2(dbl, 0x3, rm, rn, rd); }
-    /// FCMP/FCMPE: fp2 opcode 0100/0101 with Rd=0
+    /// FCMP/FCMPE: LLVM-verified fcmp d1,d2 = 0x1e622020; E is bit4 (fcmpe = 0x1e622030).
     pub fn fcmp(&mut self, dbl: bool, e: bool, rm: XR, rn: XR) {
-        self.fp2(dbl, if e { 0x5 } else { 0x4 }, rm, rn, 0);
+        let ty = if dbl { 1u32 } else { 0 };
+        self.e(0x1E202000 | (ty << 22) | ((rm as u32) << 16) | ((e as u32) << 4)
+            | ((rn as u32) << 5));
     }
-    /// FCMP with zero: 0001 1110 type 10 0000 10000 01000 00000 (FCMP Xn, #0.0)
+    /// FCMP with zero: LLVM-verified fcmp d1,#0.0 = 0x1e602028; fcmpe = 0x1e602038 (E=bit4).
     pub fn fcmpz(&mut self, dbl: bool, e: bool, rn: XR) {
         let ty = if dbl { 1u32 } else { 0 };
-        let opcode = if e { 0x11u32 } else { 0x10 };
-        self.e(0x1E202000 | (ty << 22) | (opcode << 12) | ((rn as u32) << 5) | 0x08);
+        self.e(0x1E202000 | (ty << 22) | ((e as u32) << 4) | ((rn as u32) << 5) | 0x8);
     }
 
-    /// FMADD: 0001 1110 type 0 Rm 0 Ra Rn Rd (opcode 0)
+    /// FMADD family — LLVM-verified: fmadd=0x1f420c20; fmsub=|bit15; fnmadd=|bit21;
+    /// fnmsub=both (NOT the reverse!).
     pub fn fmadd(&mut self, dbl: bool, rm: XR, ra: XR, rn: XR, rd: XR) {
         let ty = if dbl { 1u32 } else { 0 };
         self.e(0x1F000000 | (ty << 22) | ((rm as u32) << 16) | ((ra as u32) << 10)
             | ((rn as u32) << 5) | rd as u32);
     }
-    /// FMSUB: same but with bit 21 (o1)
     pub fn fmsub(&mut self, dbl: bool, rm: XR, ra: XR, rn: XR, rd: XR) {
-        let ty = if dbl { 1u32 } else { 0 };
-        self.e(0x1F200000 | (ty << 22) | ((rm as u32) << 16) | ((ra as u32) << 10)
-            | ((rn as u32) << 5) | rd as u32);
-    }
-    /// FNMADD: same but with bit 15 (o2)
-    pub fn fnmadd(&mut self, dbl: bool, rm: XR, ra: XR, rn: XR, rd: XR) {
         let ty = if dbl { 1u32 } else { 0 };
         self.e(0x1F000000 | (1 << 15) | (ty << 22) | ((rm as u32) << 16) | ((ra as u32) << 10)
             | ((rn as u32) << 5) | rd as u32);
     }
-    /// FNMSUB: bits 21+15
+    pub fn fnmadd(&mut self, dbl: bool, rm: XR, ra: XR, rn: XR, rd: XR) {
+        let ty = if dbl { 1u32 } else { 0 };
+        self.e(0x1F000000 | (1 << 21) | (ty << 22) | ((rm as u32) << 16) | ((ra as u32) << 10)
+            | ((rn as u32) << 5) | rd as u32);
+    }
     pub fn fnmsub(&mut self, dbl: bool, rm: XR, ra: XR, rn: XR, rd: XR) {
         let ty = if dbl { 1u32 } else { 0 };
-        self.e(0x1F200000 | (1 << 15) | (ty << 22) | ((rm as u32) << 16) | ((ra as u32) << 10)
+        self.e(0x1F000000 | (1 << 21) | (1 << 15) | (ty << 22) | ((rm as u32) << 16) | ((ra as u32) << 10)
             | ((rn as u32) << 5) | rd as u32);
     }
 
     // ==================== scalar FP ↔ integer conversions ====================
-    // FCVT: 0001 1110 type 1 opcode 10000 Rn Rd
-    /// SCVTF (integer to float): 0001 1110 type 0 0010 1 10 sf Rn Rd
+    // LLVM-verified: scvtf s0,w1 = 0x1e220020; scvtf d0,x1 = 0x9e620020;
+    // fcvtzs w0,s1 = 0x1e380020; fcvtzs x0,d1 = 0x9e780020. sf at bit31, ty at b22.
     pub fn scvtf(&mut self, dbl: bool, sf: bool, rn: XR, rd: XR) {
         let ty = if dbl { 1u32 } else { 0 };
         let sf = sf as u32;
-        self.e(0x1E220000 | (ty << 22) | (sf << 21) | ((rn as u32) << 5) | rd as u32);
+        self.e(0x1E220000 | (ty << 22) | (sf << 31) | ((rn as u32) << 5) | rd as u32);
     }
-    /// FCVTZS (float to integer, round toward zero): 0001 1110 type 11 0010 Rn Rd
+    pub fn ucvtf(&mut self, dbl: bool, sf: bool, rn: XR, rd: XR) {
+        let ty = if dbl { 1u32 } else { 0 };
+        let sf = sf as u32;
+        self.e(0x1E230000 | (ty << 22) | (sf << 31) | ((rn as u32) << 5) | rd as u32);
+    }
     pub fn fcvtzs(&mut self, dbl: bool, sf: bool, rn: XR, rd: XR) {
         let ty = if dbl { 1u32 } else { 0 };
         let sf = sf as u32;
-        self.e(0x1E380000 | (ty << 22) | (sf << 21) | ((rn as u32) << 5) | rd as u32);
+        self.e(0x1E380000 | (ty << 22) | (sf << 31) | ((rn as u32) << 5) | rd as u32);
+    }
+    pub fn fcvtzu(&mut self, dbl: bool, sf: bool, rn: XR, rd: XR) {
+        let ty = if dbl { 1u32 } else { 0 };
+        let sf = sf as u32;
+        self.e(0x1E390000 | (ty << 22) | (sf << 31) | ((rn as u32) << 5) | rd as u32);
     }
 
-    // ==================== FMOV (immediate ↔ GPR) ====================
-    /// FMOV Wd, Sn (GPR ← 32-bit float reg): 0001 1110 type 0 10 111 10 000000 Nn Rd
+    // ==================== FMOV (GPR ↔ FP) ====================
+    // LLVM-verified: fmov w0,s1 = 0x1e260020; fmov x0,d1 = 0x9e660020;
+    // fmov s0,w1 = 0x1e270020; fmov d0,x1 = 0x9e670020.
+    // to-gpr base 0x1E260000, from-gpr base 0x1E270000; ty at b22, sf at b31.
     pub fn fmov_to_gpr32(&mut self, vn: XR, rd: XR) {
         self.e(0x1E260000 | ((vn as u32) << 5) | rd as u32);
     }
-    /// FMOV Sn, Wd: 0001 1110 type 0 10 110 10 000000 Nn Rd
     pub fn fmov_from_gpr32(&mut self, rn: XR, rd: XR) {
-        self.e(0x1E240000 | ((rn as u32) << 5) | rd as u32);
+        self.e(0x1E270000 | ((rn as u32) << 5) | rd as u32);
     }
-    /// FMOV Xd, Dn: 0001 1110 type 0 11 111 10 000000 Nn Rd
     pub fn fmov_to_gpr64(&mut self, vn: XR, rd: XR) {
-        self.e(0x1E660000 | ((vn as u32) << 5) | rd as u32);
+        self.e(0x9E660000 | ((vn as u32) << 5) | rd as u32);
     }
-    /// FMOV Dn, Xd: 0001 1110 type 0 11 110 10 000000 Nn Rd
     pub fn fmov_from_gpr64(&mut self, rn: XR, rd: XR) {
-        self.e(0x1E640000 | ((rn as u32) << 5) | rd as u32);
+        self.e(0x9E670000 | ((rn as u32) << 5) | rd as u32);
     }
 
     // ==================== scalar FP load/store ====================
@@ -422,8 +453,17 @@ impl A64 {
     pub fn dsb(&mut self, opt: u8) { self.e(0xD503_309F | ((opt as u32 & 0xF) << 8)); }
     pub fn dmb(&mut self, opt: u8) { self.e(0xD503_30BF | ((opt as u32 & 0xF) << 8)); }
     pub fn isb(&mut self) { self.e(0xD503_3FDF); }
+    /// LLVM-verified: clrex = 0xd5033f5f.
+    pub fn clrex(&mut self) { self.e(0xD503_3F5F); }
     pub fn svc(&mut self, imm16: u16) { self.e(0xD400_0001 | ((imm16 as u32) << 5)); }
     pub fn brk(&mut self, imm16: u16) { self.e(0xD420_0000 | ((imm16 as u32) << 5)); }
+    /// A64 UDF #imm16 — LLVM-verified: udf #0x1234 = 0x00001234 (imm at bits 15:0).
+    pub fn udf(&mut self, imm16: u16) { self.e(imm16 as u32); }
+    /// MRS Xt, NZCV — LLVM-verified: mrs x0,nzcv = 0xd53b4200; mrs x16 = 0xd53b4210.
+    /// Rt at bits(4:0).
+    pub fn mrs_nzcv(&mut self, rt: XR) { self.e(0xD53B_4200 | rt as u32); }
+    /// MSR NZCV, Xt — LLVM-verified: msr nzcv,x16 = 0xd51b4210. Rt at bits(4:0).
+    pub fn msr_nzcv(&mut self, rt: XR) { self.e(0xD51B_4200 | rt as u32); }
     /// PRFM (immediate): prfop 0=PLDL1KEEP 8=PLIL1KEEP; imm12 scaled by 8.
     /// LLVM-verified: prfm pldl1keep,[x1] = 0xf9800020; plil1keep,[x1,#8] = 0xf9800428.
     pub fn prfm(&mut self, prfop: u8, imm12: u16, rn: XR) {

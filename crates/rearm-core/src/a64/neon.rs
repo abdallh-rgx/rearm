@@ -293,12 +293,14 @@ pub fn enc_movi(q: bool, neg: bool, abc: u8, cmode: u8, defgh: u8, rd: VR) -> u3
         | ((defgh & 0x1F) as u32) | rd as u32
 }
 
-/// AdvSIMD load/store multiple structures: LD1/ST1 etc.
-/// 0 Q 0 0 0110 size 0 11111 Rn Rt(4:0) with opcode in bits 15:12:
-///   LD1 (4 regs, no wb): 0010; LD1R: 1101; LD1 (1 reg): 0111 (110?)...
-/// Encoding: 0Q001 0 0110 L size 0 Rm 1111 opcode Rn Rt (Rm=11111 post)
+/// AdvSIMD load/store multiple structures. LLVM-verified:
+/// ld1 {v0.8b},[x0] = 0x0c407000 (L=bit22, opcode(15:12)=0111, size(11:10));
+/// ld1 {v0.8b},[x0],x1 = 0x0cc17000 (post=bit21 + Rm); post-imm Rm=11111:
+/// ld1 {v0.8b},[x0],#8 = 0x0cdf7000. No-post: Rm=0, bit21=0.
 pub fn enc_ldst_multi(load: bool, q: bool, size: u32, opcode: u8, rn: u8, rt: u8, rm: Option<u8>) -> u32 {
-    let m = rm.unwrap_or(0x1F);
-    ((q as u32) << 30) | 0x0C000000 | ((load as u32) << 22) | (size << 10)
-        | ((m as u32) << 16) | ((opcode as u32) << 12) | ((rn as u32) << 5) | rt as u32
+    let post = rm.is_some() as u32;
+    let m = rm.unwrap_or(0);
+    ((q as u32) << 30) | 0x0C000000 | ((load as u32) << 22) | (post << 23)
+        | ((m as u32) << 16) | ((opcode as u32) << 12) | (size << 10)
+        | ((rn as u32) << 5) | rt as u32
 }

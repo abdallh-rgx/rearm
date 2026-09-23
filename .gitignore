@@ -5,3 +5,5 @@ test-data/*.js
 test-data/downloads/
 test-data/turnstile-loop.log
 test-data/loop.pid
+
+*.deb

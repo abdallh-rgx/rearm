@@ -147,8 +147,9 @@ fn decode_group0(word: u32) -> Result<Ins, DecodeErr> {
         return Ok(Ins::Smc { imm: bits(word, 3, 0) as u16 });
     }
 
-    // ---- media in 000 space ----
-    if bit(word, 24) && !bit(word, 23) && (bit(word, 7) || bit(word, 4)) {
+    // ---- media in 000 space (SMLA/QADD/SMUL/CLZ family; all have S=0) ----
+    // TST/TEQ/CMP/CMN (op 1000-1011) with S=1 are valid DpReg — must NOT divert.
+    if bit(word, 24) && !bit(word, 23) && !bit(word, 20) && (bit(word, 7) || bit(word, 4)) {
         return decode_media_000(word);
     }
 
@@ -179,6 +180,7 @@ fn decode_multiply(word: u32) -> Result<Ins, DecodeErr> {
     Ok(match bits(word, 23, 21) {
         0b000 => Ins::Mul { rd, rn, rm, s },
         0b001 => Ins::Mla { rd, rn, rm, ra: ra_or_lo, s },
+        0b010 => Ins::Umaal { rdlo: ra_or_lo, rdhi: rd, rn, rm },
         0b011 => Ins::Mls { rd, rn, rm, ra: ra_or_lo },
         0b100 => Ins::Umull { rdlo: ra_or_lo, rdhi: rd, rn, rm, s },
         0b101 => Ins::Umlal { rdlo: ra_or_lo, rdhi: rd, rn, rm, s },
@@ -520,30 +522,58 @@ fn decode_media_011(word: u32) -> Result<Ins, DecodeErr> {
                 Ins::Usada8 { rd: rd2, rn: rn2, rm: rm2, ra }
             });
         }
-        // SBFX: op1=11010: widthm1(19:16) Rd(15:12) lsb(11:7) 101 Rn(3:0)
-        0b11010 if op2 & 0b0011 == 0b0001 => {
-            let widthm1 = rn;
+        // SMMUL/SMMLA/SMMLS family: op1=10101: Rd(19:16), Ra(15:12; 1111=no-acc),
+        // Rm(11:8), Rn(3:0); op2: 0001=plain, 0011=rounding, 0101=SMMLS, 0111=SMMLSR
+        0b10101 => {
+            let rd2 = rn; let ra = rd; let rm2 = bits11_8; let rn2 = rm;
+            return Ok(match op2 {
+                0b0001 => Ins::Smmul { rd: rd2, rn: rn2, rm: rm2, ra: if ra == 0b1111 { None } else { Some(ra) }, sub: false, round: false },
+                0b0011 => Ins::Smmul { rd: rd2, rn: rn2, rm: rm2, ra: if ra == 0b1111 { None } else { Some(ra) }, sub: false, round: true },
+                0b1101 => Ins::Smmul { rd: rd2, rn: rn2, rm: rm2, ra: Some(ra), sub: true, round: false },
+                0b1111 => Ins::Smmul { rd: rd2, rn: rn2, rm: rm2, ra: Some(ra), sub: true, round: true },
+                _ => return Err(DecodeErr(word)),
+            });
+        }
+        // SBFX (wide, op1=11011): sel(24:21)=1101, widthm1(20:16)
+        0b11011 if op2 & 0b0111 == 0b0101 => {
+            let widthm1 = ((1 << 4) | rn) as u8;
             let lsb = bits(word, 11, 7) as u8;
             return Ok(Ins::Sbfx { rd, rn: rm, lsb, width: widthm1 + 1 });
         }
-        // UBFX: op1=11110
-        0b11110 if op2 & 0b0011 == 0b0001 => {
-            let widthm1 = rn;
-            let lsb = bits(word, 11, 7) as u8;
-            return Ok(Ins::Ubfx { rd, rn: rm, lsb, width: widthm1 + 1 });
-        }
-        // BFC/BFI: op1=11100: msb(19:16) Rd(15:12) lsb(11:7) 001 Rn/f
-        0b11100 if op2 & 0b0011 == 0b0001 => {
-            let msb = rn;
-            let lsb = bits(word, 11, 7) as u8;
-            let width = msb - lsb + 1;
-            return Ok(if bits11_8 == 0b1111 || rm == 0b1111 {
-                Ins::Bfc { rd, lsb, width }
-            } else {
-                Ins::Bfi { rd, rn: rm, lsb, width }
-            });
-        }
         _ => {}
+    }
+    // BFX family: selector at bits(24:21), widthm1/msb at bits(20:16) (FIVE bits —
+    // bit20 is part of the field, empirically LLVM-verified), lsb at bits(11:7).
+    // SBFX: sel=1101 op2(6:4)=101; UBFX: sel=1111 op2(6:4)=101; BFC/BFI: sel=1110
+    // op2(6:4)=001; UDF: sel=1111 bits(7:4)=1111, imm16=(bits(19:8)<<4)|bits(3:0).
+    let sel4 = (op1 >> 1) as u8; // bits(24:21)
+    let wfield = ((op1 & 1) << 4 | rn as u32) as u8; // bits(20:16)
+    if sel4 == 0b1101 && op2 & 0b0111 == 0b0101 {
+        // SBFX (narrow, op1=11010)
+        let lsb = bits(word, 11, 7) as u8;
+        return Ok(Ins::Sbfx { rd, rn: rm, lsb, width: wfield as u8 + 1 });
+    }
+    if sel4 == 0b1111 && op2 & 0b0111 == 0b0101 {
+        // UBFX (op1=11110 or 11111)
+        let lsb = bits(word, 11, 7) as u8;
+        return Ok(Ins::Ubfx { rd, rn: rm, lsb, width: wfield as u8 + 1 });
+    }
+    if sel4 == 0b1110 && op2 & 0b0111 == 0b0001 {
+        // BFC (Rn=0xF) / BFI (op1=11100 or 11101)
+        let lsb = bits(word, 11, 7) as u8;
+        let msb = wfield;
+        let width = msb as i16 - lsb as i16 + 1;
+        if width <= 0 { return Err(DecodeErr(word)); }
+        return Ok(if rm == 0b1111 {
+            Ins::Bfc { rd, lsb, width: width as u8 }
+        } else {
+            Ins::Bfi { rd, rn: rm, lsb, width: width as u8 }
+        });
+    }
+    if sel4 == 0b1111 && op2 == 0b1111 {
+        // UDF #imm16
+        let imm16 = ((bits(word, 19, 8) << 4) | bits(word, 3, 0)) as u16;
+        return Ok(Ins::Udf { imm: imm16 });
     }
     Err(DecodeErr(word))
 }
@@ -647,6 +677,8 @@ fn decode_unconditional(word: u32) -> Result<Ins, DecodeErr> {
         }
         0b001 => crate::a32::decode_neon::decode_neon_data(word),
         0b010 | 0b011 => {
+            // CLREX: F57FF01F
+            if word & 0x0FFF_FFFF == 0x057F_F01F { return Ok(Ins::Clrex); }
             // barriers first: F57FF0xx (rn=1111, rd=1111, bits(11:8)=1111)
             if bits(word, 27, 25) == 0b010
                 && bits(word, 19, 16) == 0b1111 && bits(word, 15, 12) == 0b1111

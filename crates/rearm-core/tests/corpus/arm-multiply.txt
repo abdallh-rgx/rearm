@@ -1,0 +1,343 @@
+e0403291 umaal	r3, r0, r1, r2
+e0803291 umull	r3, r0, r1, r2
+e0a03291 umlal	r3, r0, r1, r2
+e0c03291 smull	r3, r0, r1, r2
+e0e03291 smlal	r3, r0, r1, r2
+e0403e9a umaal	r3, r0, r10, lr
+e0803e9a umull	r3, r0, r10, lr
+e0a03e9a umlal	r3, r0, r10, lr
+e0c03e9a smull	r3, r0, r10, lr
+e0e03e9a smlal	r3, r0, r10, lr
+e0403794 umaal	r3, r0, r4, r7
+e0803794 umull	r3, r0, r4, r7
+e0a03794 umlal	r3, r0, r4, r7
+e0c03794 smull	r3, r0, r4, r7
+e0e03794 smlal	r3, r0, r4, r7
+e0423291 umaal	r3, r2, r1, r2
+e0823291 umull	r3, r2, r1, r2
+e0a23291 umlal	r3, r2, r1, r2
+e0c23291 smull	r3, r2, r1, r2
+e0e23291 smlal	r3, r2, r1, r2
+e0423e9a umaal	r3, r2, r10, lr
+e0823e9a umull	r3, r2, r10, lr
+e0a23e9a umlal	r3, r2, r10, lr
+e0c23e9a smull	r3, r2, r10, lr
+e0e23e9a smlal	r3, r2, r10, lr
+e0423794 umaal	r3, r2, r4, r7
+e0823794 umull	r3, r2, r4, r7
+e0a23794 umlal	r3, r2, r4, r7
+e0c23794 smull	r3, r2, r4, r7
+e0e23794 smlal	r3, r2, r4, r7
+e0493291 umaal	r3, r9, r1, r2
+e0893291 umull	r3, r9, r1, r2
+e0a93291 umlal	r3, r9, r1, r2
+e0c93291 smull	r3, r9, r1, r2
+e0e93291 smlal	r3, r9, r1, r2
+e0493e9a umaal	r3, r9, r10, lr
+e0893e9a umull	r3, r9, r10, lr
+e0a93e9a umlal	r3, r9, r10, lr
+e0c93e9a smull	r3, r9, r10, lr
+e0e93e9a smlal	r3, r9, r10, lr
+e0493794 umaal	r3, r9, r4, r7
+e0893794 umull	r3, r9, r4, r7
+e0a93794 umlal	r3, r9, r4, r7
+e0c93794 smull	r3, r9, r4, r7
+e0e93794 smlal	r3, r9, r4, r7
+e04c3291 umaal	r3, r12, r1, r2
+e08c3291 umull	r3, r12, r1, r2
+e0ac3291 umlal	r3, r12, r1, r2
+e0cc3291 smull	r3, r12, r1, r2
+e0ec3291 smlal	r3, r12, r1, r2
+e04c3e9a umaal	r3, r12, r10, lr
+e08c3e9a umull	r3, r12, r10, lr
+e0ac3e9a umlal	r3, r12, r10, lr
+e0cc3e9a smull	r3, r12, r10, lr
+e0ec3e9a smlal	r3, r12, r10, lr
+e04c3794 umaal	r3, r12, r4, r7
+e08c3794 umull	r3, r12, r4, r7
+e0ac3794 umlal	r3, r12, r4, r7
+e0cc3794 smull	r3, r12, r4, r7
+e0ec3794 smlal	r3, r12, r4, r7
+e0405291 umaal	r5, r0, r1, r2
+e0805291 umull	r5, r0, r1, r2
+e0a05291 umlal	r5, r0, r1, r2
+e0c05291 smull	r5, r0, r1, r2
+e0e05291 smlal	r5, r0, r1, r2
+e0405e9a umaal	r5, r0, r10, lr
+e0805e9a umull	r5, r0, r10, lr
+e0a05e9a umlal	r5, r0, r10, lr
+e0c05e9a smull	r5, r0, r10, lr
+e0e05e9a smlal	r5, r0, r10, lr
+e0405794 umaal	r5, r0, r4, r7
+e0805794 umull	r5, r0, r4, r7
+e0a05794 umlal	r5, r0, r4, r7
+e0c05794 smull	r5, r0, r4, r7
+e0e05794 smlal	r5, r0, r4, r7
+e0425291 umaal	r5, r2, r1, r2
+e0825291 umull	r5, r2, r1, r2
+e0a25291 umlal	r5, r2, r1, r2
+e0c25291 smull	r5, r2, r1, r2
+e0e25291 smlal	r5, r2, r1, r2
+e0425e9a umaal	r5, r2, r10, lr
+e0825e9a umull	r5, r2, r10, lr
+e0a25e9a umlal	r5, r2, r10, lr
+e0c25e9a smull	r5, r2, r10, lr
+e0e25e9a smlal	r5, r2, r10, lr
+e0425794 umaal	r5, r2, r4, r7
+e0825794 umull	r5, r2, r4, r7
+e0a25794 umlal	r5, r2, r4, r7
+e0c25794 smull	r5, r2, r4, r7
+e0e25794 smlal	r5, r2, r4, r7
+e0495291 umaal	r5, r9, r1, r2
+e0895291 umull	r5, r9, r1, r2
+e0a95291 umlal	r5, r9, r1, r2
+e0c95291 smull	r5, r9, r1, r2
+e0e95291 smlal	r5, r9, r1, r2
+e0495e9a umaal	r5, r9, r10, lr
+e0895e9a umull	r5, r9, r10, lr
+e0a95e9a umlal	r5, r9, r10, lr
+e0c95e9a smull	r5, r9, r10, lr
+e0e95e9a smlal	r5, r9, r10, lr
+e0495794 umaal	r5, r9, r4, r7
+e0895794 umull	r5, r9, r4, r7
+e0a95794 umlal	r5, r9, r4, r7
+e0c95794 smull	r5, r9, r4, r7
+e0e95794 smlal	r5, r9, r4, r7
+e04c5291 umaal	r5, r12, r1, r2
+e08c5291 umull	r5, r12, r1, r2
+e0ac5291 umlal	r5, r12, r1, r2
+e0cc5291 smull	r5, r12, r1, r2
+e0ec5291 smlal	r5, r12, r1, r2
+e04c5e9a umaal	r5, r12, r10, lr
+e08c5e9a umull	r5, r12, r10, lr
+e0ac5e9a umlal	r5, r12, r10, lr
+e0cc5e9a smull	r5, r12, r10, lr
+e0ec5e9a smlal	r5, r12, r10, lr
+e04c5794 umaal	r5, r12, r4, r7
+e08c5794 umull	r5, r12, r4, r7
+e0ac5794 umlal	r5, r12, r4, r7
+e0cc5794 smull	r5, r12, r4, r7
+e0ec5794 smlal	r5, r12, r4, r7
+e0408291 umaal	r8, r0, r1, r2
+e0808291 umull	r8, r0, r1, r2
+e0a08291 umlal	r8, r0, r1, r2
+e0c08291 smull	r8, r0, r1, r2
+e0e08291 smlal	r8, r0, r1, r2
+e0408e9a umaal	r8, r0, r10, lr
+e0808e9a umull	r8, r0, r10, lr
+e0a08e9a umlal	r8, r0, r10, lr
+e0c08e9a smull	r8, r0, r10, lr
+e0e08e9a smlal	r8, r0, r10, lr
+e0408794 umaal	r8, r0, r4, r7
+e0808794 umull	r8, r0, r4, r7
+e0a08794 umlal	r8, r0, r4, r7
+e0c08794 smull	r8, r0, r4, r7
+e0e08794 smlal	r8, r0, r4, r7
+e0428291 umaal	r8, r2, r1, r2
+e0828291 umull	r8, r2, r1, r2
+e0a28291 umlal	r8, r2, r1, r2
+e0c28291 smull	r8, r2, r1, r2
+e0e28291 smlal	r8, r2, r1, r2
+e0428e9a umaal	r8, r2, r10, lr
+e0828e9a umull	r8, r2, r10, lr
+e0a28e9a umlal	r8, r2, r10, lr
+e0c28e9a smull	r8, r2, r10, lr
+e0e28e9a smlal	r8, r2, r10, lr
+e0428794 umaal	r8, r2, r4, r7
+e0828794 umull	r8, r2, r4, r7
+e0a28794 umlal	r8, r2, r4, r7
+e0c28794 smull	r8, r2, r4, r7
+e0e28794 smlal	r8, r2, r4, r7
+e0498291 umaal	r8, r9, r1, r2
+e0898291 umull	r8, r9, r1, r2
+e0a98291 umlal	r8, r9, r1, r2
+e0c98291 smull	r8, r9, r1, r2
+e0e98291 smlal	r8, r9, r1, r2
+e0498e9a umaal	r8, r9, r10, lr
+e0898e9a umull	r8, r9, r10, lr
+e0a98e9a umlal	r8, r9, r10, lr
+e0c98e9a smull	r8, r9, r10, lr
+e0e98e9a smlal	r8, r9, r10, lr
+e0498794 umaal	r8, r9, r4, r7
+e0898794 umull	r8, r9, r4, r7
+e0a98794 umlal	r8, r9, r4, r7
+e0c98794 smull	r8, r9, r4, r7
+e0e98794 smlal	r8, r9, r4, r7
+e04c8291 umaal	r8, r12, r1, r2
+e08c8291 umull	r8, r12, r1, r2
+e0ac8291 umlal	r8, r12, r1, r2
+e0cc8291 smull	r8, r12, r1, r2
+e0ec8291 smlal	r8, r12, r1, r2
+e04c8e9a umaal	r8, r12, r10, lr
+e08c8e9a umull	r8, r12, r10, lr
+e0ac8e9a umlal	r8, r12, r10, lr
+e0cc8e9a smull	r8, r12, r10, lr
+e0ec8e9a smlal	r8, r12, r10, lr
+e04c8794 umaal	r8, r12, r4, r7
+e08c8794 umull	r8, r12, r4, r7
+e0ac8794 umlal	r8, r12, r4, r7
+e0cc8794 smull	r8, r12, r4, r7
+e0ec8794 smlal	r8, r12, r4, r7
+e040b291 umaal	r11, r0, r1, r2
+e080b291 umull	r11, r0, r1, r2
+e0a0b291 umlal	r11, r0, r1, r2
+e0c0b291 smull	r11, r0, r1, r2
+e0e0b291 smlal	r11, r0, r1, r2
+e040be9a umaal	r11, r0, r10, lr
+e080be9a umull	r11, r0, r10, lr
+e0a0be9a umlal	r11, r0, r10, lr
+e0c0be9a smull	r11, r0, r10, lr
+e0e0be9a smlal	r11, r0, r10, lr
+e040b794 umaal	r11, r0, r4, r7
+e080b794 umull	r11, r0, r4, r7
+e0a0b794 umlal	r11, r0, r4, r7
+e0c0b794 smull	r11, r0, r4, r7
+e0e0b794 smlal	r11, r0, r4, r7
+e042b291 umaal	r11, r2, r1, r2
+e082b291 umull	r11, r2, r1, r2
+e0a2b291 umlal	r11, r2, r1, r2
+e0c2b291 smull	r11, r2, r1, r2
+e0e2b291 smlal	r11, r2, r1, r2
+e042be9a umaal	r11, r2, r10, lr
+e082be9a umull	r11, r2, r10, lr
+e0a2be9a umlal	r11, r2, r10, lr
+e0c2be9a smull	r11, r2, r10, lr
+e0e2be9a smlal	r11, r2, r10, lr
+e042b794 umaal	r11, r2, r4, r7
+e082b794 umull	r11, r2, r4, r7
+e0a2b794 umlal	r11, r2, r4, r7
+e0c2b794 smull	r11, r2, r4, r7
+e0e2b794 smlal	r11, r2, r4, r7
+e049b291 umaal	r11, r9, r1, r2
+e089b291 umull	r11, r9, r1, r2
+e0a9b291 umlal	r11, r9, r1, r2
+e0c9b291 smull	r11, r9, r1, r2
+e0e9b291 smlal	r11, r9, r1, r2
+e049be9a umaal	r11, r9, r10, lr
+e089be9a umull	r11, r9, r10, lr
+e0a9be9a umlal	r11, r9, r10, lr
+e0c9be9a smull	r11, r9, r10, lr
+e0e9be9a smlal	r11, r9, r10, lr
+e049b794 umaal	r11, r9, r4, r7
+e089b794 umull	r11, r9, r4, r7
+e0a9b794 umlal	r11, r9, r4, r7
+e0c9b794 smull	r11, r9, r4, r7
+e0e9b794 smlal	r11, r9, r4, r7
+e04cb291 umaal	r11, r12, r1, r2
+e08cb291 umull	r11, r12, r1, r2
+e0acb291 umlal	r11, r12, r1, r2
+e0ccb291 smull	r11, r12, r1, r2
+e0ecb291 smlal	r11, r12, r1, r2
+e04cbe9a umaal	r11, r12, r10, lr
+e08cbe9a umull	r11, r12, r10, lr
+e0acbe9a umlal	r11, r12, r10, lr
+e0ccbe9a smull	r11, r12, r10, lr
+e0ecbe9a smlal	r11, r12, r10, lr
+e04cb794 umaal	r11, r12, r4, r7
+e08cb794 umull	r11, r12, r4, r7
+e0acb794 umlal	r11, r12, r4, r7
+e0ccb794 smull	r11, r12, r4, r7
+e0ecb794 smlal	r11, r12, r4, r7
+e000009a mul	r0, r10, r0
+e020a09a mla	r0, r10, r0, r10
+e060a09a mls	r0, r10, r0, r10
+e000009b mul	r0, r11, r0
+e020b09b mla	r0, r11, r0, r11
+e060b09b mls	r0, r11, r0, r11
+e000009c mul	r0, r12, r0
+e020c09c mla	r0, r12, r0, r12
+e060c09c mls	r0, r12, r0, r12
+e000009e mul	r0, lr, r0
+e020e09e mla	r0, lr, r0, lr
+e060e09e mls	r0, lr, r0, lr
+e001019a mul	r1, r10, r1
+e021a19a mla	r1, r10, r1, r10
+e061a19a mls	r1, r10, r1, r10
+e001019b mul	r1, r11, r1
+e021b19b mla	r1, r11, r1, r11
+e061b19b mls	r1, r11, r1, r11
+e001019c mul	r1, r12, r1
+e021c19c mla	r1, r12, r1, r12
+e061c19c mls	r1, r12, r1, r12
+e001019e mul	r1, lr, r1
+e021e19e mla	r1, lr, r1, lr
+e061e19e mls	r1, lr, r1, lr
+e003039a mul	r3, r10, r3
+e023a39a mla	r3, r10, r3, r10
+e063a39a mls	r3, r10, r3, r10
+e003039b mul	r3, r11, r3
+e023b39b mla	r3, r11, r3, r11
+e063b39b mls	r3, r11, r3, r11
+e003039c mul	r3, r12, r3
+e023c39c mla	r3, r12, r3, r12
+e063c39c mls	r3, r12, r3, r12
+e003039e mul	r3, lr, r3
+e023e39e mla	r3, lr, r3, lr
+e063e39e mls	r3, lr, r3, lr
+e008089a mul	r8, r10, r8
+e028a89a mla	r8, r10, r8, r10
+e068a89a mls	r8, r10, r8, r10
+e008089b mul	r8, r11, r8
+e028b89b mla	r8, r11, r8, r11
+e068b89b mls	r8, r11, r8, r11
+e008089c mul	r8, r12, r8
+e028c89c mla	r8, r12, r8, r12
+e068c89c mls	r8, r12, r8, r12
+e008089e mul	r8, lr, r8
+e028e89e mla	r8, lr, r8, lr
+e068e89e mls	r8, lr, r8, lr
+e0083e1a and	r3, r8, r10, lsl lr
+e0183e1a ands	r3, r8, r10, lsl lr
+e0283e1a eor	r3, r8, r10, lsl lr
+e0383e1a eors	r3, r8, r10, lsl lr
+e0483e1a sub	r3, r8, r10, lsl lr
+e0583e1a subs	r3, r8, r10, lsl lr
+e0883e1a add	r3, r8, r10, lsl lr
+e0983e1a adds	r3, r8, r10, lsl lr
+e1883e1a orr	r3, r8, r10, lsl lr
+e1983e1a orrs	r3, r8, r10, lsl lr
+e1c83e1a bic	r3, r8, r10, lsl lr
+e1d83e1a bics	r3, r8, r10, lsl lr
+e0083e3a and	r3, r8, r10, lsr lr
+e0183e3a ands	r3, r8, r10, lsr lr
+e0283e3a eor	r3, r8, r10, lsr lr
+e0383e3a eors	r3, r8, r10, lsr lr
+e0483e3a sub	r3, r8, r10, lsr lr
+e0583e3a subs	r3, r8, r10, lsr lr
+e0883e3a add	r3, r8, r10, lsr lr
+e0983e3a adds	r3, r8, r10, lsr lr
+e1883e3a orr	r3, r8, r10, lsr lr
+e1983e3a orrs	r3, r8, r10, lsr lr
+e1c83e3a bic	r3, r8, r10, lsr lr
+e1d83e3a bics	r3, r8, r10, lsr lr
+e0083e5a and	r3, r8, r10, asr lr
+e0183e5a ands	r3, r8, r10, asr lr
+e0283e5a eor	r3, r8, r10, asr lr
+e0383e5a eors	r3, r8, r10, asr lr
+e0483e5a sub	r3, r8, r10, asr lr
+e0583e5a subs	r3, r8, r10, asr lr
+e0883e5a add	r3, r8, r10, asr lr
+e0983e5a adds	r3, r8, r10, asr lr
+e1883e5a orr	r3, r8, r10, asr lr
+e1983e5a orrs	r3, r8, r10, asr lr
+e1c83e5a bic	r3, r8, r10, asr lr
+e1d83e5a bics	r3, r8, r10, asr lr
+e0083e7a and	r3, r8, r10, ror lr
+e0183e7a ands	r3, r8, r10, ror lr
+e0283e7a eor	r3, r8, r10, ror lr
+e0383e7a eors	r3, r8, r10, ror lr
+e0483e7a sub	r3, r8, r10, ror lr
+e0583e7a subs	r3, r8, r10, ror lr
+e0883e7a add	r3, r8, r10, ror lr
+e0983e7a adds	r3, r8, r10, ror lr
+e1883e7a orr	r3, r8, r10, ror lr
+e1983e7a orrs	r3, r8, r10, ror lr
+e1c83e7a bic	r3, r8, r10, ror lr
+e1d83e7a bics	r3, r8, r10, ror lr
+e750f110     	smmul	r0, r0, r1
+e750f231     	smmulr	r0, r1, r2
+e7503211     	smmla	r0, r1, r2, r3
+e7521033     	smmlar	r2, r3, r0, r1
+e75032d1     	smmls	r0, r1, r2, r3
+e75210f3     	smmlsr	r2, r3, r0, r1
+e750f110 smmul r0, r0, r1

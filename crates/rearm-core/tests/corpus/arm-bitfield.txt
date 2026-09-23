@@ -1,0 +1,361 @@
+e7e05057 ubfx	r5, r7, #0x0, #0x1
+e7a05057 sbfx	r5, r7, #0x0, #0x1
+e7c0501f bfc	r5, #0, #1
+e7c05019 bfi	r5, r9, #0, #1
+e7e15057 ubfx	r5, r7, #0x0, #0x2
+e7a15057 sbfx	r5, r7, #0x0, #0x2
+e7c1501f bfc	r5, #0, #2
+e7c15019 bfi	r5, r9, #0, #2
+e7e25057 ubfx	r5, r7, #0x0, #0x3
+e7a25057 sbfx	r5, r7, #0x0, #0x3
+e7c2501f bfc	r5, #0, #3
+e7c25019 bfi	r5, r9, #0, #3
+e7e65057 ubfx	r5, r7, #0x0, #0x7
+e7a65057 sbfx	r5, r7, #0x0, #0x7
+e7c6501f bfc	r5, #0, #7
+e7c65019 bfi	r5, r9, #0, #7
+e7e75057 ubfx	r5, r7, #0x0, #0x8
+e7a75057 sbfx	r5, r7, #0x0, #0x8
+e7c7501f bfc	r5, #0, #8
+e7c75019 bfi	r5, r9, #0, #8
+e7ee5057 ubfx	r5, r7, #0x0, #0xf
+e7ae5057 sbfx	r5, r7, #0x0, #0xf
+e7ce501f bfc	r5, #0, #15
+e7ce5019 bfi	r5, r9, #0, #15
+e7ef5057 ubfx	r5, r7, #0x0, #0x10
+e7af5057 sbfx	r5, r7, #0x0, #0x10
+e7cf501f bfc	r5, #0, #16
+e7cf5019 bfi	r5, r9, #0, #16
+e7f05057 ubfx	r5, r7, #0x0, #0x11
+e7b05057 sbfx	r5, r7, #0x0, #0x11
+e7d0501f bfc	r5, #0, #17
+e7d05019 bfi	r5, r9, #0, #17
+e7f35057 ubfx	r5, r7, #0x0, #0x14
+e7b35057 sbfx	r5, r7, #0x0, #0x14
+e7d3501f bfc	r5, #0, #20
+e7d35019 bfi	r5, r9, #0, #20
+e7f75057 ubfx	r5, r7, #0x0, #0x18
+e7b75057 sbfx	r5, r7, #0x0, #0x18
+e7d7501f bfc	r5, #0, #24
+e7d75019 bfi	r5, r9, #0, #24
+e7fe5057 ubfx	r5, r7, #0x0, #0x1f
+e7be5057 sbfx	r5, r7, #0x0, #0x1f
+e7de501f bfc	r5, #0, #31
+e7de5019 bfi	r5, r9, #0, #31
+e7ff5057 ubfx	r5, r7, #0x0, #0x20
+e7bf5057 sbfx	r5, r7, #0x0, #0x20
+e7df501f bfc	r5, #0, #32
+e7df5019 bfi	r5, r9, #0, #32
+e7e050d7 ubfx	r5, r7, #0x1, #0x1
+e7a050d7 sbfx	r5, r7, #0x1, #0x1
+e7c1509f bfc	r5, #1, #1
+e7c15099 bfi	r5, r9, #1, #1
+e7e150d7 ubfx	r5, r7, #0x1, #0x2
+e7a150d7 sbfx	r5, r7, #0x1, #0x2
+e7c2509f bfc	r5, #1, #2
+e7c25099 bfi	r5, r9, #1, #2
+e7e250d7 ubfx	r5, r7, #0x1, #0x3
+e7a250d7 sbfx	r5, r7, #0x1, #0x3
+e7c3509f bfc	r5, #1, #3
+e7c35099 bfi	r5, r9, #1, #3
+e7e650d7 ubfx	r5, r7, #0x1, #0x7
+e7a650d7 sbfx	r5, r7, #0x1, #0x7
+e7c7509f bfc	r5, #1, #7
+e7c75099 bfi	r5, r9, #1, #7
+e7e750d7 ubfx	r5, r7, #0x1, #0x8
+e7a750d7 sbfx	r5, r7, #0x1, #0x8
+e7c8509f bfc	r5, #1, #8
+e7c85099 bfi	r5, r9, #1, #8
+e7ee50d7 ubfx	r5, r7, #0x1, #0xf
+e7ae50d7 sbfx	r5, r7, #0x1, #0xf
+e7cf509f bfc	r5, #1, #15
+e7cf5099 bfi	r5, r9, #1, #15
+e7ef50d7 ubfx	r5, r7, #0x1, #0x10
+e7af50d7 sbfx	r5, r7, #0x1, #0x10
+e7d0509f bfc	r5, #1, #16
+e7d05099 bfi	r5, r9, #1, #16
+e7f050d7 ubfx	r5, r7, #0x1, #0x11
+e7b050d7 sbfx	r5, r7, #0x1, #0x11
+e7d1509f bfc	r5, #1, #17
+e7d15099 bfi	r5, r9, #1, #17
+e7f350d7 ubfx	r5, r7, #0x1, #0x14
+e7b350d7 sbfx	r5, r7, #0x1, #0x14
+e7d4509f bfc	r5, #1, #20
+e7d45099 bfi	r5, r9, #1, #20
+e7f750d7 ubfx	r5, r7, #0x1, #0x18
+e7b750d7 sbfx	r5, r7, #0x1, #0x18
+e7d8509f bfc	r5, #1, #24
+e7d85099 bfi	r5, r9, #1, #24
+e7fe50d7 ubfx	r5, r7, #0x1, #0x1f
+e7be50d7 sbfx	r5, r7, #0x1, #0x1f
+e7df509f bfc	r5, #1, #31
+e7df5099 bfi	r5, r9, #1, #31
+e7e051d7 ubfx	r5, r7, #0x3, #0x1
+e7a051d7 sbfx	r5, r7, #0x3, #0x1
+e7c3519f bfc	r5, #3, #1
+e7c35199 bfi	r5, r9, #3, #1
+e7e151d7 ubfx	r5, r7, #0x3, #0x2
+e7a151d7 sbfx	r5, r7, #0x3, #0x2
+e7c4519f bfc	r5, #3, #2
+e7c45199 bfi	r5, r9, #3, #2
+e7e251d7 ubfx	r5, r7, #0x3, #0x3
+e7a251d7 sbfx	r5, r7, #0x3, #0x3
+e7c5519f bfc	r5, #3, #3
+e7c55199 bfi	r5, r9, #3, #3
+e7e651d7 ubfx	r5, r7, #0x3, #0x7
+e7a651d7 sbfx	r5, r7, #0x3, #0x7
+e7c9519f bfc	r5, #3, #7
+e7c95199 bfi	r5, r9, #3, #7
+e7e751d7 ubfx	r5, r7, #0x3, #0x8
+e7a751d7 sbfx	r5, r7, #0x3, #0x8
+e7ca519f bfc	r5, #3, #8
+e7ca5199 bfi	r5, r9, #3, #8
+e7ee51d7 ubfx	r5, r7, #0x3, #0xf
+e7ae51d7 sbfx	r5, r7, #0x3, #0xf
+e7d1519f bfc	r5, #3, #15
+e7d15199 bfi	r5, r9, #3, #15
+e7ef51d7 ubfx	r5, r7, #0x3, #0x10
+e7af51d7 sbfx	r5, r7, #0x3, #0x10
+e7d2519f bfc	r5, #3, #16
+e7d25199 bfi	r5, r9, #3, #16
+e7f051d7 ubfx	r5, r7, #0x3, #0x11
+e7b051d7 sbfx	r5, r7, #0x3, #0x11
+e7d3519f bfc	r5, #3, #17
+e7d35199 bfi	r5, r9, #3, #17
+e7f351d7 ubfx	r5, r7, #0x3, #0x14
+e7b351d7 sbfx	r5, r7, #0x3, #0x14
+e7d6519f bfc	r5, #3, #20
+e7d65199 bfi	r5, r9, #3, #20
+e7f751d7 ubfx	r5, r7, #0x3, #0x18
+e7b751d7 sbfx	r5, r7, #0x3, #0x18
+e7da519f bfc	r5, #3, #24
+e7da5199 bfi	r5, r9, #3, #24
+e7e053d7 ubfx	r5, r7, #0x7, #0x1
+e7a053d7 sbfx	r5, r7, #0x7, #0x1
+e7c7539f bfc	r5, #7, #1
+e7c75399 bfi	r5, r9, #7, #1
+e7e153d7 ubfx	r5, r7, #0x7, #0x2
+e7a153d7 sbfx	r5, r7, #0x7, #0x2
+e7c8539f bfc	r5, #7, #2
+e7c85399 bfi	r5, r9, #7, #2
+e7e253d7 ubfx	r5, r7, #0x7, #0x3
+e7a253d7 sbfx	r5, r7, #0x7, #0x3
+e7c9539f bfc	r5, #7, #3
+e7c95399 bfi	r5, r9, #7, #3
+e7e653d7 ubfx	r5, r7, #0x7, #0x7
+e7a653d7 sbfx	r5, r7, #0x7, #0x7
+e7cd539f bfc	r5, #7, #7
+e7cd5399 bfi	r5, r9, #7, #7
+e7e753d7 ubfx	r5, r7, #0x7, #0x8
+e7a753d7 sbfx	r5, r7, #0x7, #0x8
+e7ce539f bfc	r5, #7, #8
+e7ce5399 bfi	r5, r9, #7, #8
+e7ee53d7 ubfx	r5, r7, #0x7, #0xf
+e7ae53d7 sbfx	r5, r7, #0x7, #0xf
+e7d5539f bfc	r5, #7, #15
+e7d55399 bfi	r5, r9, #7, #15
+e7ef53d7 ubfx	r5, r7, #0x7, #0x10
+e7af53d7 sbfx	r5, r7, #0x7, #0x10
+e7d6539f bfc	r5, #7, #16
+e7d65399 bfi	r5, r9, #7, #16
+e7f053d7 ubfx	r5, r7, #0x7, #0x11
+e7b053d7 sbfx	r5, r7, #0x7, #0x11
+e7d7539f bfc	r5, #7, #17
+e7d75399 bfi	r5, r9, #7, #17
+e7f353d7 ubfx	r5, r7, #0x7, #0x14
+e7b353d7 sbfx	r5, r7, #0x7, #0x14
+e7da539f bfc	r5, #7, #20
+e7da5399 bfi	r5, r9, #7, #20
+e7f753d7 ubfx	r5, r7, #0x7, #0x18
+e7b753d7 sbfx	r5, r7, #0x7, #0x18
+e7de539f bfc	r5, #7, #24
+e7de5399 bfi	r5, r9, #7, #24
+e7e05457 ubfx	r5, r7, #0x8, #0x1
+e7a05457 sbfx	r5, r7, #0x8, #0x1
+e7c8541f bfc	r5, #8, #1
+e7c85419 bfi	r5, r9, #8, #1
+e7e15457 ubfx	r5, r7, #0x8, #0x2
+e7a15457 sbfx	r5, r7, #0x8, #0x2
+e7c9541f bfc	r5, #8, #2
+e7c95419 bfi	r5, r9, #8, #2
+e7e25457 ubfx	r5, r7, #0x8, #0x3
+e7a25457 sbfx	r5, r7, #0x8, #0x3
+e7ca541f bfc	r5, #8, #3
+e7ca5419 bfi	r5, r9, #8, #3
+e7e65457 ubfx	r5, r7, #0x8, #0x7
+e7a65457 sbfx	r5, r7, #0x8, #0x7
+e7ce541f bfc	r5, #8, #7
+e7ce5419 bfi	r5, r9, #8, #7
+e7e75457 ubfx	r5, r7, #0x8, #0x8
+e7a75457 sbfx	r5, r7, #0x8, #0x8
+e7cf541f bfc	r5, #8, #8
+e7cf5419 bfi	r5, r9, #8, #8
+e7ee5457 ubfx	r5, r7, #0x8, #0xf
+e7ae5457 sbfx	r5, r7, #0x8, #0xf
+e7d6541f bfc	r5, #8, #15
+e7d65419 bfi	r5, r9, #8, #15
+e7ef5457 ubfx	r5, r7, #0x8, #0x10
+e7af5457 sbfx	r5, r7, #0x8, #0x10
+e7d7541f bfc	r5, #8, #16
+e7d75419 bfi	r5, r9, #8, #16
+e7f05457 ubfx	r5, r7, #0x8, #0x11
+e7b05457 sbfx	r5, r7, #0x8, #0x11
+e7d8541f bfc	r5, #8, #17
+e7d85419 bfi	r5, r9, #8, #17
+e7f35457 ubfx	r5, r7, #0x8, #0x14
+e7b35457 sbfx	r5, r7, #0x8, #0x14
+e7db541f bfc	r5, #8, #20
+e7db5419 bfi	r5, r9, #8, #20
+e7f75457 ubfx	r5, r7, #0x8, #0x18
+e7b75457 sbfx	r5, r7, #0x8, #0x18
+e7df541f bfc	r5, #8, #24
+e7df5419 bfi	r5, r9, #8, #24
+e7e057d7 ubfx	r5, r7, #0xf, #0x1
+e7a057d7 sbfx	r5, r7, #0xf, #0x1
+e7cf579f bfc	r5, #15, #1
+e7cf5799 bfi	r5, r9, #15, #1
+e7e157d7 ubfx	r5, r7, #0xf, #0x2
+e7a157d7 sbfx	r5, r7, #0xf, #0x2
+e7d0579f bfc	r5, #15, #2
+e7d05799 bfi	r5, r9, #15, #2
+e7e257d7 ubfx	r5, r7, #0xf, #0x3
+e7a257d7 sbfx	r5, r7, #0xf, #0x3
+e7d1579f bfc	r5, #15, #3
+e7d15799 bfi	r5, r9, #15, #3
+e7e657d7 ubfx	r5, r7, #0xf, #0x7
+e7a657d7 sbfx	r5, r7, #0xf, #0x7
+e7d5579f bfc	r5, #15, #7
+e7d55799 bfi	r5, r9, #15, #7
+e7e757d7 ubfx	r5, r7, #0xf, #0x8
+e7a757d7 sbfx	r5, r7, #0xf, #0x8
+e7d6579f bfc	r5, #15, #8
+e7d65799 bfi	r5, r9, #15, #8
+e7ee57d7 ubfx	r5, r7, #0xf, #0xf
+e7ae57d7 sbfx	r5, r7, #0xf, #0xf
+e7dd579f bfc	r5, #15, #15
+e7dd5799 bfi	r5, r9, #15, #15
+e7ef57d7 ubfx	r5, r7, #0xf, #0x10
+e7af57d7 sbfx	r5, r7, #0xf, #0x10
+e7de579f bfc	r5, #15, #16
+e7de5799 bfi	r5, r9, #15, #16
+e7f057d7 ubfx	r5, r7, #0xf, #0x11
+e7b057d7 sbfx	r5, r7, #0xf, #0x11
+e7df579f bfc	r5, #15, #17
+e7df5799 bfi	r5, r9, #15, #17
+e7e05857 ubfx	r5, r7, #0x10, #0x1
+e7a05857 sbfx	r5, r7, #0x10, #0x1
+e7d0581f bfc	r5, #16, #1
+e7d05819 bfi	r5, r9, #16, #1
+e7e15857 ubfx	r5, r7, #0x10, #0x2
+e7a15857 sbfx	r5, r7, #0x10, #0x2
+e7d1581f bfc	r5, #16, #2
+e7d15819 bfi	r5, r9, #16, #2
+e7e25857 ubfx	r5, r7, #0x10, #0x3
+e7a25857 sbfx	r5, r7, #0x10, #0x3
+e7d2581f bfc	r5, #16, #3
+e7d25819 bfi	r5, r9, #16, #3
+e7e65857 ubfx	r5, r7, #0x10, #0x7
+e7a65857 sbfx	r5, r7, #0x10, #0x7
+e7d6581f bfc	r5, #16, #7
+e7d65819 bfi	r5, r9, #16, #7
+e7e75857 ubfx	r5, r7, #0x10, #0x8
+e7a75857 sbfx	r5, r7, #0x10, #0x8
+e7d7581f bfc	r5, #16, #8
+e7d75819 bfi	r5, r9, #16, #8
+e7ee5857 ubfx	r5, r7, #0x10, #0xf
+e7ae5857 sbfx	r5, r7, #0x10, #0xf
+e7de581f bfc	r5, #16, #15
+e7de5819 bfi	r5, r9, #16, #15
+e7ef5857 ubfx	r5, r7, #0x10, #0x10
+e7af5857 sbfx	r5, r7, #0x10, #0x10
+e7df581f bfc	r5, #16, #16
+e7df5819 bfi	r5, r9, #16, #16
+e7e058d7 ubfx	r5, r7, #0x11, #0x1
+e7a058d7 sbfx	r5, r7, #0x11, #0x1
+e7d1589f bfc	r5, #17, #1
+e7d15899 bfi	r5, r9, #17, #1
+e7e158d7 ubfx	r5, r7, #0x11, #0x2
+e7a158d7 sbfx	r5, r7, #0x11, #0x2
+e7d2589f bfc	r5, #17, #2
+e7d25899 bfi	r5, r9, #17, #2
+e7e258d7 ubfx	r5, r7, #0x11, #0x3
+e7a258d7 sbfx	r5, r7, #0x11, #0x3
+e7d3589f bfc	r5, #17, #3
+e7d35899 bfi	r5, r9, #17, #3
+e7e658d7 ubfx	r5, r7, #0x11, #0x7
+e7a658d7 sbfx	r5, r7, #0x11, #0x7
+e7d7589f bfc	r5, #17, #7
+e7d75899 bfi	r5, r9, #17, #7
+e7e758d7 ubfx	r5, r7, #0x11, #0x8
+e7a758d7 sbfx	r5, r7, #0x11, #0x8
+e7d8589f bfc	r5, #17, #8
+e7d85899 bfi	r5, r9, #17, #8
+e7ee58d7 ubfx	r5, r7, #0x11, #0xf
+e7ae58d7 sbfx	r5, r7, #0x11, #0xf
+e7df589f bfc	r5, #17, #15
+e7df5899 bfi	r5, r9, #17, #15
+e7e05bd7 ubfx	r5, r7, #0x17, #0x1
+e7a05bd7 sbfx	r5, r7, #0x17, #0x1
+e7d75b9f bfc	r5, #23, #1
+e7d75b99 bfi	r5, r9, #23, #1
+e7e15bd7 ubfx	r5, r7, #0x17, #0x2
+e7a15bd7 sbfx	r5, r7, #0x17, #0x2
+e7d85b9f bfc	r5, #23, #2
+e7d85b99 bfi	r5, r9, #23, #2
+e7e25bd7 ubfx	r5, r7, #0x17, #0x3
+e7a25bd7 sbfx	r5, r7, #0x17, #0x3
+e7d95b9f bfc	r5, #23, #3
+e7d95b99 bfi	r5, r9, #23, #3
+e7e65bd7 ubfx	r5, r7, #0x17, #0x7
+e7a65bd7 sbfx	r5, r7, #0x17, #0x7
+e7dd5b9f bfc	r5, #23, #7
+e7dd5b99 bfi	r5, r9, #23, #7
+e7e75bd7 ubfx	r5, r7, #0x17, #0x8
+e7a75bd7 sbfx	r5, r7, #0x17, #0x8
+e7de5b9f bfc	r5, #23, #8
+e7de5b99 bfi	r5, r9, #23, #8
+e7e05dd7 ubfx	r5, r7, #0x1b, #0x1
+e7a05dd7 sbfx	r5, r7, #0x1b, #0x1
+e7db5d9f bfc	r5, #27, #1
+e7db5d99 bfi	r5, r9, #27, #1
+e7e15dd7 ubfx	r5, r7, #0x1b, #0x2
+e7a15dd7 sbfx	r5, r7, #0x1b, #0x2
+e7dc5d9f bfc	r5, #27, #2
+e7dc5d99 bfi	r5, r9, #27, #2
+e7e25dd7 ubfx	r5, r7, #0x1b, #0x3
+e7a25dd7 sbfx	r5, r7, #0x1b, #0x3
+e7dd5d9f bfc	r5, #27, #3
+e7dd5d99 bfi	r5, r9, #27, #3
+e7e05e57 ubfx	r5, r7, #0x1c, #0x1
+e7a05e57 sbfx	r5, r7, #0x1c, #0x1
+e7dc5e1f bfc	r5, #28, #1
+e7dc5e19 bfi	r5, r9, #28, #1
+e7e15e57 ubfx	r5, r7, #0x1c, #0x2
+e7a15e57 sbfx	r5, r7, #0x1c, #0x2
+e7dd5e1f bfc	r5, #28, #2
+e7dd5e19 bfi	r5, r9, #28, #2
+e7e25e57 ubfx	r5, r7, #0x1c, #0x3
+e7a25e57 sbfx	r5, r7, #0x1c, #0x3
+e7de5e1f bfc	r5, #28, #3
+e7de5e19 bfi	r5, r9, #28, #3
+e7e05f57 ubfx	r5, r7, #0x1e, #0x1
+e7a05f57 sbfx	r5, r7, #0x1e, #0x1
+e7de5f1f bfc	r5, #30, #1
+e7de5f19 bfi	r5, r9, #30, #1
+e7e15f57 ubfx	r5, r7, #0x1e, #0x2
+e7a15f57 sbfx	r5, r7, #0x1e, #0x2
+e7df5f1f bfc	r5, #30, #2
+e7df5f19 bfi	r5, r9, #30, #2
+e7e05fd7 ubfx	r5, r7, #0x1f, #0x1
+e7a05fd7 sbfx	r5, r7, #0x1f, #0x1
+e7df5f9f bfc	r5, #31, #1
+e7df5f99 bfi	r5, r9, #31, #1
+e7f000f0 udf	#0x0
+e7f000f1 udf	#0x1
+e7f001f0 udf	#0x10
+e7f5b0f0 udf	#0x5b00
+e7f305fb udf	#0x305b
+e7f5defe udf	#0x5dee
+e7ffffff udf	#0xffff
+e7f800f0 udf	#0x8000
+e7f123f4 udf	#0x1234

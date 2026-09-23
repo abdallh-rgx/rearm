@@ -61,6 +61,12 @@ fn run_corpus(name: &str) {
 fn arm_integer_roundtrip() { run_corpus("arm-integer.txt"); }
 
 #[test]
+fn arm_bitfield_roundtrip() { run_corpus("arm-bitfield.txt"); }
+
+#[test]
+fn arm_multiply_roundtrip() { run_corpus("arm-multiply.txt"); }
+
+#[test]
 fn arm_vfp_roundtrip() { run_corpus("arm-vfp.txt"); }
 
 #[test]
