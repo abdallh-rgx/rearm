@@ -1,0 +1,19 @@
+[workspace]
+resolver = "2"
+members = [
+    "crates/rearm-core",
+    "crates/rearm-verify",
+    "crates/rearm-elf",
+    "crates/rearm-cli",
+]
+
+[workspace.package]
+version = "0.1.0"
+edition = "2021"
+license = "MIT OR Apache-2.0"
+repository = "https://github.com/abdallh-rgx/rearm"
+description = "Cross-architecture ARM disassembler / assembler / recompiler with Z3-verified 1:1 translation"
+
+[profile.release]
+debug = true
+lto = "thin"

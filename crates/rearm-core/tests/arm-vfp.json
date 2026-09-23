@@ -1,0 +1,76 @@
+ed900a00 vldr s0, [r0]
+edd00a01 vldr s1, [r0, #4]
+ed912b02 vldr d2, [r1, #8]
+ed800a00 vstr s0, [r0]
+ed010b02 vstr d0, [r1, #-8]
+ec900a04 vldmia r0, {s0, s1, s2, s3}
+ec900b08 vldmia r0, {d0, d1, d2, d3}
+ecb04a08 vldmia r0!, {s8, s9, s10, s11, s12, s13, s14, s15}
+ed300b08 vldmdb r0!, {d0, d1, d2, d3}
+ec800a04 vstmia r0, {s0, s1, s2, s3}
+eca00b0c vstmia r0!, {d0, d1, d2, d3, d4, d5}
+ed201a08 vstmdb r0!, {s2, s3, s4, s5, s6, s7, s8, s9}
+ee300a81 vadd.f32 s0, s1, s2
+ee310b02 vadd.f64 d0, d1, d2
+ee300ac1 vsub.f32 s0, s1, s2
+ee310b42 vsub.f64 d0, d1, d2
+ee200a81 vmul.f32 s0, s1, s2
+ee210b02 vmul.f64 d0, d1, d2
+ee200ac1 vnmul.f32 s0, s1, s2
+ee800a81 vdiv.f32 s0, s1, s2
+ee810b02 vdiv.f64 d0, d1, d2
+ee000a81 vmla.f32 s0, s1, s2
+ee010b02 vmla.f64 d0, d1, d2
+ee000ac1 vmls.f32 s0, s1, s2
+ee100ac1 vnmla.f32 s0, s1, s2
+ee100a81 vnmls.f32 s0, s1, s2
+ee110b42 vnmla.f64 d0, d1, d2
+ee110b02 vnmls.f64 d0, d1, d2
+eeb00ae0 vabs.f32 s0, s1
+eeb00bc1 vabs.f64 d0, d1
+eeb10a60 vneg.f32 s0, s1
+eeb10b41 vneg.f64 d0, d1
+eeb10ae0 vsqrt.f32 s0, s1
+eeb10bc1 vsqrt.f64 d0, d1
+eeb40a60 vcmp.f32 s0, s1
+eeb40b41 vcmp.f64 d0, d1
+eeb40ae0 vcmpe.f32 s0, s1
+eeb50a40 vcmp.f32 s0, #0
+eeb50ac0 vcmpe.f32 s0, #0
+eeb50b40 vcmp.f64 d0, #0
+eeb00a60 vmov.f32 s0, s1
+f2210111 vorr d0, d1, d1
+eeb70a00 vmov.f32 s0, #1.000000e+00
+eef60a00 vmov.f32 s1, #5.000000e-01
+eeb00b00 vmov.f64 d0, #2.000000e+00
+ee100a90 vmov r0, s1
+ee000a90 vmov s1, r0
+ec510b12 vmov r0, r1, d2
+ec410b12 vmov d2, r0, r1
+ee110b10 vmov.32 r0, d1[0]
+ee010b10 vmov.32 d1[0], r0
+ee310b10 vmov.32 r0, d1[1]
+eef10a10 vmrs r0, fpscr
+eef1fa10 vmrs APSR_nzcv, fpscr
+eee10a10 vmsr fpscr, r0
+eeb80ae0 vcvt.f32.s32 s0, s1
+eeb80a60 vcvt.f32.u32 s0, s1
+eebd0ae0 vcvt.s32.f32 s0, s1
+eebc0ae0 vcvt.u32.f32 s0, s1
+eeb80be0 vcvt.f64.s32 d0, s1
+eebd0bc1 vcvt.s32.f64 s0, d1
+eeb80b60 vcvt.f64.u32 d0, s1
+eebc0bc1 vcvt.u32.f64 s0, d1
+eebd0a60 vcvtr.s32.f32 s0, s1
+eebc0a60 vcvtr.u32.f32 s0, s1
+eeb70bc1 vcvt.f32.f64 s0, d1
+eeb70ae0 vcvt.f64.f32 d0, s1
+eeba0a46 vcvt.f32.s16 s0, s0, #4
+eebb0a42 vcvt.f32.u16 s0, s0, #12
+eebe0a46 vcvt.s16.f32 s0, s0, #4
+eebf0a66 vcvt.u16.f32 s0, s0, #3
+eeba0b64 vcvt.f64.s16 d0, d0, #7
+eebe1b47 vcvt.s16.f64 d1, d1, #2
+eeb8faef vcvt.f32.s32 s30, s31
+eeb7facf vcvt.f64.f32 d15, s30
+eef1facf vsqrt.f32 s31, s30

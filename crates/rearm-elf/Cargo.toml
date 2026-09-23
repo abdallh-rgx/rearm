@@ -1,0 +1,10 @@
+[package]
+name = "rearm-elf"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+description = "ELF/.so cross-architecture recompilation: rewrites armeabi-v7a objects to arm64-v8a and back"
+
+[dependencies]
+rearm-core = { path = "../rearm-core" }
+object = { version = "0.36", features = ["build", "read_core", "write_core", "elf"], default-features = false }

@@ -1,0 +1,862 @@
+[
+{
+"hex": "f2010802",
+"text": "vadd.i8 d0, d1, d2"
+},
+{
+"hex": "f2110802",
+"text": "vadd.i16 d0, d1, d2"
+},
+{
+"hex": "f2210802",
+"text": "vadd.i32 d0, d1, d2"
+},
+{
+"hex": "f2310802",
+"text": "vadd.i64 d0, d1, d2"
+},
+{
+"hex": "f2020844",
+"text": "vadd.i8 q0, q1, q2"
+},
+{
+"hex": "f2120844",
+"text": "vadd.i16 q0, q1, q2"
+},
+{
+"hex": "f2220844",
+"text": "vadd.i32 q0, q1, q2"
+},
+{
+"hex": "f2320844",
+"text": "vadd.i64 q0, q1, q2"
+},
+{
+"hex": "f2010d02",
+"text": "vadd.f32 d0, d1, d2"
+},
+{
+"hex": "f2020d44",
+"text": "vadd.f32 q0, q1, q2"
+},
+{
+"hex": "ee310b02",
+"text": "vadd.f64 d0, d1, d2"
+},
+{
+"hex": "f3010802",
+"text": "vsub.i8 d0, d1, d2"
+},
+{
+"hex": "f3220844",
+"text": "vsub.i32 q0, q1, q2"
+},
+{
+"hex": "f2210d02",
+"text": "vsub.f32 d0, d1, d2"
+},
+{
+"hex": "f2220d44",
+"text": "vsub.f32 q0, q1, q2"
+},
+{
+"hex": "ee310b42",
+"text": "vsub.f64 d0, d1, d2"
+},
+{
+"hex": "f2010912",
+"text": "vmul.i8 d0, d1, d2"
+},
+{
+"hex": "f2120954",
+"text": "vmul.i16 q0, q1, q2"
+},
+{
+"hex": "f2210912",
+"text": "vmul.i32 d0, d1, d2"
+},
+{
+"hex": "f3010d12",
+"text": "vmul.f32 d0, d1, d2"
+},
+{
+"hex": "f3020d54",
+"text": "vmul.f32 q0, q1, q2"
+},
+{
+"hex": "f3010912",
+"text": "vmul.p8 d0, d1, d2"
+},
+{
+"hex": "f2910862",
+"text": "vmul.i16 d0, d1, d2[2]"
+},
+{
+"hex": "f3a20862",
+"text": "vmul.i32 q0, q1, d2[1]"
+},
+{
+"hex": "f2a10942",
+"text": "vmul.f32 d0, d1, d2[0]"
+},
+{
+"hex": "f3a20962",
+"text": "vmul.f32 q0, q1, d2[1]"
+},
+{
+"hex": "f2010902",
+"text": "vmla.i8 d0, d1, d2"
+},
+{
+"hex": "f2120944",
+"text": "vmla.i16 q0, q1, q2"
+},
+{
+"hex": "f2210902",
+"text": "vmla.i32 d0, d1, d2"
+},
+{
+"hex": "f2010d12",
+"text": "vmla.f32 d0, d1, d2"
+},
+{
+"hex": "f2020d54",
+"text": "vmla.f32 q0, q1, q2"
+},
+{
+"hex": "f3110902",
+"text": "vmls.i16 d0, d1, d2"
+},
+{
+"hex": "f2220d54",
+"text": "vmls.f32 q0, q1, q2"
+},
+{
+"hex": "f2810802",
+"text": "vmlal.s8 q0, d1, d2"
+},
+{
+"hex": "f2910802",
+"text": "vmlal.s16 q0, d1, d2"
+},
+{
+"hex": "f2a10802",
+"text": "vmlal.s32 q0, d1, d2"
+},
+{
+"hex": "f3810802",
+"text": "vmlal.u8 q0, d1, d2"
+},
+{
+"hex": "f3910802",
+"text": "vmlal.u16 q0, d1, d2"
+},
+{
+"hex": "f3a10802",
+"text": "vmlal.u32 q0, d1, d2"
+},
+{
+"hex": "f2810a02",
+"text": "vmlsl.s8 q0, d1, d2"
+},
+{
+"hex": "f2910a02",
+"text": "vmlsl.s16 q0, d1, d2"
+},
+{
+"hex": "f2a10a02",
+"text": "vmlsl.s32 q0, d1, d2"
+},
+{
+"hex": "f3910a02",
+"text": "vmlsl.u16 q0, d1, d2"
+},
+{
+"hex": "f2910902",
+"text": "vqdmlal.s16 q0, d1, d2"
+},
+{
+"hex": "f2a10902",
+"text": "vqdmlal.s32 q0, d1, d2"
+},
+{
+"hex": "f2910b02",
+"text": "vqdmlsl.s16 q0, d1, d2"
+},
+{
+"hex": "f2a10b02",
+"text": "vqdmlsl.s32 q0, d1, d2"
+},
+{
+"hex": "f2110b02",
+"text": "vqdmulh.s16 d0, d1, d2"
+},
+{
+"hex": "f2220b44",
+"text": "vqdmulh.s32 q0, q1, q2"
+},
+{
+"hex": "f3110b02",
+"text": "vqrdmulh.s16 d0, d1, d2"
+},
+{
+"hex": "f3220b44",
+"text": "vqrdmulh.s32 q0, q1, q2"
+},
+{
+"hex": "f2810c02",
+"text": "vmull.s8 q0, d1, d2"
+},
+{
+"hex": "f2910c02",
+"text": "vmull.s16 q0, d1, d2"
+},
+{
+"hex": "f2a10c02",
+"text": "vmull.s32 q0, d1, d2"
+},
+{
+"hex": "f3810c02",
+"text": "vmull.u8 q0, d1, d2"
+},
+{
+"hex": "f3910c02",
+"text": "vmull.u16 q0, d1, d2"
+},
+{
+"hex": "f3a10c02",
+"text": "vmull.u32 q0, d1, d2"
+},
+{
+"hex": "f2810e02",
+"text": "vmull.p8 q0, d1, d2"
+},
+{
+"hex": "f2910d02",
+"text": "vqdmull.s16 q0, d1, d2"
+},
+{
+"hex": "f2a10d02",
+"text": "vqdmull.s32 q0, d1, d2"
+},
+{
+"hex": "f2910a6a",
+"text": "vmull.s16 q0, d1, d2[3]"
+},
+{
+"hex": "f2a10b62",
+"text": "vqdmull.s32 q0, d1, d2[1]"
+},
+{
+"hex": "f2010c12",
+"text": "<unknown>"
+},
+{
+"hex": "f2020c54",
+"text": "<unknown>"
+},
+{
+"hex": "f2210c12",
+"text": "<unknown>"
+},
+{
+"hex": "f2220c54",
+"text": "<unknown>"
+},
+{
+"hex": "f2820102",
+"text": "vaddw.s8 q0, q1, d2"
+},
+{
+"hex": "f2920102",
+"text": "vaddw.s16 q0, q1, d2"
+},
+{
+"hex": "f2a20102",
+"text": "vaddw.s32 q0, q1, d2"
+},
+{
+"hex": "f3820102",
+"text": "vaddw.u8 q0, q1, d2"
+},
+{
+"hex": "f3920102",
+"text": "vaddw.u16 q0, q1, d2"
+},
+{
+"hex": "f3a20102",
+"text": "vaddw.u32 q0, q1, d2"
+},
+{
+"hex": "f2810002",
+"text": "vaddl.s8 q0, d1, d2"
+},
+{
+"hex": "f2910002",
+"text": "vaddl.s16 q0, d1, d2"
+},
+{
+"hex": "f2a10002",
+"text": "vaddl.s32 q0, d1, d2"
+},
+{
+"hex": "f3810002",
+"text": "vaddl.u8 q0, d1, d2"
+},
+{
+"hex": "f3910002",
+"text": "vaddl.u16 q0, d1, d2"
+},
+{
+"hex": "f3a10002",
+"text": "vaddl.u32 q0, d1, d2"
+},
+{
+"hex": "f2820404",
+"text": "vaddhn.i16 d0, q1, q2"
+},
+{
+"hex": "f2920404",
+"text": "vaddhn.i32 d0, q1, q2"
+},
+{
+"hex": "f2a20404",
+"text": "vaddhn.i64 d0, q1, q2"
+},
+{
+"hex": "f3820404",
+"text": "vraddhn.i16 d0, q1, q2"
+},
+{
+"hex": "f3920404",
+"text": "vraddhn.i32 d0, q1, q2"
+},
+{
+"hex": "f3a20404",
+"text": "vraddhn.i64 d0, q1, q2"
+},
+{
+"hex": "f2920302",
+"text": "vsubw.s16 q0, q1, d2"
+},
+{
+"hex": "f3a20302",
+"text": "vsubw.u32 q0, q1, d2"
+},
+{
+"hex": "f2810202",
+"text": "vsubl.s8 q0, d1, d2"
+},
+{
+"hex": "f2910202",
+"text": "vsubl.s16 q0, d1, d2"
+},
+{
+"hex": "f2a10202",
+"text": "vsubl.s32 q0, d1, d2"
+},
+{
+"hex": "f3910202",
+"text": "vsubl.u16 q0, d1, d2"
+},
+{
+"hex": "f3a10202",
+"text": "vsubl.u32 q0, d1, d2"
+},
+{
+"hex": "f2820604",
+"text": "vsubhn.i16 d0, q1, q2"
+},
+{
+"hex": "f2920604",
+"text": "vsubhn.i32 d0, q1, q2"
+},
+{
+"hex": "f2a20604",
+"text": "vsubhn.i64 d0, q1, q2"
+},
+{
+"hex": "f3820604",
+"text": "vrsubhn.i16 d0, q1, q2"
+},
+{
+"hex": "f3920604",
+"text": "vrsubhn.i32 d0, q1, q2"
+},
+{
+"hex": "f3a20604",
+"text": "vrsubhn.i64 d0, q1, q2"
+},
+{
+"hex": "f2010002",
+"text": "vhadd.s8 d0, d1, d2"
+},
+{
+"hex": "f2120044",
+"text": "vhadd.s16 q0, q1, q2"
+},
+{
+"hex": "f2210002",
+"text": "vhadd.s32 d0, d1, d2"
+},
+{
+"hex": "f3010002",
+"text": "vhadd.u8 d0, d1, d2"
+},
+{
+"hex": "f3220044",
+"text": "vhadd.u32 q0, q1, q2"
+},
+{
+"hex": "f2010102",
+"text": "vrhadd.s8 d0, d1, d2"
+},
+{
+"hex": "f2120144",
+"text": "vrhadd.s16 q0, q1, q2"
+},
+{
+"hex": "f3210102",
+"text": "vrhadd.u32 d0, d1, d2"
+},
+{
+"hex": "f2010202",
+"text": "vhsub.s8 d0, d1, d2"
+},
+{
+"hex": "f2120244",
+"text": "vhsub.s16 q0, q1, q2"
+},
+{
+"hex": "f2210202",
+"text": "vhsub.s32 d0, d1, d2"
+},
+{
+"hex": "f3020244",
+"text": "vhsub.u8 q0, q1, q2"
+},
+{
+"hex": "f3b10301",
+"text": "vabs.s8 d0, d1"
+},
+{
+"hex": "f3b50342",
+"text": "vabs.s16 q0, q1"
+},
+{
+"hex": "f3b90301",
+"text": "vabs.s32 d0, d1"
+},
+{
+"hex": "f3b90701",
+"text": "vabs.f32 d0, d1"
+},
+{
+"hex": "f3b90742",
+"text": "vabs.f32 q0, q1"
+},
+{
+"hex": "f3b10381",
+"text": "vneg.s8 d0, d1"
+},
+{
+"hex": "f3b503c2",
+"text": "vneg.s16 q0, q1"
+},
+{
+"hex": "f3b90381",
+"text": "vneg.s32 d0, d1"
+},
+{
+"hex": "f3b90781",
+"text": "vneg.f32 d0, d1"
+},
+{
+"hex": "f3b907c2",
+"text": "vneg.f32 q0, q1"
+},
+{
+"hex": "f2010602",
+"text": "vmax.s8 d0, d1, d2"
+},
+{
+"hex": "f2120644",
+"text": "vmax.s16 q0, q1, q2"
+},
+{
+"hex": "f2210602",
+"text": "vmax.s32 d0, d1, d2"
+},
+{
+"hex": "f3010602",
+"text": "vmax.u8 d0, d1, d2"
+},
+{
+"hex": "f3120644",
+"text": "vmax.u16 q0, q1, q2"
+},
+{
+"hex": "f3210602",
+"text": "vmax.u32 d0, d1, d2"
+},
+{
+"hex": "f2010f02",
+"text": "vmax.f32 d0, d1, d2"
+},
+{
+"hex": "f2020f44",
+"text": "vmax.f32 q0, q1, q2"
+},
+{
+"hex": "f2010612",
+"text": "vmin.s8 d0, d1, d2"
+},
+{
+"hex": "f2120654",
+"text": "vmin.s16 q0, q1, q2"
+},
+{
+"hex": "f3210612",
+"text": "vmin.u32 d0, d1, d2"
+},
+{
+"hex": "f2210f02",
+"text": "vmin.f32 d0, d1, d2"
+},
+{
+"hex": "f2220f44",
+"text": "vmin.f32 q0, q1, q2"
+},
+{
+"hex": "f2010a02",
+"text": "vpmax.s8 d0, d1, d2"
+},
+{
+"hex": "f2110a02",
+"text": "vpmax.s16 d0, d1, d2"
+},
+{
+"hex": "f3010a02",
+"text": "vpmax.u8 d0, d1, d2"
+},
+{
+"hex": "f3210a02",
+"text": "vpmax.u32 d0, d1, d2"
+},
+{
+"hex": "f3010f02",
+"text": "vpmax.f32 d0, d1, d2"
+},
+{
+"hex": "f2010a12",
+"text": "vpmin.s8 d0, d1, d2"
+},
+{
+"hex": "f2110a12",
+"text": "vpmin.s16 d0, d1, d2"
+},
+{
+"hex": "f3010a12",
+"text": "vpmin.u8 d0, d1, d2"
+},
+{
+"hex": "f3210f02",
+"text": "vpmin.f32 d0, d1, d2"
+},
+{
+"hex": "f2010b12",
+"text": "vpadd.i8 d0, d1, d2"
+},
+{
+"hex": "f2110b12",
+"text": "vpadd.i16 d0, d1, d2"
+},
+{
+"hex": "f2210b12",
+"text": "vpadd.i32 d0, d1, d2"
+},
+{
+"hex": "f3010d02",
+"text": "vpadd.f32 d0, d1, d2"
+},
+{
+"hex": "f3b00201",
+"text": "vpaddl.s8 d0, d1"
+},
+{
+"hex": "f3b40201",
+"text": "vpaddl.s16 d0, d1"
+},
+{
+"hex": "f3b80242",
+"text": "vpaddl.s32 q0, q1"
+},
+{
+"hex": "f3b002c2",
+"text": "vpaddl.u8 q0, q1"
+},
+{
+"hex": "f3b402c2",
+"text": "vpaddl.u16 q0, q1"
+},
+{
+"hex": "f3b00601",
+"text": "vpadal.s8 d0, d1"
+},
+{
+"hex": "f3b40642",
+"text": "vpadal.s16 q0, q1"
+},
+{
+"hex": "f3b80642",
+"text": "vpadal.s32 q0, q1"
+},
+{
+"hex": "f3b00681",
+"text": "vpadal.u8 d0, d1"
+},
+{
+"hex": "f3b40681",
+"text": "vpadal.u16 d0, d1"
+},
+{
+"hex": "f2010302",
+"text": "vcgt.s8 d0, d1, d2"
+},
+{
+"hex": "f2120344",
+"text": "vcgt.s16 q0, q1, q2"
+},
+{
+"hex": "f2210302",
+"text": "vcgt.s32 d0, d1, d2"
+},
+{
+"hex": "f3020344",
+"text": "vcgt.u8 q0, q1, q2"
+},
+{
+"hex": "f3210e02",
+"text": "vcgt.f32 d0, d1, d2"
+},
+{
+"hex": "f3220e44",
+"text": "vcgt.f32 q0, q1, q2"
+},
+{
+"hex": "f2010312",
+"text": "vcge.s8 d0, d1, d2"
+},
+{
+"hex": "f2120354",
+"text": "vcge.s16 q0, q1, q2"
+},
+{
+"hex": "f3210312",
+"text": "vcge.u32 d0, d1, d2"
+},
+{
+"hex": "f3010e02",
+"text": "vcge.f32 d0, d1, d2"
+},
+{
+"hex": "f3010812",
+"text": "vceq.i8 d0, d1, d2"
+},
+{
+"hex": "f3120854",
+"text": "vceq.i16 q0, q1, q2"
+},
+{
+"hex": "f3210812",
+"text": "vceq.i32 d0, d1, d2"
+},
+{
+"hex": "f2020e44",
+"text": "vceq.f32 q0, q1, q2"
+},
+{
+"hex": "f2020301",
+"text": "vcgt.s8 d0, d2, d1"
+},
+{
+"hex": "f2140342",
+"text": "vcgt.s16 q0, q2, q1"
+},
+{
+"hex": "f3220e01",
+"text": "vcgt.f32 d0, d2, d1"
+},
+{
+"hex": "f2120311",
+"text": "vcge.s16 d0, d2, d1"
+},
+{
+"hex": "f3240352",
+"text": "vcge.u32 q0, q2, q1"
+},
+{
+"hex": "f3b00481",
+"text": "vclz.i8 d0, d1"
+},
+{
+"hex": "f3b404c2",
+"text": "vclz.i16 q0, q1"
+},
+{
+"hex": "f3b80481",
+"text": "vclz.i32 d0, d1"
+},
+{
+"hex": "f3b00401",
+"text": "vcls.s8 d0, d1"
+},
+{
+"hex": "f3b40442",
+"text": "vcls.s16 q0, q1"
+},
+{
+"hex": "f3b80401",
+"text": "vcls.s32 d0, d1"
+},
+{
+"hex": "f3b00501",
+"text": "vcnt.8 d0, d1"
+},
+{
+"hex": "f3b00542",
+"text": "vcnt.8 q0, q1"
+},
+{
+"hex": "f3bb0401",
+"text": "vrecpe.u32 d0, d1"
+},
+{
+"hex": "f3bb0542",
+"text": "vrecpe.f32 q0, q1"
+},
+{
+"hex": "f2010f12",
+"text": "vrecps.f32 d0, d1, d2"
+},
+{
+"hex": "f2020f54",
+"text": "vrecps.f32 q0, q1, q2"
+},
+{
+"hex": "f3bb0481",
+"text": "vrsqrte.u32 d0, d1"
+},
+{
+"hex": "f3bb05c2",
+"text": "vrsqrte.f32 q0, q1"
+},
+{
+"hex": "f2210f12",
+"text": "vrsqrts.f32 d0, d1, d2"
+},
+{
+"hex": "f2220f54",
+"text": "vrsqrts.f32 q0, q1, q2"
+},
+{
+"hex": "f2010012",
+"text": "vqadd.s8 d0, d1, d2"
+},
+{
+"hex": "f2120054",
+"text": "vqadd.s16 q0, q1, q2"
+},
+{
+"hex": "f2210012",
+"text": "vqadd.s32 d0, d1, d2"
+},
+{
+"hex": "f2310012",
+"text": "vqadd.s64 d0, d1, d2"
+},
+{
+"hex": "f3020054",
+"text": "vqadd.u8 q0, q1, q2"
+},
+{
+"hex": "f3110012",
+"text": "vqadd.u16 d0, d1, d2"
+},
+{
+"hex": "f3220054",
+"text": "vqadd.u32 q0, q1, q2"
+},
+{
+"hex": "f2010212",
+"text": "vqsub.s8 d0, d1, d2"
+},
+{
+"hex": "f2120254",
+"text": "vqsub.s16 q0, q1, q2"
+},
+{
+"hex": "f2220254",
+"text": "vqsub.s32 q0, q1, q2"
+},
+{
+"hex": "f2310212",
+"text": "vqsub.s64 d0, d1, d2"
+},
+{
+"hex": "f3010212",
+"text": "vqsub.u8 d0, d1, d2"
+},
+{
+"hex": "f3220254",
+"text": "vqsub.u32 q0, q1, q2"
+},
+{
+"hex": "f3b00701",
+"text": "vqabs.s8 d0, d1"
+},
+{
+"hex": "f3b40742",
+"text": "vqabs.s16 q0, q1"
+},
+{
+"hex": "f3b80701",
+"text": "vqabs.s32 d0, d1"
+},
+{
+"hex": "f3b00781",
+"text": "vqneg.s8 d0, d1"
+},
+{
+"hex": "f3b407c2",
+"text": "vqneg.s16 q0, q1"
+},
+{
+"hex": "f3b80781",
+"text": "vqneg.s32 d0, d1"
+},
+{
+"hex": "f3010f12",
+"text": "<unknown>"
+},
+{
+"hex": "f3020f54",
+"text": "<unknown>"
+},
+{
+"hex": "f3210f12",
+"text": "<unknown>"
+},
+{
+"hex": "f3220f54",
+"text": "<unknown>"
+},
+{
+"hex": "fe810b02",
+"text": "<unknown>"
+},
+{
+"hex": "fe810b42",
+"text": "<unknown>"
+}
+]

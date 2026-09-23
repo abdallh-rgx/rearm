@@ -1,0 +1,15 @@
+[package]
+name = "rearm-cli"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+description = "rearm command line tool: disassemble, assemble, recompile, verify, coverage, benchmark"
+
+[[bin]]
+name = "rearm"
+path = "src/main.rs"
+
+[dependencies]
+rearm-core = { path = "../rearm-core" }
+rearm-verify = { path = "../rearm-verify" }
+rearm-elf = { path = "../rearm-elf" }

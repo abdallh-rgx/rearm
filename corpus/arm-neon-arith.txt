@@ -1,0 +1,215 @@
+f2010802 vadd.i8 d0, d1, d2
+f2110802 vadd.i16 d0, d1, d2
+f2210802 vadd.i32 d0, d1, d2
+f2310802 vadd.i64 d0, d1, d2
+f2020844 vadd.i8 q0, q1, q2
+f2120844 vadd.i16 q0, q1, q2
+f2220844 vadd.i32 q0, q1, q2
+f2320844 vadd.i64 q0, q1, q2
+f2010d02 vadd.f32 d0, d1, d2
+f2020d44 vadd.f32 q0, q1, q2
+ee310b02 vadd.f64 d0, d1, d2
+f3010802 vsub.i8 d0, d1, d2
+f3220844 vsub.i32 q0, q1, q2
+f2210d02 vsub.f32 d0, d1, d2
+f2220d44 vsub.f32 q0, q1, q2
+ee310b42 vsub.f64 d0, d1, d2
+f2010912 vmul.i8 d0, d1, d2
+f2120954 vmul.i16 q0, q1, q2
+f2210912 vmul.i32 d0, d1, d2
+f3010d12 vmul.f32 d0, d1, d2
+f3020d54 vmul.f32 q0, q1, q2
+f3010912 vmul.p8 d0, d1, d2
+f2910862 vmul.i16 d0, d1, d2[2]
+f3a20862 vmul.i32 q0, q1, d2[1]
+f2a10942 vmul.f32 d0, d1, d2[0]
+f3a20962 vmul.f32 q0, q1, d2[1]
+f2010902 vmla.i8 d0, d1, d2
+f2120944 vmla.i16 q0, q1, q2
+f2210902 vmla.i32 d0, d1, d2
+f2010d12 vmla.f32 d0, d1, d2
+f2020d54 vmla.f32 q0, q1, q2
+f3110902 vmls.i16 d0, d1, d2
+f2220d54 vmls.f32 q0, q1, q2
+f2810802 vmlal.s8 q0, d1, d2
+f2910802 vmlal.s16 q0, d1, d2
+f2a10802 vmlal.s32 q0, d1, d2
+f3810802 vmlal.u8 q0, d1, d2
+f3910802 vmlal.u16 q0, d1, d2
+f3a10802 vmlal.u32 q0, d1, d2
+f2810a02 vmlsl.s8 q0, d1, d2
+f2910a02 vmlsl.s16 q0, d1, d2
+f2a10a02 vmlsl.s32 q0, d1, d2
+f3910a02 vmlsl.u16 q0, d1, d2
+f2910902 vqdmlal.s16 q0, d1, d2
+f2a10902 vqdmlal.s32 q0, d1, d2
+f2910b02 vqdmlsl.s16 q0, d1, d2
+f2a10b02 vqdmlsl.s32 q0, d1, d2
+f2110b02 vqdmulh.s16 d0, d1, d2
+f2220b44 vqdmulh.s32 q0, q1, q2
+f3110b02 vqrdmulh.s16 d0, d1, d2
+f3220b44 vqrdmulh.s32 q0, q1, q2
+f2810c02 vmull.s8 q0, d1, d2
+f2910c02 vmull.s16 q0, d1, d2
+f2a10c02 vmull.s32 q0, d1, d2
+f3810c02 vmull.u8 q0, d1, d2
+f3910c02 vmull.u16 q0, d1, d2
+f3a10c02 vmull.u32 q0, d1, d2
+f2810e02 vmull.p8 q0, d1, d2
+f2910d02 vqdmull.s16 q0, d1, d2
+f2a10d02 vqdmull.s32 q0, d1, d2
+f2910a6a vmull.s16 q0, d1, d2[3]
+f2a10b62 vqdmull.s32 q0, d1, d2[1]
+f2010c12 <unknown>
+f2020c54 <unknown>
+f2210c12 <unknown>
+f2220c54 <unknown>
+f2820102 vaddw.s8 q0, q1, d2
+f2920102 vaddw.s16 q0, q1, d2
+f2a20102 vaddw.s32 q0, q1, d2
+f3820102 vaddw.u8 q0, q1, d2
+f3920102 vaddw.u16 q0, q1, d2
+f3a20102 vaddw.u32 q0, q1, d2
+f2810002 vaddl.s8 q0, d1, d2
+f2910002 vaddl.s16 q0, d1, d2
+f2a10002 vaddl.s32 q0, d1, d2
+f3810002 vaddl.u8 q0, d1, d2
+f3910002 vaddl.u16 q0, d1, d2
+f3a10002 vaddl.u32 q0, d1, d2
+f2820404 vaddhn.i16 d0, q1, q2
+f2920404 vaddhn.i32 d0, q1, q2
+f2a20404 vaddhn.i64 d0, q1, q2
+f3820404 vraddhn.i16 d0, q1, q2
+f3920404 vraddhn.i32 d0, q1, q2
+f3a20404 vraddhn.i64 d0, q1, q2
+f2920302 vsubw.s16 q0, q1, d2
+f3a20302 vsubw.u32 q0, q1, d2
+f2810202 vsubl.s8 q0, d1, d2
+f2910202 vsubl.s16 q0, d1, d2
+f2a10202 vsubl.s32 q0, d1, d2
+f3910202 vsubl.u16 q0, d1, d2
+f3a10202 vsubl.u32 q0, d1, d2
+f2820604 vsubhn.i16 d0, q1, q2
+f2920604 vsubhn.i32 d0, q1, q2
+f2a20604 vsubhn.i64 d0, q1, q2
+f3820604 vrsubhn.i16 d0, q1, q2
+f3920604 vrsubhn.i32 d0, q1, q2
+f3a20604 vrsubhn.i64 d0, q1, q2
+f2010002 vhadd.s8 d0, d1, d2
+f2120044 vhadd.s16 q0, q1, q2
+f2210002 vhadd.s32 d0, d1, d2
+f3010002 vhadd.u8 d0, d1, d2
+f3220044 vhadd.u32 q0, q1, q2
+f2010102 vrhadd.s8 d0, d1, d2
+f2120144 vrhadd.s16 q0, q1, q2
+f3210102 vrhadd.u32 d0, d1, d2
+f2010202 vhsub.s8 d0, d1, d2
+f2120244 vhsub.s16 q0, q1, q2
+f2210202 vhsub.s32 d0, d1, d2
+f3020244 vhsub.u8 q0, q1, q2
+f3b10301 vabs.s8 d0, d1
+f3b50342 vabs.s16 q0, q1
+f3b90301 vabs.s32 d0, d1
+f3b90701 vabs.f32 d0, d1
+f3b90742 vabs.f32 q0, q1
+f3b10381 vneg.s8 d0, d1
+f3b503c2 vneg.s16 q0, q1
+f3b90381 vneg.s32 d0, d1
+f3b90781 vneg.f32 d0, d1
+f3b907c2 vneg.f32 q0, q1
+f2010602 vmax.s8 d0, d1, d2
+f2120644 vmax.s16 q0, q1, q2
+f2210602 vmax.s32 d0, d1, d2
+f3010602 vmax.u8 d0, d1, d2
+f3120644 vmax.u16 q0, q1, q2
+f3210602 vmax.u32 d0, d1, d2
+f2010f02 vmax.f32 d0, d1, d2
+f2020f44 vmax.f32 q0, q1, q2
+f2010612 vmin.s8 d0, d1, d2
+f2120654 vmin.s16 q0, q1, q2
+f3210612 vmin.u32 d0, d1, d2
+f2210f02 vmin.f32 d0, d1, d2
+f2220f44 vmin.f32 q0, q1, q2
+f2010a02 vpmax.s8 d0, d1, d2
+f2110a02 vpmax.s16 d0, d1, d2
+f3010a02 vpmax.u8 d0, d1, d2
+f3210a02 vpmax.u32 d0, d1, d2
+f3010f02 vpmax.f32 d0, d1, d2
+f2010a12 vpmin.s8 d0, d1, d2
+f2110a12 vpmin.s16 d0, d1, d2
+f3010a12 vpmin.u8 d0, d1, d2
+f3210f02 vpmin.f32 d0, d1, d2
+f2010b12 vpadd.i8 d0, d1, d2
+f2110b12 vpadd.i16 d0, d1, d2
+f2210b12 vpadd.i32 d0, d1, d2
+f3010d02 vpadd.f32 d0, d1, d2
+f3b00201 vpaddl.s8 d0, d1
+f3b40201 vpaddl.s16 d0, d1
+f3b80242 vpaddl.s32 q0, q1
+f3b002c2 vpaddl.u8 q0, q1
+f3b402c2 vpaddl.u16 q0, q1
+f3b00601 vpadal.s8 d0, d1
+f3b40642 vpadal.s16 q0, q1
+f3b80642 vpadal.s32 q0, q1
+f3b00681 vpadal.u8 d0, d1
+f3b40681 vpadal.u16 d0, d1
+f2010302 vcgt.s8 d0, d1, d2
+f2120344 vcgt.s16 q0, q1, q2
+f2210302 vcgt.s32 d0, d1, d2
+f3020344 vcgt.u8 q0, q1, q2
+f3210e02 vcgt.f32 d0, d1, d2
+f3220e44 vcgt.f32 q0, q1, q2
+f2010312 vcge.s8 d0, d1, d2
+f2120354 vcge.s16 q0, q1, q2
+f3210312 vcge.u32 d0, d1, d2
+f3010e02 vcge.f32 d0, d1, d2
+f3010812 vceq.i8 d0, d1, d2
+f3120854 vceq.i16 q0, q1, q2
+f3210812 vceq.i32 d0, d1, d2
+f2020e44 vceq.f32 q0, q1, q2
+f2020301 vcgt.s8 d0, d2, d1
+f2140342 vcgt.s16 q0, q2, q1
+f3220e01 vcgt.f32 d0, d2, d1
+f2120311 vcge.s16 d0, d2, d1
+f3240352 vcge.u32 q0, q2, q1
+f3b00481 vclz.i8 d0, d1
+f3b404c2 vclz.i16 q0, q1
+f3b80481 vclz.i32 d0, d1
+f3b00401 vcls.s8 d0, d1
+f3b40442 vcls.s16 q0, q1
+f3b80401 vcls.s32 d0, d1
+f3b00501 vcnt.8 d0, d1
+f3b00542 vcnt.8 q0, q1
+f3bb0401 vrecpe.u32 d0, d1
+f3bb0542 vrecpe.f32 q0, q1
+f2010f12 vrecps.f32 d0, d1, d2
+f2020f54 vrecps.f32 q0, q1, q2
+f3bb0481 vrsqrte.u32 d0, d1
+f3bb05c2 vrsqrte.f32 q0, q1
+f2210f12 vrsqrts.f32 d0, d1, d2
+f2220f54 vrsqrts.f32 q0, q1, q2
+f2010012 vqadd.s8 d0, d1, d2
+f2120054 vqadd.s16 q0, q1, q2
+f2210012 vqadd.s32 d0, d1, d2
+f2310012 vqadd.s64 d0, d1, d2
+f3020054 vqadd.u8 q0, q1, q2
+f3110012 vqadd.u16 d0, d1, d2
+f3220054 vqadd.u32 q0, q1, q2
+f2010212 vqsub.s8 d0, d1, d2
+f2120254 vqsub.s16 q0, q1, q2
+f2220254 vqsub.s32 q0, q1, q2
+f2310212 vqsub.s64 d0, d1, d2
+f3010212 vqsub.u8 d0, d1, d2
+f3220254 vqsub.u32 q0, q1, q2
+f3b00701 vqabs.s8 d0, d1
+f3b40742 vqabs.s16 q0, q1
+f3b80701 vqabs.s32 d0, d1
+f3b00781 vqneg.s8 d0, d1
+f3b407c2 vqneg.s16 q0, q1
+f3b80781 vqneg.s32 d0, d1
+f3010f12 <unknown>
+f3020f54 <unknown>
+f3210f12 <unknown>
+f3220f54 <unknown>
+fe810b02 <unknown>
+fe810b42 <unknown>

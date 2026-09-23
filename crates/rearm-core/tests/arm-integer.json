@@ -1,0 +1,263 @@
+e0810002 add r0, r1, r2
+e0810182 add r0, r1, r2, lsl #3
+e08103a2 add r0, r1, r2, lsr #7
+e08104c2 add r0, r1, r2, asr #9
+e08105e2 add r0, r1, r2, ror #11
+e0810062 add r0, r1, r2, rrx
+e0910002 adds r0, r1, r2
+e0910f82 adds r0, r1, r2, lsl #31
+e0a43005 adc r3, r4, r5
+e0b43145 adcs r3, r4, r5, asr #2
+e0410002 sub r0, r1, r2
+e2510010 subs r0, r1, #16
+e0c32004 sbc r2, r3, r4
+e0d32464 sbcs r2, r3, r4, ror #8
+e26100ff rsb r0, r1, #255
+e0710282 rsbs r0, r1, r2, lsl #5
+e2e21a01 rsc r1, r2, #4096
+e0010002 and r0, r1, r2
+e0110082 ands r0, r1, r2, lsl #1
+e1c10002 bic r0, r1, r2
+e1d10222 bics r0, r1, r2, lsr #4
+e0265007 eor r5, r6, r7
+e03651c7 eors r5, r6, r7, asr #3
+e189800a orr r8, r9, r10
+e199836a orrs r8, r9, r10, ror #6
+e1a00001 mov r0, r1
+e1a00101 lsl r0, r1, #2
+e1b00001 movs r0, r1
+e1b00fa1 lsrs r0, r1, #31
+e3a00e12 mov r0, #288
+e3b000ff movs r0, #255
+e1e02003 mvn r2, r3
+e3f02040 mvns r2, #64
+e0810712 add r0, r1, r2, lsl r7
+e0410732 sub r0, r1, r2, lsr r7
+e0810352 add r0, r1, r2, asr r3
+e1810472 orr r0, r1, r2, ror r4
+e1100001 tst r0, r1
+e1100201 tst r0, r1, lsl #4
+e3100003 tst r0, #3
+e1310442 teq r1, r2, asr #8
+e1500001 cmp r0, r1
+e350004d cmp r0, #77
+e1500621 cmp r0, r1, lsr #12
+e1700001 cmn r0, r1
+e1700161 cmn r0, r1, ror #2
+e28f0008 add r0, pc, #8
+e24f0004 sub r0, pc, #4
+e1a0000f mov r0, pc
+e0000291 mul r0, r1, r2
+e0100291 muls r0, r1, r2
+e0236594 mla r3, r4, r5, r6
+e0336594 mlas r3, r4, r5, r6
+e0636594 mls r3, r4, r5, r6
+e0c21493 smull r1, r2, r3, r4
+e0821493 umull r1, r2, r3, r4
+e0e21493 smlal r1, r2, r3, r4
+e0a21493 umlal r1, r2, r3, r4
+e0d21493 smulls r1, r2, r3, r4
+e1600281 smulbb r0, r1, r2
+e16002c1 smulbt r0, r1, r2
+e16002a1 smultb r0, r1, r2
+e16002e1 smultt r0, r1, r2
+e1003281 smlabb r0, r1, r2, r3
+e10032c1 smlabt r0, r1, r2, r3
+e10032a1 smlatb r0, r1, r2, r3
+e10032e1 smlatt r0, r1, r2, r3
+e12002a1 smulwb r0, r1, r2
+e12002e1 smulwt r0, r1, r2
+e1203281 smlawb r0, r1, r2, r3
+e12032c1 smlawt r0, r1, r2, r3
+e700f211 smuad r0, r1, r2
+e700f231 smuadx r0, r1, r2
+e700f251 smusd r0, r1, r2
+e700f271 smusdx r0, r1, r2
+e7003211 smlad r0, r1, r2, r3
+e7003231 smladx r0, r1, r2, r3
+e7003251 smlsd r0, r1, r2, r3
+e7003271 smlsdx r0, r1, r2, r3
+e7432514 smlald r2, r3, r4, r5
+e7432534 smlaldx r2, r3, r4, r5
+e7432554 smlsld r2, r3, r4, r5
+e7432574 smlsldx r2, r3, r4, r5
+e6110f12 sadd16 r0, r1, r2
+e6110f92 sadd8 r0, r1, r2
+e6110f32 sasx r0, r1, r2
+e6110f52 ssax r0, r1, r2
+e6110f72 ssub16 r0, r1, r2
+e6110ff2 ssub8 r0, r1, r2
+e6210f12 qadd16 r0, r1, r2
+e6210f92 qadd8 r0, r1, r2
+e6210f32 qasx r0, r1, r2
+e6210f52 qsax r0, r1, r2
+e6210f72 qsub16 r0, r1, r2
+e6210ff2 qsub8 r0, r1, r2
+e6310f12 shadd16 r0, r1, r2
+e6310f92 shadd8 r0, r1, r2
+e6310f32 shasx r0, r1, r2
+e6310f52 shsax r0, r1, r2
+e6310f72 shsub16 r0, r1, r2
+e6310ff2 shsub8 r0, r1, r2
+e6510f12 uadd16 r0, r1, r2
+e6510f92 uadd8 r0, r1, r2
+e6510f32 uasx r0, r1, r2
+e6510f52 usax r0, r1, r2
+e6510f72 usub16 r0, r1, r2
+e6510ff2 usub8 r0, r1, r2
+e6610f12 uqadd16 r0, r1, r2
+e6610f92 uqadd8 r0, r1, r2
+e6610f32 uqasx r0, r1, r2
+e6610f52 uqsax r0, r1, r2
+e6610f72 uqsub16 r0, r1, r2
+e6610ff2 uqsub8 r0, r1, r2
+e6710f12 uhadd16 r0, r1, r2
+e6710f92 uhadd8 r0, r1, r2
+e6710f32 uhasx r0, r1, r2
+e6710f52 uhsax r0, r1, r2
+e6710f72 uhsub16 r0, r1, r2
+e6710ff2 uhsub8 r0, r1, r2
+e6810012 pkhbt r0, r1, r2
+e6810292 pkhbt r0, r1, r2, lsl #5
+e6820011 pkhbt r0, r2, r1
+e68104d2 pkhtb r0, r1, r2, asr #9
+e6810fb2 sel r0, r1, r2
+e780f211 usad8 r0, r1, r2
+e7803211 usada8 r0, r1, r2, r3
+e6a60011 ssat r0, #0x7, r1
+e6a60211 ssat r0, #0x7, r1, lsl #4
+e6be01d1 ssat r0, #0x1f, r1, asr #3
+e6e70011 usat r0, #0x7, r1
+e6e70211 usat r0, #0x7, r1, lsl #4
+e6ff01d1 usat r0, #0x1f, r1, asr #3
+e6a60f31 ssat16 r0, #0x7, r1
+e6e70f31 usat16 r0, #0x7, r1
+e1020051 qadd r0, r1, r2
+e1220051 qsub r0, r1, r2
+e1420051 qdadd r0, r1, r2
+e1620051 qdsub r0, r1, r2
+e6bf0f31 rev r0, r1
+e6bf0fb1 rev16 r0, r1
+e6ff0fb1 revsh r0, r1
+e16f0f11 clz r0, r1
+e6ff0f31 rbit r0, r1
+e7a601d1 sbfx r0, r1, #0x3, #0x7
+e7e601d1 ubfx r0, r1, #0x3, #0x7
+e7c9019f bfc r0, #3, #7
+e7c90191 bfi r0, r1, #3, #7
+e6af0071 sxtb r0, r1
+e6af0471 sxtb r0, r1, ror #8
+e6bf2073 sxth r2, r3
+e68f2073 sxtb16 r2, r3
+e6ef0071 uxtb r0, r1
+e6ef0871 uxtb r0, r1, ror #16
+e6ff2073 uxth r2, r3
+e6cf2073 uxtb16 r2, r3
+e6a10072 sxtab r0, r1, r2
+e6a10472 sxtab r0, r1, r2, ror #8
+e6b10072 sxtah r0, r1, r2
+e6810072 sxtab16 r0, r1, r2
+e6e10072 uxtab r0, r1, r2
+e6f10072 uxtah r0, r1, r2
+e6c10072 uxtab16 r0, r1, r2
+e710f211 <unknown>
+e730f211 <unknown>
+e5910000 ldr r0, [r1]
+e5910008 ldr r0, [r1, #0x8]
+e5110008 ldr r0, [r1, #-0x8]
+e5b10008 ldr r0, [r1, #0x8]!
+e4910008 ldr r0, [r1], #8
+e4110008 ldr r0, [r1], #-8
+e7910002 ldr r0, [r1, r2]
+e7910102 ldr r0, [r1, r2, lsl #2]
+e7110002 ldr r0, [r1, -r2]
+e5810004 str r0, [r1, #0x4]
+e5a10004 str r0, [r1, #0x4]!
+e4810004 str r0, [r1], #4
+e7810082 str r0, [r1, r2, lsl #1]
+e5d10003 ldrb r0, [r1, #0x3]
+e5c10003 strb r0, [r1, #0x3]
+e1d100b6 ldrh r0, [r1, #6]
+e1c100b6 strh r0, [r1, #6]
+e19100b2 ldrh r0, [r1, r2]
+e1d100d5 ldrsb r0, [r1, #5]
+e1d100f5 ldrsh r0, [r1, #5]
+e19100d2 ldrsb r0, [r1, r2]
+e19100f2 ldrsh r0, [r1, r2]
+e1c120d8 ldrd r2, r3, [r1, #8]
+e1c120f8 strd r2, r3, [r1, #8]
+e0c120d8 ldrd r2, r3, [r1], #8
+e8900006 ldm r0, {r1, r2}
+e890028e ldm r0, {r1, r2, r3, r7, r9}
+e8900006 ldm r0, {r1, r2}
+e9100006 ldmdb r0, {r1, r2}
+e9900006 ldmib r0, {r1, r2}
+e8100006 ldmda r0, {r1, r2}
+e8b00006 ldm r0!, {r1, r2}
+e8800006 stm r0, {r1, r2}
+e8800006 stm r0, {r1, r2}
+e9200006 stmdb r0!, {r1, r2}
+e9800006 stmib r0, {r1, r2}
+e8000006 stmda r0, {r1, r2}
+e92d0ff0 push {r4, r5, r6, r7, r8, r9, r10, r11}
+e8bd0ff0 pop {r4, r5, r6, r7, r8, r9, r10, r11}
+e8908006 ldm r0, {r1, r2, pc}
+e1910f9f ldrex r0, [r1]
+e1910f9f ldrex r0, [r1]
+e1c21f90 strexb r1, r0, [r2]
+e1f10f9f ldrexh r0, [r1]
+e1e21f90 strexh r1, r0, [r2]
+e1d10f9f ldrexb r0, [r1]
+e1c120d0 ldrd r2, r3, [r1]
+e1b12f9f ldrexd r2, r3, [r1]
+e1a16f92 strexd r6, r2, r3, [r1]
+ea000004 b 0x36c <.text+0x36c> @ imm = #0x10
+1a000002 bne 0x368 <.text+0x368> @ imm = #0x8
+0a000003 beq 0x370 <.text+0x370> @ imm = #0xc
+baffffff blt 0x364 <.text+0x364> @ imm = #-0x4
+ca000002 bgt 0x374 <.text+0x374> @ imm = #0x8
+da000004 ble 0x380 <.text+0x380> @ imm = #0x10
+8a000001 bhi 0x378 <.text+0x378> @ imm = #0x4
+9a000002 bls 0x380 <.text+0x380> @ imm = #0x8
+aafffffd bge 0x370 <.text+0x370> @ imm = #-0xc
+eb000008 bl 0x3a0 <.text+0x3a0> @ imm = #0x20
+fa000004 blx 0x394 <.text+0x394> @ imm = #0x10
+e12fff1e bx lr
+e12fff12 bx r2
+e12fff33 blx r3
+ef000000 svc #0x0
+ef123456 svc #0x123456
+e320f000 nop
+e320f000 nop
+e320f001 yield
+e320f002 wfe
+e320f003 wfi
+e320f004 sev
+f57ff05f dmb sy
+f57ff04f dsb sy
+f57ff06f isb sy
+f57ff05b dmb ish
+f57ff047 dsb nsh
+e10f0000 mrs r0, apsr
+e10f0000 mrs r0, apsr
+e14f0000 mrs r0, spsr
+e128f000 msr APSR_nzcvq, r0
+e124f000 msr APSR_g, r0
+e12cf000 msr APSR_nzcvqg, r0
+e121f000 msr CPSR_c, r0
+e123f000 msr CPSR_xc, r0
+e321f013 msr CPSR_c, #19
+e16ff000 msr SPSR_fsxc, r0
+e120007c bkpt #0xc
+f5d0f000 pld [r0]
+f5d0f004 pld [r0, #0x4]
+f7d1f002 pld [r1, r2]
+f4d2f010 pli [r2, #0x10]
+f6d2f103 pli [r2, r3, lsl #2]
+f1010200 setend be
+f1010000 setend le
+ea000001 b 0x414 <.text+0x414> @ imm = #0x4
+1a000001 bne 0x418 <.text+0x418> @ imm = #0x4
+0a000001 beq 0x41c <.text+0x41c> @ imm = #0x4
+e59f0008 ldr r0, [pc, #0x8] @ 0x424 <.text+0x424>
+e28f0000 add r0, pc, #0

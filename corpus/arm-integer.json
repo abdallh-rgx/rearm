@@ -1,0 +1,1054 @@
+[
+{
+"hex": "e0810002",
+"text": "add r0, r1, r2"
+},
+{
+"hex": "e0810182",
+"text": "add r0, r1, r2, lsl #3"
+},
+{
+"hex": "e08103a2",
+"text": "add r0, r1, r2, lsr #7"
+},
+{
+"hex": "e08104c2",
+"text": "add r0, r1, r2, asr #9"
+},
+{
+"hex": "e08105e2",
+"text": "add r0, r1, r2, ror #11"
+},
+{
+"hex": "e0810062",
+"text": "add r0, r1, r2, rrx"
+},
+{
+"hex": "e0910002",
+"text": "adds r0, r1, r2"
+},
+{
+"hex": "e0910f82",
+"text": "adds r0, r1, r2, lsl #31"
+},
+{
+"hex": "e0a43005",
+"text": "adc r3, r4, r5"
+},
+{
+"hex": "e0b43145",
+"text": "adcs r3, r4, r5, asr #2"
+},
+{
+"hex": "e0410002",
+"text": "sub r0, r1, r2"
+},
+{
+"hex": "e2510010",
+"text": "subs r0, r1, #16"
+},
+{
+"hex": "e0c32004",
+"text": "sbc r2, r3, r4"
+},
+{
+"hex": "e0d32464",
+"text": "sbcs r2, r3, r4, ror #8"
+},
+{
+"hex": "e26100ff",
+"text": "rsb r0, r1, #255"
+},
+{
+"hex": "e0710282",
+"text": "rsbs r0, r1, r2, lsl #5"
+},
+{
+"hex": "e2e21a01",
+"text": "rsc r1, r2, #4096"
+},
+{
+"hex": "e0010002",
+"text": "and r0, r1, r2"
+},
+{
+"hex": "e0110082",
+"text": "ands r0, r1, r2, lsl #1"
+},
+{
+"hex": "e1c10002",
+"text": "bic r0, r1, r2"
+},
+{
+"hex": "e1d10222",
+"text": "bics r0, r1, r2, lsr #4"
+},
+{
+"hex": "e0265007",
+"text": "eor r5, r6, r7"
+},
+{
+"hex": "e03651c7",
+"text": "eors r5, r6, r7, asr #3"
+},
+{
+"hex": "e189800a",
+"text": "orr r8, r9, r10"
+},
+{
+"hex": "e199836a",
+"text": "orrs r8, r9, r10, ror #6"
+},
+{
+"hex": "e1a00001",
+"text": "mov r0, r1"
+},
+{
+"hex": "e1a00101",
+"text": "lsl r0, r1, #2"
+},
+{
+"hex": "e1b00001",
+"text": "movs r0, r1"
+},
+{
+"hex": "e1b00fa1",
+"text": "lsrs r0, r1, #31"
+},
+{
+"hex": "e3a00e12",
+"text": "mov r0, #288"
+},
+{
+"hex": "e3b000ff",
+"text": "movs r0, #255"
+},
+{
+"hex": "e1e02003",
+"text": "mvn r2, r3"
+},
+{
+"hex": "e3f02040",
+"text": "mvns r2, #64"
+},
+{
+"hex": "e0810712",
+"text": "add r0, r1, r2, lsl r7"
+},
+{
+"hex": "e0410732",
+"text": "sub r0, r1, r2, lsr r7"
+},
+{
+"hex": "e0810352",
+"text": "add r0, r1, r2, asr r3"
+},
+{
+"hex": "e1810472",
+"text": "orr r0, r1, r2, ror r4"
+},
+{
+"hex": "e1100001",
+"text": "tst r0, r1"
+},
+{
+"hex": "e1100201",
+"text": "tst r0, r1, lsl #4"
+},
+{
+"hex": "e3100003",
+"text": "tst r0, #3"
+},
+{
+"hex": "e1310442",
+"text": "teq r1, r2, asr #8"
+},
+{
+"hex": "e1500001",
+"text": "cmp r0, r1"
+},
+{
+"hex": "e350004d",
+"text": "cmp r0, #77"
+},
+{
+"hex": "e1500621",
+"text": "cmp r0, r1, lsr #12"
+},
+{
+"hex": "e1700001",
+"text": "cmn r0, r1"
+},
+{
+"hex": "e1700161",
+"text": "cmn r0, r1, ror #2"
+},
+{
+"hex": "e28f0008",
+"text": "add r0, pc, #8"
+},
+{
+"hex": "e24f0004",
+"text": "sub r0, pc, #4"
+},
+{
+"hex": "e1a0000f",
+"text": "mov r0, pc"
+},
+{
+"hex": "e0000291",
+"text": "mul r0, r1, r2"
+},
+{
+"hex": "e0100291",
+"text": "muls r0, r1, r2"
+},
+{
+"hex": "e0236594",
+"text": "mla r3, r4, r5, r6"
+},
+{
+"hex": "e0336594",
+"text": "mlas r3, r4, r5, r6"
+},
+{
+"hex": "e0636594",
+"text": "mls r3, r4, r5, r6"
+},
+{
+"hex": "e0c21493",
+"text": "smull r1, r2, r3, r4"
+},
+{
+"hex": "e0821493",
+"text": "umull r1, r2, r3, r4"
+},
+{
+"hex": "e0e21493",
+"text": "smlal r1, r2, r3, r4"
+},
+{
+"hex": "e0a21493",
+"text": "umlal r1, r2, r3, r4"
+},
+{
+"hex": "e0d21493",
+"text": "smulls r1, r2, r3, r4"
+},
+{
+"hex": "e1600281",
+"text": "smulbb r0, r1, r2"
+},
+{
+"hex": "e16002c1",
+"text": "smulbt r0, r1, r2"
+},
+{
+"hex": "e16002a1",
+"text": "smultb r0, r1, r2"
+},
+{
+"hex": "e16002e1",
+"text": "smultt r0, r1, r2"
+},
+{
+"hex": "e1003281",
+"text": "smlabb r0, r1, r2, r3"
+},
+{
+"hex": "e10032c1",
+"text": "smlabt r0, r1, r2, r3"
+},
+{
+"hex": "e10032a1",
+"text": "smlatb r0, r1, r2, r3"
+},
+{
+"hex": "e10032e1",
+"text": "smlatt r0, r1, r2, r3"
+},
+{
+"hex": "e12002a1",
+"text": "smulwb r0, r1, r2"
+},
+{
+"hex": "e12002e1",
+"text": "smulwt r0, r1, r2"
+},
+{
+"hex": "e1203281",
+"text": "smlawb r0, r1, r2, r3"
+},
+{
+"hex": "e12032c1",
+"text": "smlawt r0, r1, r2, r3"
+},
+{
+"hex": "e700f211",
+"text": "smuad r0, r1, r2"
+},
+{
+"hex": "e700f231",
+"text": "smuadx r0, r1, r2"
+},
+{
+"hex": "e700f251",
+"text": "smusd r0, r1, r2"
+},
+{
+"hex": "e700f271",
+"text": "smusdx r0, r1, r2"
+},
+{
+"hex": "e7003211",
+"text": "smlad r0, r1, r2, r3"
+},
+{
+"hex": "e7003231",
+"text": "smladx r0, r1, r2, r3"
+},
+{
+"hex": "e7003251",
+"text": "smlsd r0, r1, r2, r3"
+},
+{
+"hex": "e7003271",
+"text": "smlsdx r0, r1, r2, r3"
+},
+{
+"hex": "e7432514",
+"text": "smlald r2, r3, r4, r5"
+},
+{
+"hex": "e7432534",
+"text": "smlaldx r2, r3, r4, r5"
+},
+{
+"hex": "e7432554",
+"text": "smlsld r2, r3, r4, r5"
+},
+{
+"hex": "e7432574",
+"text": "smlsldx r2, r3, r4, r5"
+},
+{
+"hex": "e6110f12",
+"text": "sadd16 r0, r1, r2"
+},
+{
+"hex": "e6110f92",
+"text": "sadd8 r0, r1, r2"
+},
+{
+"hex": "e6110f32",
+"text": "sasx r0, r1, r2"
+},
+{
+"hex": "e6110f52",
+"text": "ssax r0, r1, r2"
+},
+{
+"hex": "e6110f72",
+"text": "ssub16 r0, r1, r2"
+},
+{
+"hex": "e6110ff2",
+"text": "ssub8 r0, r1, r2"
+},
+{
+"hex": "e6210f12",
+"text": "qadd16 r0, r1, r2"
+},
+{
+"hex": "e6210f92",
+"text": "qadd8 r0, r1, r2"
+},
+{
+"hex": "e6210f32",
+"text": "qasx r0, r1, r2"
+},
+{
+"hex": "e6210f52",
+"text": "qsax r0, r1, r2"
+},
+{
+"hex": "e6210f72",
+"text": "qsub16 r0, r1, r2"
+},
+{
+"hex": "e6210ff2",
+"text": "qsub8 r0, r1, r2"
+},
+{
+"hex": "e6310f12",
+"text": "shadd16 r0, r1, r2"
+},
+{
+"hex": "e6310f92",
+"text": "shadd8 r0, r1, r2"
+},
+{
+"hex": "e6310f32",
+"text": "shasx r0, r1, r2"
+},
+{
+"hex": "e6310f52",
+"text": "shsax r0, r1, r2"
+},
+{
+"hex": "e6310f72",
+"text": "shsub16 r0, r1, r2"
+},
+{
+"hex": "e6310ff2",
+"text": "shsub8 r0, r1, r2"
+},
+{
+"hex": "e6510f12",
+"text": "uadd16 r0, r1, r2"
+},
+{
+"hex": "e6510f92",
+"text": "uadd8 r0, r1, r2"
+},
+{
+"hex": "e6510f32",
+"text": "uasx r0, r1, r2"
+},
+{
+"hex": "e6510f52",
+"text": "usax r0, r1, r2"
+},
+{
+"hex": "e6510f72",
+"text": "usub16 r0, r1, r2"
+},
+{
+"hex": "e6510ff2",
+"text": "usub8 r0, r1, r2"
+},
+{
+"hex": "e6610f12",
+"text": "uqadd16 r0, r1, r2"
+},
+{
+"hex": "e6610f92",
+"text": "uqadd8 r0, r1, r2"
+},
+{
+"hex": "e6610f32",
+"text": "uqasx r0, r1, r2"
+},
+{
+"hex": "e6610f52",
+"text": "uqsax r0, r1, r2"
+},
+{
+"hex": "e6610f72",
+"text": "uqsub16 r0, r1, r2"
+},
+{
+"hex": "e6610ff2",
+"text": "uqsub8 r0, r1, r2"
+},
+{
+"hex": "e6710f12",
+"text": "uhadd16 r0, r1, r2"
+},
+{
+"hex": "e6710f92",
+"text": "uhadd8 r0, r1, r2"
+},
+{
+"hex": "e6710f32",
+"text": "uhasx r0, r1, r2"
+},
+{
+"hex": "e6710f52",
+"text": "uhsax r0, r1, r2"
+},
+{
+"hex": "e6710f72",
+"text": "uhsub16 r0, r1, r2"
+},
+{
+"hex": "e6710ff2",
+"text": "uhsub8 r0, r1, r2"
+},
+{
+"hex": "e6810012",
+"text": "pkhbt r0, r1, r2"
+},
+{
+"hex": "e6810292",
+"text": "pkhbt r0, r1, r2, lsl #5"
+},
+{
+"hex": "e6820011",
+"text": "pkhbt r0, r2, r1"
+},
+{
+"hex": "e68104d2",
+"text": "pkhtb r0, r1, r2, asr #9"
+},
+{
+"hex": "e6810fb2",
+"text": "sel r0, r1, r2"
+},
+{
+"hex": "e780f211",
+"text": "usad8 r0, r1, r2"
+},
+{
+"hex": "e7803211",
+"text": "usada8 r0, r1, r2, r3"
+},
+{
+"hex": "e6a60011",
+"text": "ssat r0, #0x7, r1"
+},
+{
+"hex": "e6a60211",
+"text": "ssat r0, #0x7, r1, lsl #4"
+},
+{
+"hex": "e6be01d1",
+"text": "ssat r0, #0x1f, r1, asr #3"
+},
+{
+"hex": "e6e70011",
+"text": "usat r0, #0x7, r1"
+},
+{
+"hex": "e6e70211",
+"text": "usat r0, #0x7, r1, lsl #4"
+},
+{
+"hex": "e6ff01d1",
+"text": "usat r0, #0x1f, r1, asr #3"
+},
+{
+"hex": "e6a60f31",
+"text": "ssat16 r0, #0x7, r1"
+},
+{
+"hex": "e6e70f31",
+"text": "usat16 r0, #0x7, r1"
+},
+{
+"hex": "e1020051",
+"text": "qadd r0, r1, r2"
+},
+{
+"hex": "e1220051",
+"text": "qsub r0, r1, r2"
+},
+{
+"hex": "e1420051",
+"text": "qdadd r0, r1, r2"
+},
+{
+"hex": "e1620051",
+"text": "qdsub r0, r1, r2"
+},
+{
+"hex": "e6bf0f31",
+"text": "rev r0, r1"
+},
+{
+"hex": "e6bf0fb1",
+"text": "rev16 r0, r1"
+},
+{
+"hex": "e6ff0fb1",
+"text": "revsh r0, r1"
+},
+{
+"hex": "e16f0f11",
+"text": "clz r0, r1"
+},
+{
+"hex": "e6ff0f31",
+"text": "rbit r0, r1"
+},
+{
+"hex": "e7a601d1",
+"text": "sbfx r0, r1, #0x3, #0x7"
+},
+{
+"hex": "e7e601d1",
+"text": "ubfx r0, r1, #0x3, #0x7"
+},
+{
+"hex": "e7c9019f",
+"text": "bfc r0, #3, #7"
+},
+{
+"hex": "e7c90191",
+"text": "bfi r0, r1, #3, #7"
+},
+{
+"hex": "e6af0071",
+"text": "sxtb r0, r1"
+},
+{
+"hex": "e6af0471",
+"text": "sxtb r0, r1, ror #8"
+},
+{
+"hex": "e6bf2073",
+"text": "sxth r2, r3"
+},
+{
+"hex": "e68f2073",
+"text": "sxtb16 r2, r3"
+},
+{
+"hex": "e6ef0071",
+"text": "uxtb r0, r1"
+},
+{
+"hex": "e6ef0871",
+"text": "uxtb r0, r1, ror #16"
+},
+{
+"hex": "e6ff2073",
+"text": "uxth r2, r3"
+},
+{
+"hex": "e6cf2073",
+"text": "uxtb16 r2, r3"
+},
+{
+"hex": "e6a10072",
+"text": "sxtab r0, r1, r2"
+},
+{
+"hex": "e6a10472",
+"text": "sxtab r0, r1, r2, ror #8"
+},
+{
+"hex": "e6b10072",
+"text": "sxtah r0, r1, r2"
+},
+{
+"hex": "e6810072",
+"text": "sxtab16 r0, r1, r2"
+},
+{
+"hex": "e6e10072",
+"text": "uxtab r0, r1, r2"
+},
+{
+"hex": "e6f10072",
+"text": "uxtah r0, r1, r2"
+},
+{
+"hex": "e6c10072",
+"text": "uxtab16 r0, r1, r2"
+},
+{
+"hex": "e710f211",
+"text": "<unknown>"
+},
+{
+"hex": "e730f211",
+"text": "<unknown>"
+},
+{
+"hex": "e5910000",
+"text": "ldr r0, [r1]"
+},
+{
+"hex": "e5910008",
+"text": "ldr r0, [r1, #0x8]"
+},
+{
+"hex": "e5110008",
+"text": "ldr r0, [r1, #-0x8]"
+},
+{
+"hex": "e5b10008",
+"text": "ldr r0, [r1, #0x8]!"
+},
+{
+"hex": "e4910008",
+"text": "ldr r0, [r1], #8"
+},
+{
+"hex": "e4110008",
+"text": "ldr r0, [r1], #-8"
+},
+{
+"hex": "e7910002",
+"text": "ldr r0, [r1, r2]"
+},
+{
+"hex": "e7910102",
+"text": "ldr r0, [r1, r2, lsl #2]"
+},
+{
+"hex": "e7110002",
+"text": "ldr r0, [r1, -r2]"
+},
+{
+"hex": "e5810004",
+"text": "str r0, [r1, #0x4]"
+},
+{
+"hex": "e5a10004",
+"text": "str r0, [r1, #0x4]!"
+},
+{
+"hex": "e4810004",
+"text": "str r0, [r1], #4"
+},
+{
+"hex": "e7810082",
+"text": "str r0, [r1, r2, lsl #1]"
+},
+{
+"hex": "e5d10003",
+"text": "ldrb r0, [r1, #0x3]"
+},
+{
+"hex": "e5c10003",
+"text": "strb r0, [r1, #0x3]"
+},
+{
+"hex": "e1d100b6",
+"text": "ldrh r0, [r1, #6]"
+},
+{
+"hex": "e1c100b6",
+"text": "strh r0, [r1, #6]"
+},
+{
+"hex": "e19100b2",
+"text": "ldrh r0, [r1, r2]"
+},
+{
+"hex": "e1d100d5",
+"text": "ldrsb r0, [r1, #5]"
+},
+{
+"hex": "e1d100f5",
+"text": "ldrsh r0, [r1, #5]"
+},
+{
+"hex": "e19100d2",
+"text": "ldrsb r0, [r1, r2]"
+},
+{
+"hex": "e19100f2",
+"text": "ldrsh r0, [r1, r2]"
+},
+{
+"hex": "e1c120d8",
+"text": "ldrd r2, r3, [r1, #8]"
+},
+{
+"hex": "e1c120f8",
+"text": "strd r2, r3, [r1, #8]"
+},
+{
+"hex": "e0c120d8",
+"text": "ldrd r2, r3, [r1], #8"
+},
+{
+"hex": "e8900006",
+"text": "ldm r0, {r1, r2}"
+},
+{
+"hex": "e890028e",
+"text": "ldm r0, {r1, r2, r3, r7, r9}"
+},
+{
+"hex": "e8900006",
+"text": "ldm r0, {r1, r2}"
+},
+{
+"hex": "e9100006",
+"text": "ldmdb r0, {r1, r2}"
+},
+{
+"hex": "e9900006",
+"text": "ldmib r0, {r1, r2}"
+},
+{
+"hex": "e8100006",
+"text": "ldmda r0, {r1, r2}"
+},
+{
+"hex": "e8b00006",
+"text": "ldm r0!, {r1, r2}"
+},
+{
+"hex": "e8800006",
+"text": "stm r0, {r1, r2}"
+},
+{
+"hex": "e8800006",
+"text": "stm r0, {r1, r2}"
+},
+{
+"hex": "e9200006",
+"text": "stmdb r0!, {r1, r2}"
+},
+{
+"hex": "e9800006",
+"text": "stmib r0, {r1, r2}"
+},
+{
+"hex": "e8000006",
+"text": "stmda r0, {r1, r2}"
+},
+{
+"hex": "e92d0ff0",
+"text": "push {r4, r5, r6, r7, r8, r9, r10, r11}"
+},
+{
+"hex": "e8bd0ff0",
+"text": "pop {r4, r5, r6, r7, r8, r9, r10, r11}"
+},
+{
+"hex": "e8908006",
+"text": "ldm r0, {r1, r2, pc}"
+},
+{
+"hex": "e1910f9f",
+"text": "ldrex r0, [r1]"
+},
+{
+"hex": "e1910f9f",
+"text": "ldrex r0, [r1]"
+},
+{
+"hex": "e1c21f90",
+"text": "strexb r1, r0, [r2]"
+},
+{
+"hex": "e1f10f9f",
+"text": "ldrexh r0, [r1]"
+},
+{
+"hex": "e1e21f90",
+"text": "strexh r1, r0, [r2]"
+},
+{
+"hex": "e1d10f9f",
+"text": "ldrexb r0, [r1]"
+},
+{
+"hex": "e1c120d0",
+"text": "ldrd r2, r3, [r1]"
+},
+{
+"hex": "e1b12f9f",
+"text": "ldrexd r2, r3, [r1]"
+},
+{
+"hex": "e1a16f92",
+"text": "strexd r6, r2, r3, [r1]"
+},
+{
+"hex": "ea000004",
+"text": "b 0x36c <.text+0x36c> @ imm = #0x10"
+},
+{
+"hex": "1a000002",
+"text": "bne 0x368 <.text+0x368> @ imm = #0x8"
+},
+{
+"hex": "0a000003",
+"text": "beq 0x370 <.text+0x370> @ imm = #0xc"
+},
+{
+"hex": "baffffff",
+"text": "blt 0x364 <.text+0x364> @ imm = #-0x4"
+},
+{
+"hex": "ca000002",
+"text": "bgt 0x374 <.text+0x374> @ imm = #0x8"
+},
+{
+"hex": "da000004",
+"text": "ble 0x380 <.text+0x380> @ imm = #0x10"
+},
+{
+"hex": "8a000001",
+"text": "bhi 0x378 <.text+0x378> @ imm = #0x4"
+},
+{
+"hex": "9a000002",
+"text": "bls 0x380 <.text+0x380> @ imm = #0x8"
+},
+{
+"hex": "aafffffd",
+"text": "bge 0x370 <.text+0x370> @ imm = #-0xc"
+},
+{
+"hex": "eb000008",
+"text": "bl 0x3a0 <.text+0x3a0> @ imm = #0x20"
+},
+{
+"hex": "fa000004",
+"text": "blx 0x394 <.text+0x394> @ imm = #0x10"
+},
+{
+"hex": "e12fff1e",
+"text": "bx lr"
+},
+{
+"hex": "e12fff12",
+"text": "bx r2"
+},
+{
+"hex": "e12fff33",
+"text": "blx r3"
+},
+{
+"hex": "ef000000",
+"text": "svc #0x0"
+},
+{
+"hex": "ef123456",
+"text": "svc #0x123456"
+},
+{
+"hex": "e320f000",
+"text": "nop"
+},
+{
+"hex": "e320f000",
+"text": "nop"
+},
+{
+"hex": "e320f001",
+"text": "yield"
+},
+{
+"hex": "e320f002",
+"text": "wfe"
+},
+{
+"hex": "e320f003",
+"text": "wfi"
+},
+{
+"hex": "e320f004",
+"text": "sev"
+},
+{
+"hex": "f57ff05f",
+"text": "dmb sy"
+},
+{
+"hex": "f57ff04f",
+"text": "dsb sy"
+},
+{
+"hex": "f57ff06f",
+"text": "isb sy"
+},
+{
+"hex": "f57ff05b",
+"text": "dmb ish"
+},
+{
+"hex": "f57ff047",
+"text": "dsb nsh"
+},
+{
+"hex": "e10f0000",
+"text": "mrs r0, apsr"
+},
+{
+"hex": "e10f0000",
+"text": "mrs r0, apsr"
+},
+{
+"hex": "e14f0000",
+"text": "mrs r0, spsr"
+},
+{
+"hex": "e128f000",
+"text": "msr APSR_nzcvq, r0"
+},
+{
+"hex": "e124f000",
+"text": "msr APSR_g, r0"
+},
+{
+"hex": "e12cf000",
+"text": "msr APSR_nzcvqg, r0"
+},
+{
+"hex": "e121f000",
+"text": "msr CPSR_c, r0"
+},
+{
+"hex": "e123f000",
+"text": "msr CPSR_xc, r0"
+},
+{
+"hex": "e321f013",
+"text": "msr CPSR_c, #19"
+},
+{
+"hex": "e16ff000",
+"text": "msr SPSR_fsxc, r0"
+},
+{
+"hex": "e120007c",
+"text": "bkpt #0xc"
+},
+{
+"hex": "f5d0f000",
+"text": "pld [r0]"
+},
+{
+"hex": "f5d0f004",
+"text": "pld [r0, #0x4]"
+},
+{
+"hex": "f7d1f002",
+"text": "pld [r1, r2]"
+},
+{
+"hex": "f4d2f010",
+"text": "pli [r2, #0x10]"
+},
+{
+"hex": "f6d2f103",
+"text": "pli [r2, r3, lsl #2]"
+},
+{
+"hex": "f1010200",
+"text": "setend be"
+},
+{
+"hex": "f1010000",
+"text": "setend le"
+},
+{
+"hex": "ea000001",
+"text": "b 0x414 <.text+0x414> @ imm = #0x4"
+},
+{
+"hex": "1a000001",
+"text": "bne 0x418 <.text+0x418> @ imm = #0x4"
+},
+{
+"hex": "0a000001",
+"text": "beq 0x41c <.text+0x41c> @ imm = #0x4"
+},
+{
+"hex": "e59f0008",
+"text": "ldr r0, [pc, #0x8] @ 0x424 <.text+0x424>"
+},
+{
+"hex": "e28f0000",
+"text": "add r0, pc, #0"
+}
+]

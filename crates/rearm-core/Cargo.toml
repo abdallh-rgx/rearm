@@ -1,0 +1,8 @@
+[package]
+name = "rearm-core"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+description = "A32/T32/A64 decoders, encoders, IR and 1:1 recompiler core (no external dependencies)"
+
+[dependencies]

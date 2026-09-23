@@ -1,0 +1,312 @@
+f28b0511 vshl.i8 d0, d1, #0x3
+f2970511 vshl.i16 d0, d1, #0x7
+f2a50552 vshl.i32 q0, q1, #0x5
+f28d0591 vshl.i64 d0, d1, #0xd
+f28d0011 vshr.s8 d0, d1, #0x3
+f38b0011 vshr.u8 d0, d1, #0x5
+f2970052 vshr.s16 q0, q1, #0x9
+f3940011 vshr.u16 d0, d1, #0xc
+f2af0011 vshr.s32 d0, d1, #0x11
+f3a70052 vshr.u32 q0, q1, #0x19
+f2980091 vshr.s64 d0, d1, #0x28
+f3810091 vshr.u64 d0, d1, #0x3f
+f28d0211 vrshr.s8 d0, d1, #0x3
+f38b0211 vrshr.u8 d0, d1, #0x5
+f2970252 vrshr.s16 q0, q1, #0x9
+f3a70211 vrshr.u32 d0, d1, #0x19
+f28d0111 vsra.s8 d0, d1, #0x3
+f3940111 vsra.u16 d0, d1, #0xc
+f2af0352 vrsra.s32 q0, q1, #0x11
+f38b0311 vrsra.u8 d0, d1, #0x5
+f38d0411 vsri.8 d0, d1, #0x3
+f3970452 vsri.16 q0, q1, #0x9
+f3b10511 vsli.32 d0, d1, #0x11
+f3a805d2 vsli.64 q0, q1, #0x28
+f28b0a11 vshll.s8 q0, d1, #0x3
+f38d0a11 vshll.u8 q0, d1, #0x5
+f2990a11 vshll.s16 q0, d1, #0x9
+f39c0a11 vshll.u16 q0, d1, #0xc
+f2b10a11 vshll.s32 q0, d1, #0x11
+f3b90a11 vshll.u32 q0, d1, #0x19
+f28d0812 vshrn.i16 d0, q1, #0x3
+f2970812 vshrn.i32 d0, q1, #0x9
+f2af0812 vshrn.i64 d0, q1, #0x11
+f28d0852 vrshrn.i16 d0, q1, #0x3
+f2970852 vrshrn.i32 d0, q1, #0x9
+f2af0852 vrshrn.i64 d0, q1, #0x11
+f2020401 vshl.s8 d0, d1, d2
+f2140442 vshl.s16 q0, q1, q2
+f3020401 vshl.u8 d0, d1, d2
+f2320401 vshl.s64 d0, d1, d2
+f2020411 vqshl.s8 d0, d1, d2
+f3140452 vqshl.u16 q0, q1, q2
+f3020411 vqshl.u8 d0, d1, d2
+f2240552 vqrshl.s32 q0, q1, q2
+f3020511 vqrshl.u8 d0, d1, d2
+f28b0711 vqshl.s8 d0, d1, #0x3
+f3950711 vqshl.u16 d0, d1, #0x5
+f3970652 vqshlu.s16 q0, q1, #0x7
+f3a90611 vqshlu.s32 d0, d1, #0x9
+f28d0912 vqshrn.s16 d0, q1, #0x3
+f2970912 vqshrn.s32 d0, q1, #0x9
+f38d0912 vqshrn.u16 d0, q1, #0x3
+f38d0812 vqshrun.s16 d0, q1, #0x3
+f3970812 vqshrun.s32 d0, q1, #0x9
+f28d0952 vqrshrn.s16 d0, q1, #0x3
+f3970952 vqrshrn.u32 d0, q1, #0x9
+f38d0852 vqrshrun.s16 d0, q1, #0x3
+f3970852 vqrshrun.s32 d0, q1, #0x9
+f39804d2 vsri.64 q0, q1, #0x28
+f39c0511 vsli.16 d0, d1, #0xc
+f2010112 vand d0, d1, d2
+f2020154 vand q0, q1, q2
+f2210112 vorr d0, d1, d2
+f2220154 vorr q0, q1, q2
+f3010112 veor d0, d1, d2
+f3020154 veor q0, q1, q2
+f2110112 vbic d0, d1, d2
+f2120154 vbic q0, q1, q2
+f2310112 vorn d0, d1, d2
+f2320154 vorn q0, q1, q2
+f3120154 vbsl q0, q1, q2
+f3110112 vbsl d0, d1, d2
+f3210112 vbit d0, d1, d2
+f3220154 vbit q0, q1, q2
+f3310112 vbif d0, d1, d2
+f3320154 vbif q0, q1, q2
+f3b00581 vmvn d0, d1
+f3b005c2 vmvn q0, q1
+f2800e11 vmov.i8 d0, #0x1
+f3870e5f vmov.i8 q0, #0xff
+f2800811 vmov.i16 d0, #0x1
+f2800a11 vmov.i16 d0, #0x100
+f3800850 vmov.i16 q0, #0x80
+f2800011 vmov.i32 d0, #0x1
+f2800211 vmov.i32 d0, #0x100
+f2800411 vmov.i32 d0, #0x10000
+f2800611 vmov.i32 d0, #0x1000000
+f387005f vmov.i32 q0, #0xff
+f287005f vmov.i32 q0, #0x7f
+f3800e78 vmov.i64 q0, #0xff000000ff000000
+f3820e3a vmov.i64 d0, #0xff00ff00ff00ff00
+f2802e71 vmov.i64 q1, #0xff
+f2801e33 vmov.i64 d1, #0xffff
+f2802e3f vmov.i64 d2, #0xffffffff
+f2870f10 vmov.f32 d0, #1.000000e+00
+f2860f10 vmov.f32 d0, #5.000000e-01
+f2800f10 vmov.f32 d0, #2.000000e+00
+f2810f10 vmov.f32 d0, #4.000000e+00
+f2840f10 vmov.f32 d0, #1.250000e-01
+f3870f10 vmov.f32 d0, #-1.000000e+00
+f2870f50 vmov.f32 q0, #1.000000e+00
+f2860f50 vmov.f32 q0, #5.000000e-01
+f3800f50 vmov.f32 q0, #-2.000000e+00
+f387007f vmvn.i32 q0, #0xff
+f2800431 vmvn.i32 d0, #0x10000
+eec01b10 vdup.8 d0, r1
+ee801b30 vdup.16 d0, r1
+ee801b10 vdup.32 d0, r1
+eee01b10 vdup.8 q0, r1
+eea01b30 vdup.16 q0, r1
+eea01b10 vdup.32 q0, r1
+f3b10c01 vdup.8 d0, d1[0]
+f3b30c01 vdup.8 d0, d1[1]
+f3ba0c01 vdup.16 d0, d1[2]
+f3be0c41 vdup.16 q0, d1[3]
+f3b40c01 vdup.32 d0, d1[0]
+f3bc0c01 vdup.32 d0, d1[1]
+f3bc0c41 vdup.32 q0, d1[1]
+f3bc0c42 vdup.32 q0, d2[1]
+ec510b12 vmov r0, r1, d2
+ec532b14 vmov r2, r3, d4
+ec410b12 vmov d2, r0, r1
+ee110b10 vmov.32 r0, d1[0]
+ee310b10 vmov.32 r0, d1[1]
+ee010b10 vmov.32 d1[0], r0
+ee210b10 vmov.32 d1[1], r0
+eeb10b70 vmov.u16 r0, d1[3]
+ee210b70 vmov.16 d1[3], r0
+eef10b70 vmov.u8 r0, d1[7]
+ee610b70 vmov.8 d1[7], r0
+ee332b10 vmov.32 r2, d3[1]
+eeb32b70 vmov.u16 r2, d3[3]
+eef32b70 vmov.u8 r2, d3[7]
+eef10b70 vmov.u8 r0, d1[7]
+eeb10b70 vmov.u16 r0, d1[3]
+ee710b70 vmov.s8 r0, d1[7]
+ee310b70 vmov.s16 r0, d1[3]
+ee310b10 vmov.32 r0, d1[1]
+ee310b10 vmov.32 r0, d1[1]
+eed10b10 vmov.u8 r0, d1[0]
+ee110b70 vmov.s16 r0, d1[1]
+f2bc0f52 vcvt.s32.f32 q0, q1, #0x4
+f3bc0f52 vcvt.u32.f32 q0, q1, #0x4
+f3bb0742 vcvt.s32.f32 q0, q1
+f3bb07c2 vcvt.u32.f32 q0, q1
+f2bc0e52 vcvt.f32.s32 q0, q1, #0x4
+f3bc0e52 vcvt.f32.u32 q0, q1, #0x4
+f3bb0642 vcvt.f32.s32 q0, q1
+f3bb06c2 vcvt.f32.u32 q0, q1
+f3b60602 <unknown>
+f3b60701 <unknown>
+f3bb0401 vrecpe.u32 d0, d1
+f3bb0442 vrecpe.u32 q0, q1
+f2010f12 vrecps.f32 d0, d1, d2
+f3ba0401 <unknown>
+f3ba0442 <unknown>
+f3ba0781 <unknown>
+f3ba0681 <unknown>
+f3ba0581 <unknown>
+f3ba0501 <unknown>
+f3ba04c2 <unknown>
+eeb60bc1 <unknown>
+feb90b41 <unknown>
+eeb10bc1 vsqrt.f64 d0, d1
+eeb00ae0 vabs.f32 s0, s1
+eeb10a60 vneg.f32 s0, s1
+f3b20282 vqmovn.s16 d0, q1
+f3b60282 vqmovn.s32 d0, q1
+f3ba0282 vqmovn.s64 d0, q1
+f3b202c2 vqmovn.u16 d0, q1
+f3b602c2 vqmovn.u32 d0, q1
+f3b20242 vqmovun.s16 d0, q1
+f3b60242 vqmovun.s32 d0, q1
+f3b20202 vmovn.i16 d0, q1
+f3b60202 vmovn.i32 d0, q1
+f2880a11 vmovl.s8 q0, d1
+f2900a11 vmovl.s16 q0, d1
+f2a00a11 vmovl.s32 q0, d1
+f3880a11 vmovl.u8 q0, d1
+f3900a11 vmovl.u16 q0, d1
+f3a00a11 vmovl.u32 q0, d1
+f3b20081 vtrn.8 d0, d1
+f3b600c2 vtrn.16 q0, q1
+f3ba0081 vtrn.32 d0, d1
+f3b200c2 vtrn.8 q0, q1
+f3b20101 vuzp.8 d0, d1
+f3b60142 vuzp.16 q0, q1
+f3ba0081 vtrn.32 d0, d1
+f3b20142 vuzp.8 q0, q1
+f3b20181 vzip.8 d0, d1
+f3b601c2 vzip.16 q0, q1
+f3ba0081 vtrn.32 d0, d1
+f3b201c2 vzip.8 q0, q1
+f2b10302 vext.8 d0, d1, d2, #0x3
+f2b10402 vext.32 d0, d1, d2, #0x1
+f2b20444 vext.32 q0, q1, q2, #0x1
+f2b20844 vext.64 q0, q1, q2, #0x1
+f2b20544 vext.8 q0, q1, q2, #0x5
+f3b10802 vtbl.8 d0, {d1}, d2
+f3b10903 vtbl.8 d0, {d1, d2}, d3
+f3b10a04 vtbl.8 d0, {d1, d2, d3}, d4
+f3b10b05 vtbl.8 d0, {d1, d2, d3, d4}, d5
+f3b10842 vtbx.8 d0, {d1}, d2
+f3b10a44 vtbx.8 d0, {d1, d2, d3}, d4
+f2010812 vtst.8 d0, d1, d2
+f2120854 vtst.16 q0, q1, q2
+f2210812 vtst.32 d0, d1, d2
+f420070f vld1.8 {d0}, [r0]
+f420074f vld1.16 {d0}, [r0]
+f420078f vld1.32 {d0}, [r0]
+f42007cf vld1.64 {d0}, [r0]
+f4200a0f vld1.8 {d0, d1}, [r0]
+f4200a8f vld1.32 {d0, d1}, [r0]
+f4200acf vld1.64 {d0, d1}, [r0]
+f42002ef vld1.64 {d0, d1, d2, d3}, [r0:128]
+f4200acf vld1.64 {d0, d1}, [r0]
+f42002ff vld1.64 {d0, d1, d2, d3}, [r0:256]
+f420071f vld1.8 {d0}, [r0:64]
+f4200a1f vld1.8 {d0, d1}, [r0:64]
+f420061f vld1.8 {d0, d1, d2}, [r0:64]
+f42002af vld1.32 {d0, d1, d2, d3}, [r0:128]
+f4200701 vld1.8 {d0}, [r0], r1
+f4200a81 vld1.32 {d0, d1}, [r0], r1
+f42002c1 vld1.64 {d0, d1, d2, d3}, [r0], r1
+f420070d vld1.8 {d0}, [r0]!
+f42002cd vld1.64 {d0, d1, d2, d3}, [r0]!
+f420080f vld2.8 {d0, d1}, [r0]
+f420084f vld2.16 {d0, d1}, [r0]
+f420088f vld2.32 {d0, d1}, [r0]
+f420030f vld2.8 {d0, d1, d2, d3}, [r0]
+f420039f vld2.32 {d0, d1, d2, d3}, [r0:64]
+f420036f vld2.16 {d0, d1, d2, d3}, [r0:128]
+f4200801 vld2.8 {d0, d1}, [r0], r1
+f420080d vld2.8 {d0, d1}, [r0]!
+f420040f vld3.8 {d0, d1, d2}, [r0]
+f420048f vld3.32 {d0, d1, d2}, [r0]
+f420044f vld3.16 {d0, d1, d2}, [r0]
+f420040d vld3.8 {d0, d1, d2}, [r0]!
+f420000f vld4.8 {d0, d1, d2, d3}, [r0]
+f420004f vld4.16 {d0, d1, d2, d3}, [r0]
+f420008f vld4.32 {d0, d1, d2, d3}, [r0]
+f420003f vld4.8 {d0, d1, d2, d3}, [r0:256]
+f420008f vld4.32 {d0, d1, d2, d3}, [r0]
+f4200001 vld4.8 {d0, d1, d2, d3}, [r0], r1
+f420008d vld4.32 {d0, d1, d2, d3}, [r0]!
+f4a0004f vld1.8 {d0[2]}, [r0]
+f4a014cf vld1.16 {d1[3]}, [r0]
+f4a0288f vld1.32 {d2[1]}, [r0]
+f42007cf vld1.64 {d0}, [r0]
+f4a0012f vld2.8 {d0[1], d1[1]}, [r0]
+f4a0058f vld2.16 {d0[2], d1[2]}, [r0]
+f4a0098f vld2.32 {d0[1], d1[1]}, [r0]
+f4a0022f vld3.8 {d0[1], d1[1], d2[1]}, [r0]
+f4a00a0f vld3.32 {d0[0], d1[0], d2[0]}, [r0]
+f4a0032f vld4.8 {d0[1], d1[1], d2[1], d3[1]}, [r0]
+f4a007cf vld4.16 {d0[3], d1[3], d2[3], d3[3]}, [r0]
+f4a00b0f vld4.32 {d0[0], d1[0], d2[0], d3[0]}, [r0]
+f4a0002d vld1.8 {d0[1]}, [r0]!
+f4a01802 vld1.32 {d1[0]}, [r0], r2
+f4a004cd vld1.16 {d0[3]}, [r0]!
+f4a00c0f vld1.8 {d0[]}, [r0]
+f4a00c8f vld1.32 {d0[]}, [r0]
+f4a00d0f vld2.8 {d0[], d1[]}, [r0]
+f4a00d8f vld2.32 {d0[], d1[]}, [r0]
+f4a00f4f vld4.16 {d0[], d1[], d2[], d3[]}, [r0]
+f400070f vst1.8 {d0}, [r0]
+f400074f vst1.16 {d0}, [r0]
+f400078f vst1.32 {d0}, [r0]
+f40007cf vst1.64 {d0}, [r0]
+f4000a0f vst1.8 {d0, d1}, [r0]
+f4000a8f vst1.32 {d0, d1}, [r0]
+f4000acf vst1.64 {d0, d1}, [r0]
+f40002ef vst1.64 {d0, d1, d2, d3}, [r0:128]
+f4000acf vst1.64 {d0, d1}, [r0]
+f40002ff vst1.64 {d0, d1, d2, d3}, [r0:256]
+f4000701 vst1.8 {d0}, [r0], r1
+f4000a81 vst1.32 {d0, d1}, [r0], r1
+f400070d vst1.8 {d0}, [r0]!
+f40002cd vst1.64 {d0, d1, d2, d3}, [r0]!
+f400080f vst2.8 {d0, d1}, [r0]
+f400084f vst2.16 {d0, d1}, [r0]
+f400088f vst2.32 {d0, d1}, [r0]
+f400030f vst2.8 {d0, d1, d2, d3}, [r0]
+f400039f vst2.32 {d0, d1, d2, d3}, [r0:64]
+f400036f vst2.16 {d0, d1, d2, d3}, [r0:128]
+f4000801 vst2.8 {d0, d1}, [r0], r1
+f400080d vst2.8 {d0, d1}, [r0]!
+f400040f vst3.8 {d0, d1, d2}, [r0]
+f400048f vst3.32 {d0, d1, d2}, [r0]
+f400040d vst3.8 {d0, d1, d2}, [r0]!
+f400000f vst4.8 {d0, d1, d2, d3}, [r0]
+f400004f vst4.16 {d0, d1, d2, d3}, [r0]
+f400008f vst4.32 {d0, d1, d2, d3}, [r0]
+f400003f vst4.8 {d0, d1, d2, d3}, [r0:256]
+f400008f vst4.32 {d0, d1, d2, d3}, [r0]
+f4000001 vst4.8 {d0, d1, d2, d3}, [r0], r1
+f400008d vst4.32 {d0, d1, d2, d3}, [r0]!
+f480004f vst1.8 {d0[2]}, [r0]
+f48014cf vst1.16 {d1[3]}, [r0]
+f480288f vst1.32 {d2[1]}, [r0]
+f480012f vst2.8 {d0[1], d1[1]}, [r0]
+f480058f vst2.16 {d0[2], d1[2]}, [r0]
+f480098f vst2.32 {d0[1], d1[1]}, [r0]
+f480022f vst3.8 {d0[1], d1[1], d2[1]}, [r0]
+f4800a0f vst3.32 {d0[0], d1[0], d2[0]}, [r0]
+f480032f vst4.8 {d0[1], d1[1], d2[1], d3[1]}, [r0]
+f48007cf vst4.16 {d0[3], d1[3], d2[3], d3[3]}, [r0]
+f4800b0f vst4.32 {d0[0], d1[0], d2[0], d3[0]}, [r0]
+f480002d vst1.8 {d0[1]}, [r0]!
+f4801802 vst1.32 {d1[0]}, [r0], r2
+f3b20001 vswp d0, d1
+f3b20042 vswp q0, q1

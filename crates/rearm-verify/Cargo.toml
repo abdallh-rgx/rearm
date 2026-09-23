@@ -1,0 +1,9 @@
+[package]
+name = "rearm-verify"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+description = "Z3-based formal equivalence verification of rearm translations (SMT-LIB2 via z3 binary or library)"
+
+[dependencies]
+rearm-core = { path = "../rearm-core" }

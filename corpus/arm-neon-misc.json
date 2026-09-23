@@ -1,0 +1,1250 @@
+[
+{
+"hex": "f28b0511",
+"text": "vshl.i8 d0, d1, #0x3"
+},
+{
+"hex": "f2970511",
+"text": "vshl.i16 d0, d1, #0x7"
+},
+{
+"hex": "f2a50552",
+"text": "vshl.i32 q0, q1, #0x5"
+},
+{
+"hex": "f28d0591",
+"text": "vshl.i64 d0, d1, #0xd"
+},
+{
+"hex": "f28d0011",
+"text": "vshr.s8 d0, d1, #0x3"
+},
+{
+"hex": "f38b0011",
+"text": "vshr.u8 d0, d1, #0x5"
+},
+{
+"hex": "f2970052",
+"text": "vshr.s16 q0, q1, #0x9"
+},
+{
+"hex": "f3940011",
+"text": "vshr.u16 d0, d1, #0xc"
+},
+{
+"hex": "f2af0011",
+"text": "vshr.s32 d0, d1, #0x11"
+},
+{
+"hex": "f3a70052",
+"text": "vshr.u32 q0, q1, #0x19"
+},
+{
+"hex": "f2980091",
+"text": "vshr.s64 d0, d1, #0x28"
+},
+{
+"hex": "f3810091",
+"text": "vshr.u64 d0, d1, #0x3f"
+},
+{
+"hex": "f28d0211",
+"text": "vrshr.s8 d0, d1, #0x3"
+},
+{
+"hex": "f38b0211",
+"text": "vrshr.u8 d0, d1, #0x5"
+},
+{
+"hex": "f2970252",
+"text": "vrshr.s16 q0, q1, #0x9"
+},
+{
+"hex": "f3a70211",
+"text": "vrshr.u32 d0, d1, #0x19"
+},
+{
+"hex": "f28d0111",
+"text": "vsra.s8 d0, d1, #0x3"
+},
+{
+"hex": "f3940111",
+"text": "vsra.u16 d0, d1, #0xc"
+},
+{
+"hex": "f2af0352",
+"text": "vrsra.s32 q0, q1, #0x11"
+},
+{
+"hex": "f38b0311",
+"text": "vrsra.u8 d0, d1, #0x5"
+},
+{
+"hex": "f38d0411",
+"text": "vsri.8 d0, d1, #0x3"
+},
+{
+"hex": "f3970452",
+"text": "vsri.16 q0, q1, #0x9"
+},
+{
+"hex": "f3b10511",
+"text": "vsli.32 d0, d1, #0x11"
+},
+{
+"hex": "f3a805d2",
+"text": "vsli.64 q0, q1, #0x28"
+},
+{
+"hex": "f28b0a11",
+"text": "vshll.s8 q0, d1, #0x3"
+},
+{
+"hex": "f38d0a11",
+"text": "vshll.u8 q0, d1, #0x5"
+},
+{
+"hex": "f2990a11",
+"text": "vshll.s16 q0, d1, #0x9"
+},
+{
+"hex": "f39c0a11",
+"text": "vshll.u16 q0, d1, #0xc"
+},
+{
+"hex": "f2b10a11",
+"text": "vshll.s32 q0, d1, #0x11"
+},
+{
+"hex": "f3b90a11",
+"text": "vshll.u32 q0, d1, #0x19"
+},
+{
+"hex": "f28d0812",
+"text": "vshrn.i16 d0, q1, #0x3"
+},
+{
+"hex": "f2970812",
+"text": "vshrn.i32 d0, q1, #0x9"
+},
+{
+"hex": "f2af0812",
+"text": "vshrn.i64 d0, q1, #0x11"
+},
+{
+"hex": "f28d0852",
+"text": "vrshrn.i16 d0, q1, #0x3"
+},
+{
+"hex": "f2970852",
+"text": "vrshrn.i32 d0, q1, #0x9"
+},
+{
+"hex": "f2af0852",
+"text": "vrshrn.i64 d0, q1, #0x11"
+},
+{
+"hex": "f2020401",
+"text": "vshl.s8 d0, d1, d2"
+},
+{
+"hex": "f2140442",
+"text": "vshl.s16 q0, q1, q2"
+},
+{
+"hex": "f3020401",
+"text": "vshl.u8 d0, d1, d2"
+},
+{
+"hex": "f2320401",
+"text": "vshl.s64 d0, d1, d2"
+},
+{
+"hex": "f2020411",
+"text": "vqshl.s8 d0, d1, d2"
+},
+{
+"hex": "f3140452",
+"text": "vqshl.u16 q0, q1, q2"
+},
+{
+"hex": "f3020411",
+"text": "vqshl.u8 d0, d1, d2"
+},
+{
+"hex": "f2240552",
+"text": "vqrshl.s32 q0, q1, q2"
+},
+{
+"hex": "f3020511",
+"text": "vqrshl.u8 d0, d1, d2"
+},
+{
+"hex": "f28b0711",
+"text": "vqshl.s8 d0, d1, #0x3"
+},
+{
+"hex": "f3950711",
+"text": "vqshl.u16 d0, d1, #0x5"
+},
+{
+"hex": "f3970652",
+"text": "vqshlu.s16 q0, q1, #0x7"
+},
+{
+"hex": "f3a90611",
+"text": "vqshlu.s32 d0, d1, #0x9"
+},
+{
+"hex": "f28d0912",
+"text": "vqshrn.s16 d0, q1, #0x3"
+},
+{
+"hex": "f2970912",
+"text": "vqshrn.s32 d0, q1, #0x9"
+},
+{
+"hex": "f38d0912",
+"text": "vqshrn.u16 d0, q1, #0x3"
+},
+{
+"hex": "f38d0812",
+"text": "vqshrun.s16 d0, q1, #0x3"
+},
+{
+"hex": "f3970812",
+"text": "vqshrun.s32 d0, q1, #0x9"
+},
+{
+"hex": "f28d0952",
+"text": "vqrshrn.s16 d0, q1, #0x3"
+},
+{
+"hex": "f3970952",
+"text": "vqrshrn.u32 d0, q1, #0x9"
+},
+{
+"hex": "f38d0852",
+"text": "vqrshrun.s16 d0, q1, #0x3"
+},
+{
+"hex": "f3970852",
+"text": "vqrshrun.s32 d0, q1, #0x9"
+},
+{
+"hex": "f39804d2",
+"text": "vsri.64 q0, q1, #0x28"
+},
+{
+"hex": "f39c0511",
+"text": "vsli.16 d0, d1, #0xc"
+},
+{
+"hex": "f2010112",
+"text": "vand d0, d1, d2"
+},
+{
+"hex": "f2020154",
+"text": "vand q0, q1, q2"
+},
+{
+"hex": "f2210112",
+"text": "vorr d0, d1, d2"
+},
+{
+"hex": "f2220154",
+"text": "vorr q0, q1, q2"
+},
+{
+"hex": "f3010112",
+"text": "veor d0, d1, d2"
+},
+{
+"hex": "f3020154",
+"text": "veor q0, q1, q2"
+},
+{
+"hex": "f2110112",
+"text": "vbic d0, d1, d2"
+},
+{
+"hex": "f2120154",
+"text": "vbic q0, q1, q2"
+},
+{
+"hex": "f2310112",
+"text": "vorn d0, d1, d2"
+},
+{
+"hex": "f2320154",
+"text": "vorn q0, q1, q2"
+},
+{
+"hex": "f3120154",
+"text": "vbsl q0, q1, q2"
+},
+{
+"hex": "f3110112",
+"text": "vbsl d0, d1, d2"
+},
+{
+"hex": "f3210112",
+"text": "vbit d0, d1, d2"
+},
+{
+"hex": "f3220154",
+"text": "vbit q0, q1, q2"
+},
+{
+"hex": "f3310112",
+"text": "vbif d0, d1, d2"
+},
+{
+"hex": "f3320154",
+"text": "vbif q0, q1, q2"
+},
+{
+"hex": "f3b00581",
+"text": "vmvn d0, d1"
+},
+{
+"hex": "f3b005c2",
+"text": "vmvn q0, q1"
+},
+{
+"hex": "f2800e11",
+"text": "vmov.i8 d0, #0x1"
+},
+{
+"hex": "f3870e5f",
+"text": "vmov.i8 q0, #0xff"
+},
+{
+"hex": "f2800811",
+"text": "vmov.i16 d0, #0x1"
+},
+{
+"hex": "f2800a11",
+"text": "vmov.i16 d0, #0x100"
+},
+{
+"hex": "f3800850",
+"text": "vmov.i16 q0, #0x80"
+},
+{
+"hex": "f2800011",
+"text": "vmov.i32 d0, #0x1"
+},
+{
+"hex": "f2800211",
+"text": "vmov.i32 d0, #0x100"
+},
+{
+"hex": "f2800411",
+"text": "vmov.i32 d0, #0x10000"
+},
+{
+"hex": "f2800611",
+"text": "vmov.i32 d0, #0x1000000"
+},
+{
+"hex": "f387005f",
+"text": "vmov.i32 q0, #0xff"
+},
+{
+"hex": "f287005f",
+"text": "vmov.i32 q0, #0x7f"
+},
+{
+"hex": "f3800e78",
+"text": "vmov.i64 q0, #0xff000000ff000000"
+},
+{
+"hex": "f3820e3a",
+"text": "vmov.i64 d0, #0xff00ff00ff00ff00"
+},
+{
+"hex": "f2802e71",
+"text": "vmov.i64 q1, #0xff"
+},
+{
+"hex": "f2801e33",
+"text": "vmov.i64 d1, #0xffff"
+},
+{
+"hex": "f2802e3f",
+"text": "vmov.i64 d2, #0xffffffff"
+},
+{
+"hex": "f2870f10",
+"text": "vmov.f32 d0, #1.000000e+00"
+},
+{
+"hex": "f2860f10",
+"text": "vmov.f32 d0, #5.000000e-01"
+},
+{
+"hex": "f2800f10",
+"text": "vmov.f32 d0, #2.000000e+00"
+},
+{
+"hex": "f2810f10",
+"text": "vmov.f32 d0, #4.000000e+00"
+},
+{
+"hex": "f2840f10",
+"text": "vmov.f32 d0, #1.250000e-01"
+},
+{
+"hex": "f3870f10",
+"text": "vmov.f32 d0, #-1.000000e+00"
+},
+{
+"hex": "f2870f50",
+"text": "vmov.f32 q0, #1.000000e+00"
+},
+{
+"hex": "f2860f50",
+"text": "vmov.f32 q0, #5.000000e-01"
+},
+{
+"hex": "f3800f50",
+"text": "vmov.f32 q0, #-2.000000e+00"
+},
+{
+"hex": "f387007f",
+"text": "vmvn.i32 q0, #0xff"
+},
+{
+"hex": "f2800431",
+"text": "vmvn.i32 d0, #0x10000"
+},
+{
+"hex": "eec01b10",
+"text": "vdup.8 d0, r1"
+},
+{
+"hex": "ee801b30",
+"text": "vdup.16 d0, r1"
+},
+{
+"hex": "ee801b10",
+"text": "vdup.32 d0, r1"
+},
+{
+"hex": "eee01b10",
+"text": "vdup.8 q0, r1"
+},
+{
+"hex": "eea01b30",
+"text": "vdup.16 q0, r1"
+},
+{
+"hex": "eea01b10",
+"text": "vdup.32 q0, r1"
+},
+{
+"hex": "f3b10c01",
+"text": "vdup.8 d0, d1[0]"
+},
+{
+"hex": "f3b30c01",
+"text": "vdup.8 d0, d1[1]"
+},
+{
+"hex": "f3ba0c01",
+"text": "vdup.16 d0, d1[2]"
+},
+{
+"hex": "f3be0c41",
+"text": "vdup.16 q0, d1[3]"
+},
+{
+"hex": "f3b40c01",
+"text": "vdup.32 d0, d1[0]"
+},
+{
+"hex": "f3bc0c01",
+"text": "vdup.32 d0, d1[1]"
+},
+{
+"hex": "f3bc0c41",
+"text": "vdup.32 q0, d1[1]"
+},
+{
+"hex": "f3bc0c42",
+"text": "vdup.32 q0, d2[1]"
+},
+{
+"hex": "ec510b12",
+"text": "vmov r0, r1, d2"
+},
+{
+"hex": "ec532b14",
+"text": "vmov r2, r3, d4"
+},
+{
+"hex": "ec410b12",
+"text": "vmov d2, r0, r1"
+},
+{
+"hex": "ee110b10",
+"text": "vmov.32 r0, d1[0]"
+},
+{
+"hex": "ee310b10",
+"text": "vmov.32 r0, d1[1]"
+},
+{
+"hex": "ee010b10",
+"text": "vmov.32 d1[0], r0"
+},
+{
+"hex": "ee210b10",
+"text": "vmov.32 d1[1], r0"
+},
+{
+"hex": "eeb10b70",
+"text": "vmov.u16 r0, d1[3]"
+},
+{
+"hex": "ee210b70",
+"text": "vmov.16 d1[3], r0"
+},
+{
+"hex": "eef10b70",
+"text": "vmov.u8 r0, d1[7]"
+},
+{
+"hex": "ee610b70",
+"text": "vmov.8 d1[7], r0"
+},
+{
+"hex": "ee332b10",
+"text": "vmov.32 r2, d3[1]"
+},
+{
+"hex": "eeb32b70",
+"text": "vmov.u16 r2, d3[3]"
+},
+{
+"hex": "eef32b70",
+"text": "vmov.u8 r2, d3[7]"
+},
+{
+"hex": "eef10b70",
+"text": "vmov.u8 r0, d1[7]"
+},
+{
+"hex": "eeb10b70",
+"text": "vmov.u16 r0, d1[3]"
+},
+{
+"hex": "ee710b70",
+"text": "vmov.s8 r0, d1[7]"
+},
+{
+"hex": "ee310b70",
+"text": "vmov.s16 r0, d1[3]"
+},
+{
+"hex": "ee310b10",
+"text": "vmov.32 r0, d1[1]"
+},
+{
+"hex": "ee310b10",
+"text": "vmov.32 r0, d1[1]"
+},
+{
+"hex": "eed10b10",
+"text": "vmov.u8 r0, d1[0]"
+},
+{
+"hex": "ee110b70",
+"text": "vmov.s16 r0, d1[1]"
+},
+{
+"hex": "f2bc0f52",
+"text": "vcvt.s32.f32 q0, q1, #0x4"
+},
+{
+"hex": "f3bc0f52",
+"text": "vcvt.u32.f32 q0, q1, #0x4"
+},
+{
+"hex": "f3bb0742",
+"text": "vcvt.s32.f32 q0, q1"
+},
+{
+"hex": "f3bb07c2",
+"text": "vcvt.u32.f32 q0, q1"
+},
+{
+"hex": "f2bc0e52",
+"text": "vcvt.f32.s32 q0, q1, #0x4"
+},
+{
+"hex": "f3bc0e52",
+"text": "vcvt.f32.u32 q0, q1, #0x4"
+},
+{
+"hex": "f3bb0642",
+"text": "vcvt.f32.s32 q0, q1"
+},
+{
+"hex": "f3bb06c2",
+"text": "vcvt.f32.u32 q0, q1"
+},
+{
+"hex": "f3b60602",
+"text": "<unknown>"
+},
+{
+"hex": "f3b60701",
+"text": "<unknown>"
+},
+{
+"hex": "f3bb0401",
+"text": "vrecpe.u32 d0, d1"
+},
+{
+"hex": "f3bb0442",
+"text": "vrecpe.u32 q0, q1"
+},
+{
+"hex": "f2010f12",
+"text": "vrecps.f32 d0, d1, d2"
+},
+{
+"hex": "f3ba0401",
+"text": "<unknown>"
+},
+{
+"hex": "f3ba0442",
+"text": "<unknown>"
+},
+{
+"hex": "f3ba0781",
+"text": "<unknown>"
+},
+{
+"hex": "f3ba0681",
+"text": "<unknown>"
+},
+{
+"hex": "f3ba0581",
+"text": "<unknown>"
+},
+{
+"hex": "f3ba0501",
+"text": "<unknown>"
+},
+{
+"hex": "f3ba04c2",
+"text": "<unknown>"
+},
+{
+"hex": "eeb60bc1",
+"text": "<unknown>"
+},
+{
+"hex": "feb90b41",
+"text": "<unknown>"
+},
+{
+"hex": "eeb10bc1",
+"text": "vsqrt.f64 d0, d1"
+},
+{
+"hex": "eeb00ae0",
+"text": "vabs.f32 s0, s1"
+},
+{
+"hex": "eeb10a60",
+"text": "vneg.f32 s0, s1"
+},
+{
+"hex": "f3b20282",
+"text": "vqmovn.s16 d0, q1"
+},
+{
+"hex": "f3b60282",
+"text": "vqmovn.s32 d0, q1"
+},
+{
+"hex": "f3ba0282",
+"text": "vqmovn.s64 d0, q1"
+},
+{
+"hex": "f3b202c2",
+"text": "vqmovn.u16 d0, q1"
+},
+{
+"hex": "f3b602c2",
+"text": "vqmovn.u32 d0, q1"
+},
+{
+"hex": "f3b20242",
+"text": "vqmovun.s16 d0, q1"
+},
+{
+"hex": "f3b60242",
+"text": "vqmovun.s32 d0, q1"
+},
+{
+"hex": "f3b20202",
+"text": "vmovn.i16 d0, q1"
+},
+{
+"hex": "f3b60202",
+"text": "vmovn.i32 d0, q1"
+},
+{
+"hex": "f2880a11",
+"text": "vmovl.s8 q0, d1"
+},
+{
+"hex": "f2900a11",
+"text": "vmovl.s16 q0, d1"
+},
+{
+"hex": "f2a00a11",
+"text": "vmovl.s32 q0, d1"
+},
+{
+"hex": "f3880a11",
+"text": "vmovl.u8 q0, d1"
+},
+{
+"hex": "f3900a11",
+"text": "vmovl.u16 q0, d1"
+},
+{
+"hex": "f3a00a11",
+"text": "vmovl.u32 q0, d1"
+},
+{
+"hex": "f3b20081",
+"text": "vtrn.8 d0, d1"
+},
+{
+"hex": "f3b600c2",
+"text": "vtrn.16 q0, q1"
+},
+{
+"hex": "f3ba0081",
+"text": "vtrn.32 d0, d1"
+},
+{
+"hex": "f3b200c2",
+"text": "vtrn.8 q0, q1"
+},
+{
+"hex": "f3b20101",
+"text": "vuzp.8 d0, d1"
+},
+{
+"hex": "f3b60142",
+"text": "vuzp.16 q0, q1"
+},
+{
+"hex": "f3ba0081",
+"text": "vtrn.32 d0, d1"
+},
+{
+"hex": "f3b20142",
+"text": "vuzp.8 q0, q1"
+},
+{
+"hex": "f3b20181",
+"text": "vzip.8 d0, d1"
+},
+{
+"hex": "f3b601c2",
+"text": "vzip.16 q0, q1"
+},
+{
+"hex": "f3ba0081",
+"text": "vtrn.32 d0, d1"
+},
+{
+"hex": "f3b201c2",
+"text": "vzip.8 q0, q1"
+},
+{
+"hex": "f2b10302",
+"text": "vext.8 d0, d1, d2, #0x3"
+},
+{
+"hex": "f2b10402",
+"text": "vext.32 d0, d1, d2, #0x1"
+},
+{
+"hex": "f2b20444",
+"text": "vext.32 q0, q1, q2, #0x1"
+},
+{
+"hex": "f2b20844",
+"text": "vext.64 q0, q1, q2, #0x1"
+},
+{
+"hex": "f2b20544",
+"text": "vext.8 q0, q1, q2, #0x5"
+},
+{
+"hex": "f3b10802",
+"text": "vtbl.8 d0, {d1}, d2"
+},
+{
+"hex": "f3b10903",
+"text": "vtbl.8 d0, {d1, d2}, d3"
+},
+{
+"hex": "f3b10a04",
+"text": "vtbl.8 d0, {d1, d2, d3}, d4"
+},
+{
+"hex": "f3b10b05",
+"text": "vtbl.8 d0, {d1, d2, d3, d4}, d5"
+},
+{
+"hex": "f3b10842",
+"text": "vtbx.8 d0, {d1}, d2"
+},
+{
+"hex": "f3b10a44",
+"text": "vtbx.8 d0, {d1, d2, d3}, d4"
+},
+{
+"hex": "f2010812",
+"text": "vtst.8 d0, d1, d2"
+},
+{
+"hex": "f2120854",
+"text": "vtst.16 q0, q1, q2"
+},
+{
+"hex": "f2210812",
+"text": "vtst.32 d0, d1, d2"
+},
+{
+"hex": "f420070f",
+"text": "vld1.8 {d0}, [r0]"
+},
+{
+"hex": "f420074f",
+"text": "vld1.16 {d0}, [r0]"
+},
+{
+"hex": "f420078f",
+"text": "vld1.32 {d0}, [r0]"
+},
+{
+"hex": "f42007cf",
+"text": "vld1.64 {d0}, [r0]"
+},
+{
+"hex": "f4200a0f",
+"text": "vld1.8 {d0, d1}, [r0]"
+},
+{
+"hex": "f4200a8f",
+"text": "vld1.32 {d0, d1}, [r0]"
+},
+{
+"hex": "f4200acf",
+"text": "vld1.64 {d0, d1}, [r0]"
+},
+{
+"hex": "f42002ef",
+"text": "vld1.64 {d0, d1, d2, d3}, [r0:128]"
+},
+{
+"hex": "f4200acf",
+"text": "vld1.64 {d0, d1}, [r0]"
+},
+{
+"hex": "f42002ff",
+"text": "vld1.64 {d0, d1, d2, d3}, [r0:256]"
+},
+{
+"hex": "f420071f",
+"text": "vld1.8 {d0}, [r0:64]"
+},
+{
+"hex": "f4200a1f",
+"text": "vld1.8 {d0, d1}, [r0:64]"
+},
+{
+"hex": "f420061f",
+"text": "vld1.8 {d0, d1, d2}, [r0:64]"
+},
+{
+"hex": "f42002af",
+"text": "vld1.32 {d0, d1, d2, d3}, [r0:128]"
+},
+{
+"hex": "f4200701",
+"text": "vld1.8 {d0}, [r0], r1"
+},
+{
+"hex": "f4200a81",
+"text": "vld1.32 {d0, d1}, [r0], r1"
+},
+{
+"hex": "f42002c1",
+"text": "vld1.64 {d0, d1, d2, d3}, [r0], r1"
+},
+{
+"hex": "f420070d",
+"text": "vld1.8 {d0}, [r0]!"
+},
+{
+"hex": "f42002cd",
+"text": "vld1.64 {d0, d1, d2, d3}, [r0]!"
+},
+{
+"hex": "f420080f",
+"text": "vld2.8 {d0, d1}, [r0]"
+},
+{
+"hex": "f420084f",
+"text": "vld2.16 {d0, d1}, [r0]"
+},
+{
+"hex": "f420088f",
+"text": "vld2.32 {d0, d1}, [r0]"
+},
+{
+"hex": "f420030f",
+"text": "vld2.8 {d0, d1, d2, d3}, [r0]"
+},
+{
+"hex": "f420039f",
+"text": "vld2.32 {d0, d1, d2, d3}, [r0:64]"
+},
+{
+"hex": "f420036f",
+"text": "vld2.16 {d0, d1, d2, d3}, [r0:128]"
+},
+{
+"hex": "f4200801",
+"text": "vld2.8 {d0, d1}, [r0], r1"
+},
+{
+"hex": "f420080d",
+"text": "vld2.8 {d0, d1}, [r0]!"
+},
+{
+"hex": "f420040f",
+"text": "vld3.8 {d0, d1, d2}, [r0]"
+},
+{
+"hex": "f420048f",
+"text": "vld3.32 {d0, d1, d2}, [r0]"
+},
+{
+"hex": "f420044f",
+"text": "vld3.16 {d0, d1, d2}, [r0]"
+},
+{
+"hex": "f420040d",
+"text": "vld3.8 {d0, d1, d2}, [r0]!"
+},
+{
+"hex": "f420000f",
+"text": "vld4.8 {d0, d1, d2, d3}, [r0]"
+},
+{
+"hex": "f420004f",
+"text": "vld4.16 {d0, d1, d2, d3}, [r0]"
+},
+{
+"hex": "f420008f",
+"text": "vld4.32 {d0, d1, d2, d3}, [r0]"
+},
+{
+"hex": "f420003f",
+"text": "vld4.8 {d0, d1, d2, d3}, [r0:256]"
+},
+{
+"hex": "f420008f",
+"text": "vld4.32 {d0, d1, d2, d3}, [r0]"
+},
+{
+"hex": "f4200001",
+"text": "vld4.8 {d0, d1, d2, d3}, [r0], r1"
+},
+{
+"hex": "f420008d",
+"text": "vld4.32 {d0, d1, d2, d3}, [r0]!"
+},
+{
+"hex": "f4a0004f",
+"text": "vld1.8 {d0[2]}, [r0]"
+},
+{
+"hex": "f4a014cf",
+"text": "vld1.16 {d1[3]}, [r0]"
+},
+{
+"hex": "f4a0288f",
+"text": "vld1.32 {d2[1]}, [r0]"
+},
+{
+"hex": "f42007cf",
+"text": "vld1.64 {d0}, [r0]"
+},
+{
+"hex": "f4a0012f",
+"text": "vld2.8 {d0[1], d1[1]}, [r0]"
+},
+{
+"hex": "f4a0058f",
+"text": "vld2.16 {d0[2], d1[2]}, [r0]"
+},
+{
+"hex": "f4a0098f",
+"text": "vld2.32 {d0[1], d1[1]}, [r0]"
+},
+{
+"hex": "f4a0022f",
+"text": "vld3.8 {d0[1], d1[1], d2[1]}, [r0]"
+},
+{
+"hex": "f4a00a0f",
+"text": "vld3.32 {d0[0], d1[0], d2[0]}, [r0]"
+},
+{
+"hex": "f4a0032f",
+"text": "vld4.8 {d0[1], d1[1], d2[1], d3[1]}, [r0]"
+},
+{
+"hex": "f4a007cf",
+"text": "vld4.16 {d0[3], d1[3], d2[3], d3[3]}, [r0]"
+},
+{
+"hex": "f4a00b0f",
+"text": "vld4.32 {d0[0], d1[0], d2[0], d3[0]}, [r0]"
+},
+{
+"hex": "f4a0002d",
+"text": "vld1.8 {d0[1]}, [r0]!"
+},
+{
+"hex": "f4a01802",
+"text": "vld1.32 {d1[0]}, [r0], r2"
+},
+{
+"hex": "f4a004cd",
+"text": "vld1.16 {d0[3]}, [r0]!"
+},
+{
+"hex": "f4a00c0f",
+"text": "vld1.8 {d0[]}, [r0]"
+},
+{
+"hex": "f4a00c8f",
+"text": "vld1.32 {d0[]}, [r0]"
+},
+{
+"hex": "f4a00d0f",
+"text": "vld2.8 {d0[], d1[]}, [r0]"
+},
+{
+"hex": "f4a00d8f",
+"text": "vld2.32 {d0[], d1[]}, [r0]"
+},
+{
+"hex": "f4a00f4f",
+"text": "vld4.16 {d0[], d1[], d2[], d3[]}, [r0]"
+},
+{
+"hex": "f400070f",
+"text": "vst1.8 {d0}, [r0]"
+},
+{
+"hex": "f400074f",
+"text": "vst1.16 {d0}, [r0]"
+},
+{
+"hex": "f400078f",
+"text": "vst1.32 {d0}, [r0]"
+},
+{
+"hex": "f40007cf",
+"text": "vst1.64 {d0}, [r0]"
+},
+{
+"hex": "f4000a0f",
+"text": "vst1.8 {d0, d1}, [r0]"
+},
+{
+"hex": "f4000a8f",
+"text": "vst1.32 {d0, d1}, [r0]"
+},
+{
+"hex": "f4000acf",
+"text": "vst1.64 {d0, d1}, [r0]"
+},
+{
+"hex": "f40002ef",
+"text": "vst1.64 {d0, d1, d2, d3}, [r0:128]"
+},
+{
+"hex": "f4000acf",
+"text": "vst1.64 {d0, d1}, [r0]"
+},
+{
+"hex": "f40002ff",
+"text": "vst1.64 {d0, d1, d2, d3}, [r0:256]"
+},
+{
+"hex": "f4000701",
+"text": "vst1.8 {d0}, [r0], r1"
+},
+{
+"hex": "f4000a81",
+"text": "vst1.32 {d0, d1}, [r0], r1"
+},
+{
+"hex": "f400070d",
+"text": "vst1.8 {d0}, [r0]!"
+},
+{
+"hex": "f40002cd",
+"text": "vst1.64 {d0, d1, d2, d3}, [r0]!"
+},
+{
+"hex": "f400080f",
+"text": "vst2.8 {d0, d1}, [r0]"
+},
+{
+"hex": "f400084f",
+"text": "vst2.16 {d0, d1}, [r0]"
+},
+{
+"hex": "f400088f",
+"text": "vst2.32 {d0, d1}, [r0]"
+},
+{
+"hex": "f400030f",
+"text": "vst2.8 {d0, d1, d2, d3}, [r0]"
+},
+{
+"hex": "f400039f",
+"text": "vst2.32 {d0, d1, d2, d3}, [r0:64]"
+},
+{
+"hex": "f400036f",
+"text": "vst2.16 {d0, d1, d2, d3}, [r0:128]"
+},
+{
+"hex": "f4000801",
+"text": "vst2.8 {d0, d1}, [r0], r1"
+},
+{
+"hex": "f400080d",
+"text": "vst2.8 {d0, d1}, [r0]!"
+},
+{
+"hex": "f400040f",
+"text": "vst3.8 {d0, d1, d2}, [r0]"
+},
+{
+"hex": "f400048f",
+"text": "vst3.32 {d0, d1, d2}, [r0]"
+},
+{
+"hex": "f400040d",
+"text": "vst3.8 {d0, d1, d2}, [r0]!"
+},
+{
+"hex": "f400000f",
+"text": "vst4.8 {d0, d1, d2, d3}, [r0]"
+},
+{
+"hex": "f400004f",
+"text": "vst4.16 {d0, d1, d2, d3}, [r0]"
+},
+{
+"hex": "f400008f",
+"text": "vst4.32 {d0, d1, d2, d3}, [r0]"
+},
+{
+"hex": "f400003f",
+"text": "vst4.8 {d0, d1, d2, d3}, [r0:256]"
+},
+{
+"hex": "f400008f",
+"text": "vst4.32 {d0, d1, d2, d3}, [r0]"
+},
+{
+"hex": "f4000001",
+"text": "vst4.8 {d0, d1, d2, d3}, [r0], r1"
+},
+{
+"hex": "f400008d",
+"text": "vst4.32 {d0, d1, d2, d3}, [r0]!"
+},
+{
+"hex": "f480004f",
+"text": "vst1.8 {d0[2]}, [r0]"
+},
+{
+"hex": "f48014cf",
+"text": "vst1.16 {d1[3]}, [r0]"
+},
+{
+"hex": "f480288f",
+"text": "vst1.32 {d2[1]}, [r0]"
+},
+{
+"hex": "f480012f",
+"text": "vst2.8 {d0[1], d1[1]}, [r0]"
+},
+{
+"hex": "f480058f",
+"text": "vst2.16 {d0[2], d1[2]}, [r0]"
+},
+{
+"hex": "f480098f",
+"text": "vst2.32 {d0[1], d1[1]}, [r0]"
+},
+{
+"hex": "f480022f",
+"text": "vst3.8 {d0[1], d1[1], d2[1]}, [r0]"
+},
+{
+"hex": "f4800a0f",
+"text": "vst3.32 {d0[0], d1[0], d2[0]}, [r0]"
+},
+{
+"hex": "f480032f",
+"text": "vst4.8 {d0[1], d1[1], d2[1], d3[1]}, [r0]"
+},
+{
+"hex": "f48007cf",
+"text": "vst4.16 {d0[3], d1[3], d2[3], d3[3]}, [r0]"
+},
+{
+"hex": "f4800b0f",
+"text": "vst4.32 {d0[0], d1[0], d2[0], d3[0]}, [r0]"
+},
+{
+"hex": "f480002d",
+"text": "vst1.8 {d0[1]}, [r0]!"
+},
+{
+"hex": "f4801802",
+"text": "vst1.32 {d1[0]}, [r0], r2"
+},
+{
+"hex": "f3b20001",
+"text": "vswp d0, d1"
+},
+{
+"hex": "f3b20042",
+"text": "vswp q0, q1"
+}
+]

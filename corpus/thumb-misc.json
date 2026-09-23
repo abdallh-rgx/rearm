@@ -1,0 +1,918 @@
+[
+{
+"hex": "00001888",
+"text": "adds r0, r1, r2"
+},
+{
+"hex": "00001840",
+"text": "adds r0, r0, r1"
+},
+{
+"hex": "00001a88",
+"text": "subs r0, r1, r2"
+},
+{
+"hex": "00001ec8",
+"text": "subs r0, r1, #0x3"
+},
+{
+"hex": "00003007",
+"text": "adds r0, #0x7"
+},
+{
+"hex": "00003807",
+"text": "subs r0, #0x7"
+},
+{
+"hex": "000020ff",
+"text": "movs r0, #0xff"
+},
+{
+"hex": "00004008",
+"text": "ands r0, r1"
+},
+{
+"hex": "00004048",
+"text": "eors r0, r1"
+},
+{
+"hex": "00000088",
+"text": "lsls r0, r1, #0x2"
+},
+{
+"hex": "000008c8",
+"text": "lsrs r0, r1, #0x3"
+},
+{
+"hex": "00001108",
+"text": "asrs r0, r1, #0x4"
+},
+{
+"hex": "00004148",
+"text": "adcs r0, r1"
+},
+{
+"hex": "00004188",
+"text": "sbcs r0, r1"
+},
+{
+"hex": "000041c8",
+"text": "rors r0, r1"
+},
+{
+"hex": "00004208",
+"text": "tst r0, r1"
+},
+{
+"hex": "00004248",
+"text": "rsbs r0, r1, #0"
+},
+{
+"hex": "00004288",
+"text": "cmp r0, r1"
+},
+{
+"hex": "0000282a",
+"text": "cmp r0, #0x2a"
+},
+{
+"hex": "000042c8",
+"text": "cmn r0, r1"
+},
+{
+"hex": "0000ea5f",
+"text": "0108 movs.w r1, r8"
+},
+{
+"hex": "00004680",
+"text": "mov r8, r0"
+},
+{
+"hex": "0000ea4f",
+"text": "00c1 lsl.w r0, r1, #0x3"
+},
+{
+"hex": "0000ea4f",
+"text": "10d1 lsr.w r0, r1, #0x7"
+},
+{
+"hex": "0000ea4f",
+"text": "2061 asr.w r0, r1, #0x9"
+},
+{
+"hex": "0000ea4f",
+"text": "20f1 ror.w r0, r1, #0xb"
+},
+{
+"hex": "0000f245",
+"text": "6078 movw r0, #0x5678"
+},
+{
+"hex": "0000f2c1",
+"text": "2034 movt r0, #0x1234"
+},
+{
+"hex": "0000f245",
+"text": "6078 movw r0, #0x5678"
+},
+{
+"hex": "0000ea6f",
+"text": "0001 mvn.w r0, r1"
+},
+{
+"hex": "000043c8",
+"text": "mvns r0, r1"
+},
+{
+"hex": "0000eb01",
+"text": "0002 add.w r0, r1, r2"
+},
+{
+"hex": "0000eb01",
+"text": "00c2 add.w r0, r1, r2, lsl #3"
+},
+{
+"hex": "0000eb01",
+"text": "10d2 add.w r0, r1, r2, lsr #7"
+},
+{
+"hex": "0000eb01",
+"text": "2062 add.w r0, r1, r2, asr #9"
+},
+{
+"hex": "0000eb01",
+"text": "20f2 add.w r0, r1, r2, ror #11"
+},
+{
+"hex": "0000eb01",
+"text": "0032 add.w r0, r1, r2, rrx"
+},
+{
+"hex": "0000eb11",
+"text": "0002 adds.w r0, r1, r2"
+},
+{
+"hex": "0000eb11",
+"text": "70c2 adds.w r0, r1, r2, lsl #31"
+},
+{
+"hex": "0000eb01",
+"text": "0002 add.w r0, r1, r2"
+},
+{
+"hex": "0000eb11",
+"text": "0002 adds.w r0, r1, r2"
+},
+{
+"hex": "0000eba1",
+"text": "0002 sub.w r0, r1, r2"
+},
+{
+"hex": "0000ebb1",
+"text": "0002 subs.w r0, r1, r2"
+},
+{
+"hex": "0000f1b1",
+"text": "0010 subs.w r0, r1, #0x10"
+},
+{
+"hex": "0000eb61",
+"text": "0002 sbc.w r0, r1, r2"
+},
+{
+"hex": "0000f1c1",
+"text": "00ff rsb.w r0, r1, #0xff"
+},
+{
+"hex": "0000ea01",
+"text": "0002 and.w r0, r1, r2"
+},
+{
+"hex": "0000ea11",
+"text": "0042 ands.w r0, r1, r2, lsl #1"
+},
+{
+"hex": "0000ea21",
+"text": "0002 bic.w r0, r1, r2"
+},
+{
+"hex": "0000ea31",
+"text": "1012 bics.w r0, r1, r2, lsr #4"
+},
+{
+"hex": "0000ea81",
+"text": "0002 eor.w r0, r1, r2"
+},
+{
+"hex": "0000ea51",
+"text": "00e2 orrs.w r0, r1, r2, asr #3"
+},
+{
+"hex": "0000ea41",
+"text": "0002 orr.w r0, r1, r2"
+},
+{
+"hex": "0000ea61",
+"text": "0002 orn r0, r1, r2"
+},
+{
+"hex": "0000f10d",
+"text": "0080 add.w r0, sp, #0x80"
+},
+{
+"hex": "0000f10d",
+"text": "0040 add.w r0, sp, #0x40"
+},
+{
+"hex": "0000f1ad",
+"text": "0d60 sub.w sp, sp, #0x60"
+},
+{
+"hex": "0000b020",
+"text": "add sp, #0x80"
+},
+{
+"hex": "0000b098",
+"text": "sub sp, #0x60"
+},
+{
+"hex": "0000a800",
+"text": "add r0, sp, #0x0"
+},
+{
+"hex": "0000fb01",
+"text": "f002 mul r0, r1, r2"
+},
+{
+"hex": "0000fb01",
+"text": "f002 mul r0, r1, r2"
+},
+{
+"hex": "0000fb01",
+"text": "3002 mla r0, r1, r2, r3"
+},
+{
+"hex": "0000fb01",
+"text": "3012 mls r0, r1, r2, r3"
+},
+{
+"hex": "0000fb83",
+"text": "1204 smull r1, r2, r3, r4"
+},
+{
+"hex": "0000fba3",
+"text": "1204 umull r1, r2, r3, r4"
+},
+{
+"hex": "0000fbc3",
+"text": "1204 smlal r1, r2, r3, r4"
+},
+{
+"hex": "0000fbe3",
+"text": "1204 umlal r1, r2, r3, r4"
+},
+{
+"hex": "0000fb91",
+"text": "f0f2 <unknown>"
+},
+{
+"hex": "0000fbb1",
+"text": "f0f2 <unknown>"
+},
+{
+"hex": "00006808",
+"text": "ldr r0, [r1]"
+},
+{
+"hex": "00006888",
+"text": "ldr r0, [r1, #0x8]"
+},
+{
+"hex": "0000f851",
+"text": "0c08 ldr r0, [r1, #-8]"
+},
+{
+"hex": "0000f8d1",
+"text": "03fc ldr.w r0, [r1, #0x3fc]"
+},
+{
+"hex": "0000f851",
+"text": "0f04 ldr r0, [r1, #4]!"
+},
+{
+"hex": "0000f851",
+"text": "0b04 ldr r0, [r1], #4"
+},
+{
+"hex": "00005888",
+"text": "ldr r0, [r1, r2]"
+},
+{
+"hex": "0000f851",
+"text": "0022 ldr.w r0, [r1, r2, lsl #2]"
+},
+{
+"hex": "000078c8",
+"text": "ldrb r0, [r1, #0x3]"
+},
+{
+"hex": "000088c8",
+"text": "ldrh r0, [r1, #0x6]"
+},
+{
+"hex": "0000f991",
+"text": "0005 ldrsb.w r0, [r1, #0x5]"
+},
+{
+"hex": "0000f9b1",
+"text": "0005 ldrsh.w r0, [r1, #0x5]"
+},
+{
+"hex": "00006048",
+"text": "str r0, [r1, #0x4]"
+},
+{
+"hex": "0000f841",
+"text": "0f04 str r0, [r1, #4]!"
+},
+{
+"hex": "0000f841",
+"text": "0b04 str r0, [r1], #4"
+},
+{
+"hex": "0000f841",
+"text": "0012 str.w r0, [r1, r2, lsl #1]"
+},
+{
+"hex": "000070c8",
+"text": "strb r0, [r1, #0x3]"
+},
+{
+"hex": "000080c8",
+"text": "strh r0, [r1, #0x6]"
+},
+{
+"hex": "0000e9d1",
+"text": "2302 ldrd r2, r3, [r1, #8]"
+},
+{
+"hex": "0000e9c1",
+"text": "2302 strd r2, r3, [r1, #8]"
+},
+{
+"hex": "0000e890",
+"text": "0006 ldm.w r0, {r1, r2}"
+},
+{
+"hex": "0000e890",
+"text": "028e ldm.w r0, {r1, r2, r3, r7, r9}"
+},
+{
+"hex": "0000e890",
+"text": "0006 ldm.w r0, {r1, r2}"
+},
+{
+"hex": "0000e910",
+"text": "0006 ldmdb r0, {r1, r2}"
+},
+{
+"hex": "0000c806",
+"text": "ldm r0!, {r1, r2}"
+},
+{
+"hex": "0000e880",
+"text": "0006 stm.w r0, {r1, r2}"
+},
+{
+"hex": "0000e880",
+"text": "0006 stm.w r0, {r1, r2}"
+},
+{
+"hex": "0000e920",
+"text": "0006 stmdb r0!, {r1, r2}"
+},
+{
+"hex": "0000b530",
+"text": "push {r4, r5, lr}"
+},
+{
+"hex": "0000bd30",
+"text": "pop {r4, r5, pc}"
+},
+{
+"hex": "0000e92d",
+"text": "0ff0 push.w {r4, r5, r6, r7, r8, r9, r10, r11}"
+},
+{
+"hex": "0000e8bd",
+"text": "0ff0 pop.w {r4, r5, r6, r7, r8, r9, r10, r11}"
+},
+{
+"hex": "0000b120",
+"text": "cbz r0, 0x15c <.text+0x15c> @ imm = #0x8"
+},
+{
+"hex": "0000b920",
+"text": "cbnz r0, 0x15e <.text+0x15e> @ imm = #0x8"
+},
+{
+"hex": "0000b145",
+"text": "cbz r5, 0x168 <.text+0x168> @ imm = #0x10"
+},
+{
+"hex": "0000bf08",
+"text": "it eq"
+},
+{
+"hex": "00001888",
+"text": "addeq r0, r1, r2"
+},
+{
+"hex": "0000bf0c",
+"text": "ite eq"
+},
+{
+"hex": "00001888",
+"text": "addeq r0, r1, r2"
+},
+{
+"hex": "00001a88",
+"text": "subne r0, r1, r2"
+},
+{
+"hex": "0000bf82",
+"text": "ittt hi"
+},
+{
+"hex": "00001888",
+"text": "addhi r0, r1, r2"
+},
+{
+"hex": "00001963",
+"text": "addhi r3, r4, r5"
+},
+{
+"hex": "0000eb07",
+"text": "0608 addhi.w r6, r7, r8"
+},
+{
+"hex": "0000e8d0",
+"text": "f001 tbb [r0, r1]"
+},
+{
+"hex": "0000e8d0",
+"text": "f011 tbh [r0, r1, lsl #1]"
+},
+{
+"hex": "00004804",
+"text": "ldr r0, [pc, #0x10] @ 0x184 <.text+0x184>"
+},
+{
+"hex": "0000e004",
+"text": "b 0x180 <.text+0x180> @ imm = #0x8"
+},
+{
+"hex": "0000e200",
+"text": "b 0x57a <.text+0x57a> @ imm = #0x400"
+},
+{
+"hex": "0000e008",
+"text": "b 0x18c <.text+0x18c> @ imm = #0x10"
+},
+{
+"hex": "0000d004",
+"text": "beq 0x186 <.text+0x186> @ imm = #0x8"
+},
+{
+"hex": "0000f040",
+"text": "8080 bne.w 0x280 <.text+0x280> @ imm = #0x100"
+},
+{
+"hex": "0000db10",
+"text": "blt 0x1a4 <.text+0x1a4> @ imm = #0x20"
+},
+{
+"hex": "0000f000",
+"text": "fa00 bl 0x586 <.text+0x586> @ imm = #0x400"
+},
+{
+"hex": "00004770",
+"text": "bx lr"
+},
+{
+"hex": "00004710",
+"text": "bx r2"
+},
+{
+"hex": "00004798",
+"text": "blx r3"
+},
+{
+"hex": "0000ea10",
+"text": "1f01 tst.w r0, r1, lsl #4"
+},
+{
+"hex": "0000f1b0",
+"text": "0f4d cmp.w r0, #0x4d"
+},
+{
+"hex": "0000eb10",
+"text": "0fb1 cmn.w r0, r1, ror #2"
+},
+{
+"hex": "0000ba08",
+"text": "rev r0, r1"
+},
+{
+"hex": "0000ba48",
+"text": "rev16 r0, r1"
+},
+{
+"hex": "0000bac8",
+"text": "revsh r0, r1"
+},
+{
+"hex": "0000fab1",
+"text": "f081 clz r0, r1"
+},
+{
+"hex": "0000fa91",
+"text": "f0a1 rbit r0, r1"
+},
+{
+"hex": "0000f341",
+"text": "00c6 sbfx r0, r1, #0x3, #0x7"
+},
+{
+"hex": "0000f3c1",
+"text": "00c6 ubfx r0, r1, #0x3, #0x7"
+},
+{
+"hex": "0000f36f",
+"text": "00c9 bfc r0, #3, #7"
+},
+{
+"hex": "0000f361",
+"text": "00c9 bfi r0, r1, #3, #7"
+},
+{
+"hex": "0000b248",
+"text": "sxtb r0, r1"
+},
+{
+"hex": "0000fa4f",
+"text": "f091 sxtb.w r0, r1, ror #8"
+},
+{
+"hex": "0000b21a",
+"text": "sxth r2, r3"
+},
+{
+"hex": "0000b2c8",
+"text": "uxtb r0, r1"
+},
+{
+"hex": "0000fa5f",
+"text": "f0a1 uxtb.w r0, r1, ror #16"
+},
+{
+"hex": "0000b29a",
+"text": "uxth r2, r3"
+},
+{
+"hex": "0000fa41",
+"text": "f082 sxtab r0, r1, r2"
+},
+{
+"hex": "0000fa11",
+"text": "f082 uxtah r0, r1, r2"
+},
+{
+"hex": "0000fa82",
+"text": "f081 qadd r0, r1, r2"
+},
+{
+"hex": "0000fa82",
+"text": "f0a1 qsub r0, r1, r2"
+},
+{
+"hex": "0000fa82",
+"text": "f091 qdadd r0, r1, r2"
+},
+{
+"hex": "0000fa82",
+"text": "f0b1 qdsub r0, r1, r2"
+},
+{
+"hex": "0000fa91",
+"text": "f002 sadd16 r0, r1, r2"
+},
+{
+"hex": "0000faa1",
+"text": "f002 sasx r0, r1, r2"
+},
+{
+"hex": "0000fa81",
+"text": "f042 uadd8 r0, r1, r2"
+},
+{
+"hex": "0000fad1",
+"text": "f042 usub16 r0, r1, r2"
+},
+{
+"hex": "0000faa1",
+"text": "f082 sel r0, r1, r2"
+},
+{
+"hex": "0000eac1",
+"text": "0002 pkhbt r0, r1, r2"
+},
+{
+"hex": "0000eac2",
+"text": "0001 pkhbt r0, r2, r1"
+},
+{
+"hex": "0000f301",
+"text": "0006 ssat r0, #0x7, r1"
+},
+{
+"hex": "0000f381",
+"text": "0007 usat r0, #0x7, r1"
+},
+{
+"hex": "0000e851",
+"text": "0f00 ldrex r0, [r1]"
+},
+{
+"hex": "0000e841",
+"text": "0200 strex r2, r0, [r1]"
+},
+{
+"hex": "0000e8d1",
+"text": "0f4f ldrexb r0, [r1]"
+},
+{
+"hex": "0000e8c1",
+"text": "0f42 strexb r2, r0, [r1]"
+},
+{
+"hex": "0000e8d1",
+"text": "0f5f ldrexh r0, [r1]"
+},
+{
+"hex": "0000e8c1",
+"text": "0f52 strexh r2, r0, [r1]"
+},
+{
+"hex": "0000bf00",
+"text": "nop"
+},
+{
+"hex": "0000f3af",
+"text": "8000 nop.w"
+},
+{
+"hex": "0000bf10",
+"text": "yield"
+},
+{
+"hex": "0000bf20",
+"text": "wfe"
+},
+{
+"hex": "0000bf40",
+"text": "sev"
+},
+{
+"hex": "0000f3bf",
+"text": "8f5f dmb sy"
+},
+{
+"hex": "0000f3bf",
+"text": "8f4f dsb sy"
+},
+{
+"hex": "0000f3bf",
+"text": "8f6f isb sy"
+},
+{
+"hex": "0000be0c",
+"text": "bkpt #0xc"
+},
+{
+"hex": "0000df00",
+"text": "svc #0x0"
+},
+{
+"hex": "0000f3ef",
+"text": "8000 mrs r0, apsr"
+},
+{
+"hex": "0000f3ef",
+"text": "8000 mrs r0, apsr"
+},
+{
+"hex": "0000f380",
+"text": "8800 msr APSR_nzcvq, r0"
+},
+{
+"hex": "0000f890",
+"text": "f000 pld [r0]"
+},
+{
+"hex": "0000f990",
+"text": "f000 pli [r0]"
+},
+{
+"hex": "0000fb21",
+"text": "3002 smlad r0, r1, r2, r3"
+},
+{
+"hex": "0000fb21",
+"text": "f002 smuad r0, r1, r2"
+},
+{
+"hex": "0000fb71",
+"text": "f002 usad8 r0, r1, r2"
+},
+{
+"hex": "0000fac1",
+"text": "f082 <unknown>"
+},
+{
+"hex": "0000fad1",
+"text": "f082 <unknown>"
+},
+{
+"hex": "0000ee30",
+"text": "0a81 vadd.f32 s0, s1, s2"
+},
+{
+"hex": "0000ee30",
+"text": "0ac1 vsub.f32 s0, s1, s2"
+},
+{
+"hex": "0000ee20",
+"text": "0a81 vmul.f32 s0, s1, s2"
+},
+{
+"hex": "0000ee80",
+"text": "0a81 vdiv.f32 s0, s1, s2"
+},
+{
+"hex": "0000eeb0",
+"text": "0ae0 vabs.f32 s0, s1"
+},
+{
+"hex": "0000eeb1",
+"text": "0a60 vneg.f32 s0, s1"
+},
+{
+"hex": "0000eeb1",
+"text": "0ae0 vsqrt.f32 s0, s1"
+},
+{
+"hex": "0000eeb8",
+"text": "0ae0 vcvt.f32.s32 s0, s1"
+},
+{
+"hex": "0000eebd",
+"text": "0ae0 vcvt.s32.f32 s0, s1"
+},
+{
+"hex": "0000ee00",
+"text": "1a10 vmov s0, r1"
+},
+{
+"hex": "0000ee10",
+"text": "0a90 vmov r0, s1"
+},
+{
+"hex": "0000eeb7",
+"text": "0a00 vmov.f32 s0, #1.000000e+00"
+},
+{
+"hex": "0000eeb4",
+"text": "0a60 vcmp.f32 s0, s1"
+},
+{
+"hex": "0000ed90",
+"text": "0a00 vldr s0, [r0]"
+},
+{
+"hex": "0000ed80",
+"text": "0a00 vstr s0, [r0]"
+},
+{
+"hex": "0000ec90",
+"text": "0a04 vldmia r0, {s0, s1, s2, s3}"
+},
+{
+"hex": "0000ec80",
+"text": "0a04 vstmia r0, {s0, s1, s2, s3}"
+},
+{
+"hex": "0000ef01",
+"text": "0802 vadd.i8 d0, d1, d2"
+},
+{
+"hex": "0000ef22",
+"text": "0844 vadd.i32 q0, q1, q2"
+},
+{
+"hex": "0000ef02",
+"text": "0d44 vadd.f32 q0, q1, q2"
+},
+{
+"hex": "0000ff01",
+"text": "0d12 vmul.f32 d0, d1, d2"
+},
+{
+"hex": "0000ff12",
+"text": "0844 vsub.i16 q0, q1, q2"
+},
+{
+"hex": "0000ef02",
+"text": "0154 vand q0, q1, q2"
+},
+{
+"hex": "0000ff01",
+"text": "0112 veor d0, d1, d2"
+},
+{
+"hex": "0000ff87",
+"text": "005f vmov.i32 q0, #0xff"
+},
+{
+"hex": "0000ee80",
+"text": "1b10 vdup.32 d0, r1"
+},
+{
+"hex": "0000f920",
+"text": "0a8f vld1.32 {d0, d1}, [r0]"
+},
+{
+"hex": "0000f900",
+"text": "0a8f vst1.32 {d0, d1}, [r0]"
+},
+{
+"hex": "0000ffb2",
+"text": "0181 vzip.8 d0, d1"
+},
+{
+"hex": "0000ffb6",
+"text": "0142 vuzp.16 q0, q1"
+},
+{
+"hex": "0000ffba",
+"text": "0081 vtrn.32 d0, d1"
+},
+{
+"hex": "0000efb1",
+"text": "0302 vext.8 d0, d1, d2, #0x3"
+},
+{
+"hex": "0000ef12",
+"text": "0054 vqadd.s16 q0, q1, q2"
+},
+{
+"hex": "0000ff01",
+"text": "0212 vqsub.u8 d0, d1, d2"
+},
+{
+"hex": "0000ff21",
+"text": "0812 vceq.i32 d0, d1, d2"
+},
+{
+"hex": "0000ef02",
+"text": "0344 vcgt.s8 q0, q1, q2"
+},
+{
+"hex": "0000efa5",
+"text": "0552 vshl.i32 q0, q1, #0x5"
+},
+{
+"hex": "0000ef97",
+"text": "0011 vshr.s16 d0, d1, #0x9"
+},
+{
+"hex": "0000ef02",
+"text": "0f44 vmax.f32 q0, q1, q2"
+},
+{
+"hex": "0000ef21",
+"text": "0f02 vmin.f32 d0, d1, d2"
+},
+{
+"hex": "0000ef11",
+"text": "0b12 vpadd.i16 d0, d1, d2"
+},
+{
+"hex": "0000ec51",
+"text": "0b12 vmov r0, r1, d2"
+},
+{
+"hex": "0000ee31",
+"text": "0b10 vmov.32 r0, d1[1]"
+}
+]

@@ -1,0 +1,306 @@
+[
+{
+"hex": "ed900a00",
+"text": "vldr s0, [r0]"
+},
+{
+"hex": "edd00a01",
+"text": "vldr s1, [r0, #4]"
+},
+{
+"hex": "ed912b02",
+"text": "vldr d2, [r1, #8]"
+},
+{
+"hex": "ed800a00",
+"text": "vstr s0, [r0]"
+},
+{
+"hex": "ed010b02",
+"text": "vstr d0, [r1, #-8]"
+},
+{
+"hex": "ec900a04",
+"text": "vldmia r0, {s0, s1, s2, s3}"
+},
+{
+"hex": "ec900b08",
+"text": "vldmia r0, {d0, d1, d2, d3}"
+},
+{
+"hex": "ecb04a08",
+"text": "vldmia r0!, {s8, s9, s10, s11, s12, s13, s14, s15}"
+},
+{
+"hex": "ed300b08",
+"text": "vldmdb r0!, {d0, d1, d2, d3}"
+},
+{
+"hex": "ec800a04",
+"text": "vstmia r0, {s0, s1, s2, s3}"
+},
+{
+"hex": "eca00b0c",
+"text": "vstmia r0!, {d0, d1, d2, d3, d4, d5}"
+},
+{
+"hex": "ed201a08",
+"text": "vstmdb r0!, {s2, s3, s4, s5, s6, s7, s8, s9}"
+},
+{
+"hex": "ee300a81",
+"text": "vadd.f32 s0, s1, s2"
+},
+{
+"hex": "ee310b02",
+"text": "vadd.f64 d0, d1, d2"
+},
+{
+"hex": "ee300ac1",
+"text": "vsub.f32 s0, s1, s2"
+},
+{
+"hex": "ee310b42",
+"text": "vsub.f64 d0, d1, d2"
+},
+{
+"hex": "ee200a81",
+"text": "vmul.f32 s0, s1, s2"
+},
+{
+"hex": "ee210b02",
+"text": "vmul.f64 d0, d1, d2"
+},
+{
+"hex": "ee200ac1",
+"text": "vnmul.f32 s0, s1, s2"
+},
+{
+"hex": "ee800a81",
+"text": "vdiv.f32 s0, s1, s2"
+},
+{
+"hex": "ee810b02",
+"text": "vdiv.f64 d0, d1, d2"
+},
+{
+"hex": "ee000a81",
+"text": "vmla.f32 s0, s1, s2"
+},
+{
+"hex": "ee010b02",
+"text": "vmla.f64 d0, d1, d2"
+},
+{
+"hex": "ee000ac1",
+"text": "vmls.f32 s0, s1, s2"
+},
+{
+"hex": "ee100ac1",
+"text": "vnmla.f32 s0, s1, s2"
+},
+{
+"hex": "ee100a81",
+"text": "vnmls.f32 s0, s1, s2"
+},
+{
+"hex": "ee110b42",
+"text": "vnmla.f64 d0, d1, d2"
+},
+{
+"hex": "ee110b02",
+"text": "vnmls.f64 d0, d1, d2"
+},
+{
+"hex": "eeb00ae0",
+"text": "vabs.f32 s0, s1"
+},
+{
+"hex": "eeb00bc1",
+"text": "vabs.f64 d0, d1"
+},
+{
+"hex": "eeb10a60",
+"text": "vneg.f32 s0, s1"
+},
+{
+"hex": "eeb10b41",
+"text": "vneg.f64 d0, d1"
+},
+{
+"hex": "eeb10ae0",
+"text": "vsqrt.f32 s0, s1"
+},
+{
+"hex": "eeb10bc1",
+"text": "vsqrt.f64 d0, d1"
+},
+{
+"hex": "eeb40a60",
+"text": "vcmp.f32 s0, s1"
+},
+{
+"hex": "eeb40b41",
+"text": "vcmp.f64 d0, d1"
+},
+{
+"hex": "eeb40ae0",
+"text": "vcmpe.f32 s0, s1"
+},
+{
+"hex": "eeb50a40",
+"text": "vcmp.f32 s0, #0"
+},
+{
+"hex": "eeb50ac0",
+"text": "vcmpe.f32 s0, #0"
+},
+{
+"hex": "eeb50b40",
+"text": "vcmp.f64 d0, #0"
+},
+{
+"hex": "eeb00a60",
+"text": "vmov.f32 s0, s1"
+},
+{
+"hex": "f2210111",
+"text": "vorr d0, d1, d1"
+},
+{
+"hex": "eeb70a00",
+"text": "vmov.f32 s0, #1.000000e+00"
+},
+{
+"hex": "eef60a00",
+"text": "vmov.f32 s1, #5.000000e-01"
+},
+{
+"hex": "eeb00b00",
+"text": "vmov.f64 d0, #2.000000e+00"
+},
+{
+"hex": "ee100a90",
+"text": "vmov r0, s1"
+},
+{
+"hex": "ee000a90",
+"text": "vmov s1, r0"
+},
+{
+"hex": "ec510b12",
+"text": "vmov r0, r1, d2"
+},
+{
+"hex": "ec410b12",
+"text": "vmov d2, r0, r1"
+},
+{
+"hex": "ee110b10",
+"text": "vmov.32 r0, d1[0]"
+},
+{
+"hex": "ee010b10",
+"text": "vmov.32 d1[0], r0"
+},
+{
+"hex": "ee310b10",
+"text": "vmov.32 r0, d1[1]"
+},
+{
+"hex": "eef10a10",
+"text": "vmrs r0, fpscr"
+},
+{
+"hex": "eef1fa10",
+"text": "vmrs APSR_nzcv, fpscr"
+},
+{
+"hex": "eee10a10",
+"text": "vmsr fpscr, r0"
+},
+{
+"hex": "eeb80ae0",
+"text": "vcvt.f32.s32 s0, s1"
+},
+{
+"hex": "eeb80a60",
+"text": "vcvt.f32.u32 s0, s1"
+},
+{
+"hex": "eebd0ae0",
+"text": "vcvt.s32.f32 s0, s1"
+},
+{
+"hex": "eebc0ae0",
+"text": "vcvt.u32.f32 s0, s1"
+},
+{
+"hex": "eeb80be0",
+"text": "vcvt.f64.s32 d0, s1"
+},
+{
+"hex": "eebd0bc1",
+"text": "vcvt.s32.f64 s0, d1"
+},
+{
+"hex": "eeb80b60",
+"text": "vcvt.f64.u32 d0, s1"
+},
+{
+"hex": "eebc0bc1",
+"text": "vcvt.u32.f64 s0, d1"
+},
+{
+"hex": "eebd0a60",
+"text": "vcvtr.s32.f32 s0, s1"
+},
+{
+"hex": "eebc0a60",
+"text": "vcvtr.u32.f32 s0, s1"
+},
+{
+"hex": "eeb70bc1",
+"text": "vcvt.f32.f64 s0, d1"
+},
+{
+"hex": "eeb70ae0",
+"text": "vcvt.f64.f32 d0, s1"
+},
+{
+"hex": "eeba0a46",
+"text": "vcvt.f32.s16 s0, s0, #4"
+},
+{
+"hex": "eebb0a42",
+"text": "vcvt.f32.u16 s0, s0, #12"
+},
+{
+"hex": "eebe0a46",
+"text": "vcvt.s16.f32 s0, s0, #4"
+},
+{
+"hex": "eebf0a66",
+"text": "vcvt.u16.f32 s0, s0, #3"
+},
+{
+"hex": "eeba0b64",
+"text": "vcvt.f64.s16 d0, d0, #7"
+},
+{
+"hex": "eebe1b47",
+"text": "vcvt.s16.f64 d1, d1, #2"
+},
+{
+"hex": "eeb8faef",
+"text": "vcvt.f32.s32 s30, s31"
+},
+{
+"hex": "eeb7facf",
+"text": "vcvt.f64.f32 d15, s30"
+},
+{
+"hex": "eef1facf",
+"text": "vsqrt.f32 s31, s30"
+}
+]
