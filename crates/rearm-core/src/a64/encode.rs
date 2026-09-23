@@ -1,1 +1,325 @@
-//! A64 encoders (progressive; full set grows with the translator).
+//! A64 (arm64-v8a) encoder — the recompiler output target.
+//! Encodings byte-verified against the LLVM golden corpus (a64-misc.json).
+
+use crate::common::Cond;
+
+pub type XR = u8;
+
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct EncErr(pub &'static str);
+
+impl core::fmt::Display for EncErr {
+    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+        write!(f, "a64 encode: {}", self.0)
+    }
+}
+
+/// Assembled A64 code (little-endian 32-bit words).
+#[derive(Default, Clone)]
+pub struct A64 {
+    pub buf: Vec<u32>,
+}
+
+impl A64 {
+    pub fn new() -> Self { A64 { buf: Vec::with_capacity(1024) } }
+    pub fn len(&self) -> usize { self.buf.len() }
+    pub fn is_empty(&self) -> bool { self.buf.is_empty() }
+    pub fn words(&self) -> &[u32] { &self.buf }
+    pub fn clear(&mut self) { self.buf.clear() }
+    pub fn bytes(&self) -> Vec<u8> {
+        let mut v = Vec::with_capacity(self.buf.len() * 4);
+        for w in &self.buf { v.extend_from_slice(&w.to_le_bytes()); }
+        v
+    }
+    #[inline]
+    pub fn e(&mut self, w: u32) { self.buf.push(w); }
+    /// byte offset of the next emitted instruction
+    pub fn pc(&self) -> i32 { (self.buf.len() * 4) as i32 }
+
+    // ==================== branches ====================
+    pub fn b(&mut self, off: i32) -> Result<(), EncErr> {
+        if off & 3 != 0 || !(-134_217_728..=134_217_724).contains(&off) {
+            return Err(EncErr("b range"));
+        }
+        self.e(0b000101 << 26 | ((off >> 2) as u32 & 0x03FF_FFFF));
+        Ok(())
+    }
+    pub fn bl(&mut self, off: i32) -> Result<(), EncErr> {
+        if off & 3 != 0 || !(-134_217_728..=134_217_724).contains(&off) {
+            return Err(EncErr("bl range"));
+        }
+        self.e(0b100101 << 26 | ((off >> 2) as u32 & 0x03FF_FFFF));
+        Ok(())
+    }
+    pub fn bcond(&mut self, cond: Cond, off: i32) -> Result<(), EncErr> {
+        if off & 3 != 0 || !(-1_048_576..=1_048_572).contains(&off) {
+            return Err(EncErr("b.cond range"));
+        }
+        self.e(0x54 << 24 | (((off >> 2) as u32 & 0x7FFFF) << 5) | cond.bits() as u32);
+        Ok(())
+    }
+    pub fn cbz(&mut self, sf: bool, rt: XR, off: i32) -> Result<(), EncErr> {
+        if off & 3 != 0 { return Err(EncErr("cbz align")); }
+        self.e(((sf as u32) << 31) | (0x34 << 24) | (((off >> 2) as u32 & 0x1F_FFFF) << 5) | rt as u32);
+        Ok(())
+    }
+    pub fn cbnz(&mut self, sf: bool, rt: XR, off: i32) -> Result<(), EncErr> {
+        if off & 3 != 0 { return Err(EncErr("cbnz align")); }
+        self.e(((sf as u32) << 31) | (0x35 << 24) | (((off >> 2) as u32 & 0x1F_FFFF) << 5) | rt as u32);
+        Ok(())
+    }
+    pub fn tbz(&mut self, rt: XR, bit: u8, off: i32) -> Result<(), EncErr> {
+        if off & 3 != 0 || bit > 63 { return Err(EncErr("tbz")); }
+        self.e((((bit >> 5) as u32) << 31) | (0x36 << 24)
+            | (((off >> 2) as u32 & 0x3FFF) << 5) | (((bit & 0x1F) as u32) << 19) | rt as u32);
+        Ok(())
+    }
+    pub fn tbnz(&mut self, rt: XR, bit: u8, off: i32) -> Result<(), EncErr> {
+        if off & 3 != 0 || bit > 63 { return Err(EncErr("tbnz")); }
+        self.e((((bit >> 5) as u32) << 31) | (0x37 << 24)
+            | (((off >> 2) as u32 & 0x3FFF) << 5) | (((bit & 0x1F) as u32) << 19) | rt as u32);
+        Ok(())
+    }
+    pub fn br(&mut self, xn: XR) { self.e(0xD61F_0000 | (xn as u32) << 5); }
+    pub fn blr(&mut self, xn: XR) { self.e(0xD63F_0000 | (xn as u32) << 5); }
+    pub fn ret(&mut self, xn: Option<XR>) {
+        self.e(0xD65F_0000 | (xn.unwrap_or(30) as u32) << 5);
+    }
+
+    // ==================== data-proc immediate ====================
+    pub fn movz(&mut self, sf: bool, hw: u8, imm16: u16, rd: XR) {
+        self.e(wide(sf, 0b10, hw, imm16, rd));
+    }
+    pub fn movn(&mut self, sf: bool, hw: u8, imm16: u16, rd: XR) {
+        self.e(wide(sf, 0b00, hw, imm16, rd));
+    }
+    pub fn movk(&mut self, sf: bool, hw: u8, imm16: u16, rd: XR) {
+        self.e(wide(sf, 0b11, hw, imm16, rd));
+    }
+    /// logical bitmask immediate (raw fields)
+    pub fn log_imm(&mut self, sf: bool, opc: u8, n: bool, immr: u8, imms: u8, rn: XR, rd: XR) {
+        self.e(((sf as u32) << 31) | ((opc as u32) << 29) | (0x24 << 23)
+            | ((n as u32) << 22) | ((immr as u32) << 16) | ((imms as u32) << 10)
+            | (rn as u32) << 5 | rd as u32);
+    }
+    /// AND/ORR/EOR/ANDS with a bitmask immediate (opc: 0=AND 1=ORR 2=EOR 3=ANDS)
+    pub fn logic_bitmask(&mut self, sf: bool, opc: u8, val: u64, rn: XR, rd: XR) -> Result<(), EncErr> {
+        let (n, immr, imms) = encode_bitmask(val, sf).ok_or(EncErr("bad bitmask"))?;
+        self.log_imm(sf, opc, n, immr, imms, rn, rd);
+        Ok(())
+    }
+    /// add/sub immediate
+    pub fn addsub_imm(&mut self, sf: bool, op: u8, s: bool, imm12: u16, shift12: bool, rn: XR, rd: XR) {
+        self.e(((sf as u32) << 31) | ((op as u32) << 30) | ((s as u32) << 29)
+            | (0x11 << 24) | ((shift12 as u32) << 22) | ((imm12 as u32) << 10)
+            | (rn as u32) << 5 | rd as u32);
+    }
+    pub fn add_imm(&mut self, sf: bool, rn: XR, rd: XR, imm: u16) { self.addsub_imm(sf, 0, false, imm, false, rn, rd); }
+    pub fn sub_imm(&mut self, sf: bool, rn: XR, rd: XR, imm: u16) { self.addsub_imm(sf, 1, false, imm, false, rn, rd); }
+    pub fn adds_imm(&mut self, sf: bool, rn: XR, rd: XR, imm: u16) { self.addsub_imm(sf, 0, true, imm, false, rn, rd); }
+    pub fn subs_imm(&mut self, sf: bool, rn: XR, rd: XR, imm: u16) { self.addsub_imm(sf, 1, true, imm, false, rn, rd); }
+
+    // ==================== bitfield ====================
+    /// SBFM/UBFM/BFM common: opc 10=SBFM 00=BFM(UBFM shares opc 00 with N=0? no: UBFM opc=10?)
+    /// UBFM: sf opc=10? — per corpus: asr x0,x1,#7 = 9347fc20 (SBFM), lsr = d347fc20 (UBFM), lsl = d379e020 (UBFM)
+    pub fn bfm(&mut self, sf: bool, opc: u8, immr: u8, imms: u8, rn: XR, rd: XR) {
+        self.e(((sf as u32) << 31) | ((opc as u32) << 29) | (0x26 << 23)
+            | ((immr as u32) << 16) | ((imms as u32) << 10) | (rn as u32) << 5 | rd as u32);
+    }
+    pub fn lsl_imm(&mut self, sf: bool, rn: XR, rd: XR, amount: u8) {
+        let bits: u8 = if sf { 63 } else { 31 };
+        self.bfm(sf, 0b10, (bits + 1 - amount) & bits, bits - amount, rn, rd);
+    }
+    pub fn lsr_imm(&mut self, sf: bool, rn: XR, rd: XR, amount: u8) {
+        let bits: u8 = if sf { 63 } else { 31 };
+        self.bfm(sf, 0b10, amount, bits, rn, rd);
+    }
+    pub fn asr_imm(&mut self, sf: bool, rn: XR, rd: XR, amount: u8) {
+        let bits: u8 = if sf { 63 } else { 31 };
+        self.bfm(sf, 0b00, amount, bits, rn, rd); // SBFM: opc=00 (corpus: asr x0,x1,#7 = 9347fc20)
+    }
+    pub fn bfi(&mut self, sf: bool, rn: XR, rd: XR, lsb: u8, width: u8) {
+        let bits: u8 = if sf { 63 } else { 31 };
+        self.bfm(sf, 0b01, (bits + 1 - lsb) & bits, width - 1, rn, rd); // BFM
+    }
+    pub fn bfxil(&mut self, sf: bool, rn: XR, rd: XR, lsb: u8, width: u8) {
+        self.bfm(sf, 0b00, lsb, width - 1, rn, rd);
+    }
+    pub fn sbfx(&mut self, sf: bool, rn: XR, rd: XR, lsb: u8, width: u8) {
+        self.bfm(sf, 0b00, lsb, width - 1, rn, rd); // SBFM
+    }
+    pub fn ubfx(&mut self, sf: bool, rn: XR, rd: XR, lsb: u8, width: u8) {
+        self.bfm(sf, 0b10, lsb, width - 1, rn, rd);
+    }
+    pub fn sxt(&mut self, sf: bool, from_bits: u8, rn: XR, rd: XR) {
+        self.bfm(sf, 0b00, 0, from_bits - 1, rn, rd); // SBFM (sxtb w0,w1 = 13001c20)
+    }
+    pub fn uxt(&mut self, sf: bool, from_bits: u8, rn: XR, rd: XR) {
+        self.bfm(sf, 0b10, 0, from_bits - 1, rn, rd);
+    }
+    pub fn extr(&mut self, sf: bool, o0: bool, rm: XR, lsb: u8, rn: XR, rd: XR) {
+        self.e(((sf as u32) << 31) | (0x27 << 23) | ((o0 as u32) << 21)
+            | ((rm as u32) << 16) | ((lsb as u32) << 10) | (rn as u32) << 5 | rd as u32);
+    }
+    pub fn ror_imm(&mut self, sf: bool, rn: XR, rd: XR, amount: u8) {
+        self.extr(sf, false, rn, amount, rn, rd);
+    }
+
+    // ==================== data-proc register ====================
+    /// ADD/SUB shifted register: shift: 0=LSL 1=LSR 2=ASR; op 0=ADD 1=SUB
+    pub fn addsub_reg(&mut self, sf: bool, op: u8, s: bool, shift: u8, amount: u8, rn: XR, rm: XR, rd: XR) {
+        self.e(((sf as u32) << 31) | ((op as u32) << 30) | ((s as u32) << 29)
+            | (0x0B << 24) | ((shift as u32) << 22) | ((rm as u32) << 16) | ((amount as u32) << 10)
+            | (rn as u32) << 5 | rd as u32);
+    }
+    /// ADD/SUB extended register: ext 0..7 = UXTB,UXTH,UXTW,UXTX,SXTB,SXTH,SXTW,SXTX; amount 0..4
+    pub fn addsub_ext(&mut self, sf: bool, op: u8, s: bool, rm: XR, ext: u8, amount: u8, rn: XR, rd: XR) {
+        self.e(((sf as u32) << 31) | ((op as u32) << 30) | ((s as u32) << 29)
+            | (0x0B << 24) | (1 << 21)
+            | ((rm as u32) << 16) | ((ext as u32) << 13) | ((amount as u32) << 10)
+            | (rn as u32) << 5 | rd as u32);
+    }
+    /// ADC/SBC: op 0=ADC 1=SBC
+    pub fn adc(&mut self, sf: bool, op: u8, s: bool, rn: XR, rm: XR, rd: XR) {
+        self.e(((sf as u32) << 31) | ((op as u32) << 30) | ((s as u32) << 29)
+            | (0x1A << 24) | ((rm as u32) << 16) | (rn as u32) << 5 | rd as u32);
+    }
+    /// Logic register: opc 0=AND 1=ORR 2=EOR 3=ANDS; N inverts Rm
+    pub fn logic_reg(&mut self, sf: bool, opc: u8, n: bool, shift: bool, amount: u8, rn: XR, rm: XR, rd: XR) {
+        self.e(((sf as u32) << 31) | ((opc as u32) << 29)
+            | (0x0A << 24) | ((shift as u32) << 22) | ((n as u32) << 21)
+            | ((rm as u32) << 16) | ((amount as u32) << 10) | (rn as u32) << 5 | rd as u32);
+    }
+    /// CSEL family: op 0=CSEL 1=CSINC 2=CSINV 3=CSNEG
+    pub fn csel(&mut self, sf: bool, op: u8, rn: XR, rm: XR, cond: Cond, rd: XR) {
+        self.e(((sf as u32) << 31) | ((op as u32) << 30) | (0x1A << 24)
+            | ((rm as u32) << 16) | ((cond.bits() as u32) << 12) | (rn as u32) << 5 | rd as u32);
+    }
+    /// CCMP/CCMN register: op 0=CCMN 1=CCMP
+    pub fn ccmp(&mut self, sf: bool, op: u8, rm: XR, nzcv: u8, cond: Cond, rn: XR) {
+        self.e(((sf as u32) << 31) | ((op as u32) << 30) | (1 << 29) | (0x1A << 24) | (2 << 21)
+            | ((rm as u32) << 16) | ((cond.bits() as u32) << 12) | (rn as u32) << 5
+            | (nzcv as u32 & 0xF));
+    }
+    /// Data-proc 1-source: opcode rbit=0 rev16=1 rev32=2 rev=3 clz=4 cls=5
+    pub fn dp1(&mut self, sf: bool, opcode: u8, rn: XR, rd: XR) {
+        self.e(((sf as u32) << 31) | (1 << 30) | (0x1A << 24)
+            | ((opcode as u32) << 10) | (rn as u32) << 5 | rd as u32);
+    }
+    pub fn rbit(&mut self, sf: bool, rn: XR, rd: XR) { self.dp1(sf, 0, rn, rd); }
+    pub fn rev16(&mut self, sf: bool, rn: XR, rd: XR) { self.dp1(sf, 1, rn, rd); }
+    pub fn rev32(&mut self, sf: bool, rn: XR, rd: XR) { self.dp1(sf, 2, rn, rd); }
+    pub fn rev(&mut self, sf: bool, rn: XR, rd: XR) { self.dp1(sf, 3, rn, rd); }
+    pub fn clz(&mut self, sf: bool, rn: XR, rd: XR) { self.dp1(sf, 4, rn, rd); }
+    pub fn cls(&mut self, sf: bool, rn: XR, rd: XR) { self.dp1(sf, 5, rn, rd); }
+    /// Data-proc 2-source: opcode udiv=2 sdiv=3 lslv=8 lsrv=9 asrv=10 rorv=11
+    pub fn dp2(&mut self, sf: bool, opcode: u8, rn: XR, rm: XR, rd: XR) {
+        self.e(((sf as u32) << 31) | (0x1A << 24) | (6 << 21)
+            | ((rm as u32) << 16) | ((opcode as u32) << 10) | (rn as u32) << 5 | rd as u32);
+    }
+    pub fn sdiv(&mut self, sf: bool, rn: XR, rm: XR, rd: XR) { self.dp2(sf, 3, rn, rm, rd); }
+    pub fn udiv(&mut self, sf: bool, rn: XR, rm: XR, rd: XR) { self.dp2(sf, 2, rn, rm, rd); }
+    pub fn lslv(&mut self, sf: bool, rn: XR, rm: XR, rd: XR) { self.dp2(sf, 8, rn, rm, rd); }
+    pub fn lsrv(&mut self, sf: bool, rn: XR, rm: XR, rd: XR) { self.dp2(sf, 9, rn, rm, rd); }
+    pub fn asrv(&mut self, sf: bool, rn: XR, rm: XR, rd: XR) { self.dp2(sf, 10, rn, rm, rd); }
+    pub fn rorv(&mut self, sf: bool, rn: XR, rm: XR, rd: XR) { self.dp2(sf, 11, rn, rm, rd); }
+    /// MADD/MSUB
+    pub fn madd(&mut self, sf: bool, o0: bool, rm: XR, ra: XR, rn: XR, rd: XR) {
+        self.e(((sf as u32) << 31) | (0x1B << 24) | ((o0 as u32) << 21)
+            | ((rm as u32) << 16) | ((ra as u32) << 10) | (rn as u32) << 5 | rd as u32);
+    }
+    /// SMADDL/SMSUBL/UMADDL/UMSUBL (32→64)
+    pub fn maddl(&mut self, u: bool, o0: bool, rm: XR, ra: XR, rn: XR, rd: XR) {
+        self.e((1u32 << 31) | ((u as u32) << 30) | (0x1B << 24) | ((o0 as u32) << 21)
+            | ((rm as u32) << 16) | ((ra as u32) << 10) | (rn as u32) << 5 | rd as u32);
+    }
+    /// SMULH/UMULH
+    pub fn mulh(&mut self, u: bool, rm: XR, rn: XR, rd: XR) {
+        self.e((1u32 << 31) | ((u as u32) << 30) | (0x1B << 24) | (0b1100000 << 10)
+            | ((rm as u32) << 16) | (rn as u32) << 5 | rd as u32);
+    }
+
+    // ==================== loads/stores ====================
+    /// LDR/STR unsigned imm: size 00=8b 01=16b 10=32b 11=64b; opc 00=store 01=load
+    pub fn ldst_uimm(&mut self, size: u8, opc: u8, imm12: u16, rn: XR, rt: XR) {
+        self.e(((size as u32) << 30) | (0x39 << 24) | ((opc as u32) << 22)
+            | ((imm12 as u32) << 10) | (rn as u32) << 5 | rt as u32);
+    }
+    /// LDR/STR imm9: mode 0=unscaled 1=post-idx 2=pre-idx
+    pub fn ldst_imm9(&mut self, size: u8, opc: u8, imm9: i16, mode: u8, rn: XR, rt: XR) {
+        self.e(((size as u32) << 30) | (0x38 << 24) | ((opc as u32) << 22)
+            | (((imm9 as u32) & 0x1FF) << 12) | ((mode as u32) << 10)
+            | (rn as u32) << 5 | rt as u32);
+    }
+    /// LDR/STR register offset (LSL #size)
+    pub fn ldst_reg(&mut self, size: u8, opc: u8, rm: XR, rn: XR, rt: XR) {
+        self.e(((size as u32) << 30) | (0x38 << 24) | ((opc as u32) << 22) | (1 << 21)
+            | ((rm as u32) << 16) | (6 << 13) | (1 << 11)
+            | (rn as u32) << 5 | rt as u32);
+    }
+    /// LDP/STP: opc 00=32 10=64; L 0=store 1=load; mode 2=post 1=signed-off 3=pre
+    pub fn ldpstp(&mut self, opc: u8, l: bool, mode: u8, imm7: i16, rt2: XR, rn: XR, rt: XR) {
+        self.e(((opc as u32) << 30) | (0x29 << 24) | ((l as u32) << 22)
+            | ((mode as u32) << 23) | (((imm7 as u32) & 0x7F) << 15)
+            | ((rt2 as u32) << 10) | (rn as u32) << 5 | rt as u32);
+    }
+    pub fn ldxr(&mut self, size: u8, rt: XR, rn: XR) {
+        self.e(((size as u32) << 30) | (0x08 << 24) | (0x1F << 16) | (0x1F << 10)
+            | (rn as u32) << 5 | rt as u32);
+    }
+    pub fn stxr(&mut self, size: u8, rs: XR, rt: XR, rn: XR) {
+        self.e(((size as u32) << 30) | (0x08 << 24)
+            | ((rs as u32) << 16) | (rn as u32) << 5 | rt as u32);
+    }
+
+    // ==================== misc ====================
+    pub fn nop(&mut self) { self.e(0xD503_201F); }
+    pub fn yield_(&mut self) { self.e(0xD503_203F); }
+    pub fn wfe(&mut self) { self.e(0xD503_205F); }
+    pub fn wfi(&mut self) { self.e(0xD503_207F); }
+    pub fn sev(&mut self) { self.e(0xD503_209F); }
+    pub fn dsb(&mut self, opt: u8) { self.e(0xD503_309F | ((opt as u32 & 0xF) << 8)); }
+    pub fn dmb(&mut self, opt: u8) { self.e(0xD503_30BF | ((opt as u32 & 0xF) << 8)); }
+    pub fn isb(&mut self) { self.e(0xD503_3FDF); }
+    pub fn svc(&mut self, imm16: u16) { self.e(0xD400_0001 | ((imm16 as u32) << 5)); }
+    pub fn brk(&mut self, imm16: u16) { self.e(0xD420_0000 | ((imm16 as u32) << 5)); }
+}
+
+const fn wide(sf: bool, opc: u8, hw: u8, imm16: u16, rd: XR) -> u32 {
+    ((sf as u32) << 31) | ((opc as u32) << 29) | (0b100101 << 23)
+        | ((hw as u32) << 21) | ((imm16 as u32) << 5) | rd as u32
+}
+
+/// Encode a bitmask immediate as (N, immr, imms) per ARM ARM pseudocode.
+/// Validated: 0xff → (0, 0, 7); 0x80000000 → (0, 31, 0).
+pub fn encode_bitmask(v: u64, sf: bool) -> Option<(bool, u8, u8)> {
+    if v == 0 { return None; }
+    let bits: u32 = if sf { 64 } else { 32 };
+    let mask: u64 = if bits == 64 { u64::MAX } else { (1u64 << bits) - 1 };
+    let v = v & mask;
+    if v == mask { return None; }
+    if !sf && (v >> 32) != 0 { return None; }
+    let ror = v.trailing_zeros();
+    let rotated = v.rotate_right(ror);
+    // Try the LARGEST element size that reproduces v (canonical form, fewest bits in imms).
+    for esize_log in (1..=6u32).rev() {
+        let esize: u32 = 1 << esize_log;
+        if esize > bits { continue; }
+        let emask: u64 = (1u64 << esize) - 1;
+        let ones = (rotated & emask).count_ones();
+        if ones == 0 { continue; }
+        let pat = (1u64 << ones) - 1;
+        let mut full: u64 = 0;
+        for i in 0..(bits / esize) {
+            full |= pat << (i * esize);
+        }
+        if full.rotate_left(ror) != v { continue; }
+        // N: set iff esize == 64 (and then ones < 64 since v != all-ones)
+        let n = esize == 64;
+        // imms = ones - 1 (6-bit); the decoder derives len from N:NOT(imms)
+        let imms: u8 = (ones - 1) as u8;
+        let immr = (ror % esize) as u8;
+        return Some((n, immr, imms));
+    }
+    None
+}

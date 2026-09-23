@@ -1,0 +1,229 @@
+1888 adds r0, r1, r2
+1840 adds r0, r0, r1
+1a88 subs r0, r1, r2
+1ec8 subs r0, r1, #0x3
+3007 adds r0, #0x7
+3807 subs r0, #0x7
+20ff movs r0, #0xff
+4008 ands r0, r1
+4048 eors r0, r1
+0088 lsls r0, r1, #0x2
+08c8 lsrs r0, r1, #0x3
+1108 asrs r0, r1, #0x4
+4148 adcs r0, r1
+4188 sbcs r0, r1
+41c8 rors r0, r1
+4208 tst r0, r1
+4248 rsbs r0, r1, #0
+4288 cmp r0, r1
+282a cmp r0, #0x2a
+42c8 cmn r0, r1
+ea5f0108 movs.w r1, r8
+4680 mov r8, r0
+ea4f00c1 lsl.w r0, r1, #0x3
+ea4f10d1 lsr.w r0, r1, #0x7
+ea4f2061 asr.w r0, r1, #0x9
+ea4f20f1 ror.w r0, r1, #0xb
+f2456078 movw r0, #0x5678
+f2c12034 movt r0, #0x1234
+f2456078 movw r0, #0x5678
+ea6f0001 mvn.w r0, r1
+43c8 mvns r0, r1
+eb010002 add.w r0, r1, r2
+eb0100c2 add.w r0, r1, r2, lsl #3
+eb0110d2 add.w r0, r1, r2, lsr #7
+eb012062 add.w r0, r1, r2, asr #9
+eb0120f2 add.w r0, r1, r2, ror #11
+eb010032 add.w r0, r1, r2, rrx
+eb110002 adds.w r0, r1, r2
+eb1170c2 adds.w r0, r1, r2, lsl #31
+eb010002 add.w r0, r1, r2
+eb110002 adds.w r0, r1, r2
+eba10002 sub.w r0, r1, r2
+ebb10002 subs.w r0, r1, r2
+f1b10010 subs.w r0, r1, #0x10
+eb610002 sbc.w r0, r1, r2
+f1c100ff rsb.w r0, r1, #0xff
+ea010002 and.w r0, r1, r2
+ea110042 ands.w r0, r1, r2, lsl #1
+ea210002 bic.w r0, r1, r2
+ea311012 bics.w r0, r1, r2, lsr #4
+ea810002 eor.w r0, r1, r2
+ea5100e2 orrs.w r0, r1, r2, asr #3
+ea410002 orr.w r0, r1, r2
+ea610002 orn r0, r1, r2
+f10d0080 add.w r0, sp, #0x80
+f10d0040 add.w r0, sp, #0x40
+f1ad0d60 sub.w sp, sp, #0x60
+b020 add sp, #0x80
+b098 sub sp, #0x60
+a800 add r0, sp, #0x0
+fb01f002 mul r0, r1, r2
+fb01f002 mul r0, r1, r2
+fb013002 mla r0, r1, r2, r3
+fb013012 mls r0, r1, r2, r3
+fb831204 smull r1, r2, r3, r4
+fba31204 umull r1, r2, r3, r4
+fbc31204 smlal r1, r2, r3, r4
+fbe31204 umlal r1, r2, r3, r4
+fb91f0f2 <unknown>
+fbb1f0f2 <unknown>
+6808 ldr r0, [r1]
+6888 ldr r0, [r1, #0x8]
+f8510c08 ldr r0, [r1, #-8]
+f8d103fc ldr.w r0, [r1, #0x3fc]
+f8510f04 ldr r0, [r1, #4]!
+f8510b04 ldr r0, [r1], #4
+5888 ldr r0, [r1, r2]
+f8510022 ldr.w r0, [r1, r2, lsl #2]
+78c8 ldrb r0, [r1, #0x3]
+88c8 ldrh r0, [r1, #0x6]
+f9910005 ldrsb.w r0, [r1, #0x5]
+f9b10005 ldrsh.w r0, [r1, #0x5]
+6048 str r0, [r1, #0x4]
+f8410f04 str r0, [r1, #4]!
+f8410b04 str r0, [r1], #4
+f8410012 str.w r0, [r1, r2, lsl #1]
+70c8 strb r0, [r1, #0x3]
+80c8 strh r0, [r1, #0x6]
+e9d12302 ldrd r2, r3, [r1, #8]
+e9c12302 strd r2, r3, [r1, #8]
+e8900006 ldm.w r0, {r1, r2}
+e890028e ldm.w r0, {r1, r2, r3, r7, r9}
+e8900006 ldm.w r0, {r1, r2}
+e9100006 ldmdb r0, {r1, r2}
+c806 ldm r0!, {r1, r2}
+e8800006 stm.w r0, {r1, r2}
+e8800006 stm.w r0, {r1, r2}
+e9200006 stmdb r0!, {r1, r2}
+b530 push {r4, r5, lr}
+bd30 pop {r4, r5, pc}
+e92d0ff0 push.w {r4, r5, r6, r7, r8, r9, r10, r11}
+e8bd0ff0 pop.w {r4, r5, r6, r7, r8, r9, r10, r11}
+b120 cbz r0, 0x15c <.text+0x15c> @ imm = #0x8
+b920 cbnz r0, 0x15e <.text+0x15e> @ imm = #0x8
+b145 cbz r5, 0x168 <.text+0x168> @ imm = #0x10
+bf08 it eq
+1888 addeq r0, r1, r2
+bf0c ite eq
+1888 addeq r0, r1, r2
+1a88 subne r0, r1, r2
+bf82 ittt hi
+1888 addhi r0, r1, r2
+1963 addhi r3, r4, r5
+eb070608 addhi.w r6, r7, r8
+e8d0f001 tbb [r0, r1]
+e8d0f011 tbh [r0, r1, lsl #1]
+4804 ldr r0, [pc, #0x10] @ 0x184 <.text+0x184>
+e004 b 0x180 <.text+0x180> @ imm = #0x8
+e200 b 0x57a <.text+0x57a> @ imm = #0x400
+e008 b 0x18c <.text+0x18c> @ imm = #0x10
+d004 beq 0x186 <.text+0x186> @ imm = #0x8
+f0408080 bne.w 0x280 <.text+0x280> @ imm = #0x100
+db10 blt 0x1a4 <.text+0x1a4> @ imm = #0x20
+f000fa00 bl 0x586 <.text+0x586> @ imm = #0x400
+4770 bx lr
+4710 bx r2
+4798 blx r3
+ea101f01 tst.w r0, r1, lsl #4
+f1b00f4d cmp.w r0, #0x4d
+eb100fb1 cmn.w r0, r1, ror #2
+ba08 rev r0, r1
+ba48 rev16 r0, r1
+bac8 revsh r0, r1
+fab1f081 clz r0, r1
+fa91f0a1 rbit r0, r1
+f34100c6 sbfx r0, r1, #0x3, #0x7
+f3c100c6 ubfx r0, r1, #0x3, #0x7
+f36f00c9 bfc r0, #3, #7
+f36100c9 bfi r0, r1, #3, #7
+b248 sxtb r0, r1
+fa4ff091 sxtb.w r0, r1, ror #8
+b21a sxth r2, r3
+b2c8 uxtb r0, r1
+fa5ff0a1 uxtb.w r0, r1, ror #16
+b29a uxth r2, r3
+fa41f082 sxtab r0, r1, r2
+fa11f082 uxtah r0, r1, r2
+fa82f081 qadd r0, r1, r2
+fa82f0a1 qsub r0, r1, r2
+fa82f091 qdadd r0, r1, r2
+fa82f0b1 qdsub r0, r1, r2
+fa91f002 sadd16 r0, r1, r2
+faa1f002 sasx r0, r1, r2
+fa81f042 uadd8 r0, r1, r2
+fad1f042 usub16 r0, r1, r2
+faa1f082 sel r0, r1, r2
+eac10002 pkhbt r0, r1, r2
+eac20001 pkhbt r0, r2, r1
+f3010006 ssat r0, #0x7, r1
+f3810007 usat r0, #0x7, r1
+e8510f00 ldrex r0, [r1]
+e8410200 strex r2, r0, [r1]
+e8d10f4f ldrexb r0, [r1]
+e8c10f42 strexb r2, r0, [r1]
+e8d10f5f ldrexh r0, [r1]
+e8c10f52 strexh r2, r0, [r1]
+bf00 nop
+f3af8000 nop.w
+bf10 yield
+bf20 wfe
+bf40 sev
+f3bf8f5f dmb sy
+f3bf8f4f dsb sy
+f3bf8f6f isb sy
+be0c bkpt #0xc
+df00 svc #0x0
+f3ef8000 mrs r0, apsr
+f3ef8000 mrs r0, apsr
+f3808800 msr APSR_nzcvq, r0
+f890f000 pld [r0]
+f990f000 pli [r0]
+fb213002 smlad r0, r1, r2, r3
+fb21f002 smuad r0, r1, r2
+fb71f002 usad8 r0, r1, r2
+fac1f082 <unknown>
+fad1f082 <unknown>
+ee300a81 vadd.f32 s0, s1, s2
+ee300ac1 vsub.f32 s0, s1, s2
+ee200a81 vmul.f32 s0, s1, s2
+ee800a81 vdiv.f32 s0, s1, s2
+eeb00ae0 vabs.f32 s0, s1
+eeb10a60 vneg.f32 s0, s1
+eeb10ae0 vsqrt.f32 s0, s1
+eeb80ae0 vcvt.f32.s32 s0, s1
+eebd0ae0 vcvt.s32.f32 s0, s1
+ee001a10 vmov s0, r1
+ee100a90 vmov r0, s1
+eeb70a00 vmov.f32 s0, #1.000000e+00
+eeb40a60 vcmp.f32 s0, s1
+ed900a00 vldr s0, [r0]
+ed800a00 vstr s0, [r0]
+ec900a04 vldmia r0, {s0, s1, s2, s3}
+ec800a04 vstmia r0, {s0, s1, s2, s3}
+ef010802 vadd.i8 d0, d1, d2
+ef220844 vadd.i32 q0, q1, q2
+ef020d44 vadd.f32 q0, q1, q2
+ff010d12 vmul.f32 d0, d1, d2
+ff120844 vsub.i16 q0, q1, q2
+ef020154 vand q0, q1, q2
+ff010112 veor d0, d1, d2
+ff87005f vmov.i32 q0, #0xff
+ee801b10 vdup.32 d0, r1
+f9200a8f vld1.32 {d0, d1}, [r0]
+f9000a8f vst1.32 {d0, d1}, [r0]
+ffb20181 vzip.8 d0, d1
+ffb60142 vuzp.16 q0, q1
+ffba0081 vtrn.32 d0, d1
+efb10302 vext.8 d0, d1, d2, #0x3
+ef120054 vqadd.s16 q0, q1, q2
+ff010212 vqsub.u8 d0, d1, d2
+ff210812 vceq.i32 d0, d1, d2
+ef020344 vcgt.s8 q0, q1, q2
+efa50552 vshl.i32 q0, q1, #0x5
+ef970011 vshr.s16 d0, d1, #0x9
+ef020f44 vmax.f32 q0, q1, q2
+ef210f02 vmin.f32 d0, d1, d2
+ef110b12 vpadd.i16 d0, d1, d2
+ec510b12 vmov r0, r1, d2
+ee310b10 vmov.32 r0, d1[1]
