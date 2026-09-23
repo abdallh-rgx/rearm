@@ -457,8 +457,23 @@ fn decode_t32_dp2(w: u32) -> Result<Ins, DecodeErr> {
             let op2 = bb(w, 7, 4);
             let op1 = bb(w, 23, 20) >> 2; // bits 23:22
             let op1 = bb(w, 23, 21); // 3-bit op1 field
-            let _ = op2;
             match op1 {
+                // 001: SMUAD/SMLAD/SMUSD/SMLSD (X = bit 5; Ra=1111 → no accumulate)
+                0b001 => {
+                    let x = bt(w, 5);
+                    if ra == 15 {
+                        if x { Ok(Ins::Smusd { rd, rn, rm, x: false }) }
+                        else { Ok(Ins::Smuad { rd, rn, rm, x: false }) }
+                    } else {
+                        if x { Ok(Ins::Smlsd { rd, rn, rm, ra, x: false }) }
+                        else { Ok(Ins::Smlad { rd, rn, rm, ra, x: false }) }
+                    }
+                }
+                // 011: USAD8/USADA8
+                0b011 => {
+                    if ra == 15 { Ok(Ins::Usad8 { rd, rn, rm }) }
+                    else { Ok(Ins::Usada8 { rd, rn, rm, ra }) }
+                }
                 0b000 => {
                     if ra == 15 { Ok(Ins::Mul { rd, rn, rm, s: false }) }
                     else if bt(w, 4) { Ok(Ins::Mls { rd, rn, rm, ra }) }

@@ -2065,3 +2065,7 @@ about:blank
 === attempt Wed Sep 23 16:27:13 UTC 2026
 about:blank
 ✗ No element found: getByRole('button', { name: 'Download' }). Verify the selector, role, or name is correct and the element exists in the DOM.
+  attempt done, retrying
+=== attempt Wed Sep 23 16:28:10 UTC 2026
+about:blank
+✗ No element found: getByRole('button', { name: 'Download' }). Verify the selector, role, or name is correct and the element exists in the DOM.
