@@ -117,6 +117,10 @@ pub fn encode_a32(ins: &Ins) -> Result<u32, EncodeErr> {
             0xF000_0000 | (0b101 << 25) | (h << 24) | ((to_u24(*off)) & 0x00FF_FFFF)
         }
         Ins::Svc { imm } => (Cond::Al.bits() as u32) << 28 | (0b1111 << 24) | (*imm & 0x00FF_FFFF),
+        Ins::Neon { .. } | Ins::Vswp { .. } | Ins::VdupScalar { .. } | Ins::VdupCore { .. } => {
+            if let Some(w) = crate::a32::encode_neon::encode_neon(ins) { return Ok(w); }
+            return Err(EncodeErr("neon encode"));
+        }
         Ins::Hints { kind } => {
             let i = match kind {
                 Hint::Nop => 0, Hint::Yield => 1, Hint::Wfe => 2, Hint::Wfi => 3,
@@ -335,7 +339,10 @@ pub fn encode_a32(ins: &Ins) -> Result<u32, EncodeErr> {
                 | (dbit << 22) | (0b0101 << 16) | (d_f << 12) | (cp << 8)
                 | (ebit << 7) | (1 << 6) | (0 << 5) | 0)
         }
-        Ins::VmovImm { kind, imm, q: _, d } => {
+        Ins::VmovImm { kind, imm, q, d } => {
+            if matches!(kind, NeonImmKind::I8 | NeonImmKind::I16 | NeonImmKind::I32 | NeonImmKind::F32N) {
+                if let Some(w) = crate::a32::encode_neon::encode_neon(ins) { return Ok(w); }
+            }
             let dbl = *kind == NeonImmKind::F64;
             let cp = if dbl { 0b1011u32 } else { 0b1010 };
             let (d_f, dbit, _a, _b, _c, _e) = vfp_split(*d, 0, 0, dbl);

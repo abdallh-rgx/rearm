@@ -161,7 +161,7 @@ pub enum VcvtForm {
 
 /// NEON immediate kinds (cmode-decoded).
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum NeonImmKind { I8, I16, I32, I64, F32, F64 }
+pub enum NeonImmKind { I8, I16, I32, I64, F32, F64, F32N }
 
 /// NEON operation classes covered by the generic vector form.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]

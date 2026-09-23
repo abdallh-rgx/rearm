@@ -1,0 +1,568 @@
+f2010002 vhadd.s8	d0, d1, d2
+f2020044 vhadd.s8	q0, q1, q2
+f2110002 vhadd.s16	d0, d1, d2
+f2120044 vhadd.s16	q0, q1, q2
+f2210002 vhadd.s32	d0, d1, d2
+f2220044 vhadd.s32	q0, q1, q2
+f3010002 vhadd.u8	d0, d1, d2
+f3020044 vhadd.u8	q0, q1, q2
+f3110002 vhadd.u16	d0, d1, d2
+f3120044 vhadd.u16	q0, q1, q2
+f3210002 vhadd.u32	d0, d1, d2
+f3220044 vhadd.u32	q0, q1, q2
+f2010202 vhsub.s8	d0, d1, d2
+f2020244 vhsub.s8	q0, q1, q2
+f2110202 vhsub.s16	d0, d1, d2
+f2120244 vhsub.s16	q0, q1, q2
+f2210202 vhsub.s32	d0, d1, d2
+f2220244 vhsub.s32	q0, q1, q2
+f3010202 vhsub.u8	d0, d1, d2
+f3020244 vhsub.u8	q0, q1, q2
+f3110202 vhsub.u16	d0, d1, d2
+f3120244 vhsub.u16	q0, q1, q2
+f3210202 vhsub.u32	d0, d1, d2
+f3220244 vhsub.u32	q0, q1, q2
+f2010102 vrhadd.s8	d0, d1, d2
+f2020144 vrhadd.s8	q0, q1, q2
+f2110102 vrhadd.s16	d0, d1, d2
+f2120144 vrhadd.s16	q0, q1, q2
+f2210102 vrhadd.s32	d0, d1, d2
+f2220144 vrhadd.s32	q0, q1, q2
+f3010102 vrhadd.u8	d0, d1, d2
+f3020144 vrhadd.u8	q0, q1, q2
+f3110102 vrhadd.u16	d0, d1, d2
+f3120144 vrhadd.u16	q0, q1, q2
+f3210102 vrhadd.u32	d0, d1, d2
+f3220144 vrhadd.u32	q0, q1, q2
+f2010012 vqadd.s8	d0, d1, d2
+f2020054 vqadd.s8	q0, q1, q2
+f2110012 vqadd.s16	d0, d1, d2
+f2120054 vqadd.s16	q0, q1, q2
+f2210012 vqadd.s32	d0, d1, d2
+f2220054 vqadd.s32	q0, q1, q2
+f3010012 vqadd.u8	d0, d1, d2
+f3020054 vqadd.u8	q0, q1, q2
+f3110012 vqadd.u16	d0, d1, d2
+f3120054 vqadd.u16	q0, q1, q2
+f3210012 vqadd.u32	d0, d1, d2
+f3220054 vqadd.u32	q0, q1, q2
+f2010212 vqsub.s8	d0, d1, d2
+f2020254 vqsub.s8	q0, q1, q2
+f2110212 vqsub.s16	d0, d1, d2
+f2120254 vqsub.s16	q0, q1, q2
+f2210212 vqsub.s32	d0, d1, d2
+f2220254 vqsub.s32	q0, q1, q2
+f3010212 vqsub.u8	d0, d1, d2
+f3020254 vqsub.u8	q0, q1, q2
+f3110212 vqsub.u16	d0, d1, d2
+f3120254 vqsub.u16	q0, q1, q2
+f3210212 vqsub.u32	d0, d1, d2
+f3220254 vqsub.u32	q0, q1, q2
+f2010602 vmax.s8	d0, d1, d2
+f2020644 vmax.s8	q0, q1, q2
+f2110602 vmax.s16	d0, d1, d2
+f2120644 vmax.s16	q0, q1, q2
+f2210602 vmax.s32	d0, d1, d2
+f2220644 vmax.s32	q0, q1, q2
+f3010602 vmax.u8	d0, d1, d2
+f3020644 vmax.u8	q0, q1, q2
+f3110602 vmax.u16	d0, d1, d2
+f3120644 vmax.u16	q0, q1, q2
+f3210602 vmax.u32	d0, d1, d2
+f3220644 vmax.u32	q0, q1, q2
+f2010612 vmin.s8	d0, d1, d2
+f2020654 vmin.s8	q0, q1, q2
+f2110612 vmin.s16	d0, d1, d2
+f2120654 vmin.s16	q0, q1, q2
+f2210612 vmin.s32	d0, d1, d2
+f2220654 vmin.s32	q0, q1, q2
+f3010612 vmin.u8	d0, d1, d2
+f3020654 vmin.u8	q0, q1, q2
+f3110612 vmin.u16	d0, d1, d2
+f3120654 vmin.u16	q0, q1, q2
+f3210612 vmin.u32	d0, d1, d2
+f3220654 vmin.u32	q0, q1, q2
+f2010702 vabd.s8	d0, d1, d2
+f2020744 vabd.s8	q0, q1, q2
+f2110702 vabd.s16	d0, d1, d2
+f2120744 vabd.s16	q0, q1, q2
+f2210702 vabd.s32	d0, d1, d2
+f2220744 vabd.s32	q0, q1, q2
+f3010702 vabd.u8	d0, d1, d2
+f3020744 vabd.u8	q0, q1, q2
+f3110702 vabd.u16	d0, d1, d2
+f3120744 vabd.u16	q0, q1, q2
+f3210702 vabd.u32	d0, d1, d2
+f3220744 vabd.u32	q0, q1, q2
+f2010a02 vpmax.s8	d0, d1, d2
+f2110a02 vpmax.s16	d0, d1, d2
+f2210a02 vpmax.s32	d0, d1, d2
+f3010a02 vpmax.u8	d0, d1, d2
+f3110a02 vpmax.u16	d0, d1, d2
+f3210a02 vpmax.u32	d0, d1, d2
+f2010a12 vpmin.s8	d0, d1, d2
+f2110a12 vpmin.s16	d0, d1, d2
+f2210a12 vpmin.s32	d0, d1, d2
+f3010a12 vpmin.u8	d0, d1, d2
+f3110a12 vpmin.u16	d0, d1, d2
+f3210a12 vpmin.u32	d0, d1, d2
+f3110b02 vqrdmulh.s16	d0, d1, d2
+f3120b44 vqrdmulh.s16	q0, q1, q2
+f3210b02 vqrdmulh.s32	d0, d1, d2
+f3220b44 vqrdmulh.s32	q0, q1, q2
+f2010802 vadd.i8	d0, d1, d2
+f2020844 vadd.i8	q0, q1, q2
+f2110802 vadd.i16	d0, d1, d2
+f2120844 vadd.i16	q0, q1, q2
+f2210802 vadd.i32	d0, d1, d2
+f2220844 vadd.i32	q0, q1, q2
+f2310802 vadd.i64	d0, d1, d2
+f2320844 vadd.i64	q0, q1, q2
+f3010802 vsub.i8	d0, d1, d2
+f3020844 vsub.i8	q0, q1, q2
+f3110802 vsub.i16	d0, d1, d2
+f3120844 vsub.i16	q0, q1, q2
+f3210802 vsub.i32	d0, d1, d2
+f3220844 vsub.i32	q0, q1, q2
+f3310802 vsub.i64	d0, d1, d2
+f3320844 vsub.i64	q0, q1, q2
+f2010902 vmla.i8	d0, d1, d2
+f2020944 vmla.i8	q0, q1, q2
+f2110902 vmla.i16	d0, d1, d2
+f2120944 vmla.i16	q0, q1, q2
+f2210902 vmla.i32	d0, d1, d2
+f2220944 vmla.i32	q0, q1, q2
+f3010902 vmls.i8	d0, d1, d2
+f3020944 vmls.i8	q0, q1, q2
+f3110902 vmls.i16	d0, d1, d2
+f3120944 vmls.i16	q0, q1, q2
+f3210902 vmls.i32	d0, d1, d2
+f3220944 vmls.i32	q0, q1, q2
+f2010912 vmul.i8	d0, d1, d2
+f2020954 vmul.i8	q0, q1, q2
+f2110912 vmul.i16	d0, d1, d2
+f2120954 vmul.i16	q0, q1, q2
+f2210912 vmul.i32	d0, d1, d2
+f2220954 vmul.i32	q0, q1, q2
+f2010812 vtst.8	d0, d1, d2
+f2020854 vtst.8	q0, q1, q2
+f2110812 vtst.16	d0, d1, d2
+f2120854 vtst.16	q0, q1, q2
+f2210812 vtst.32	d0, d1, d2
+f2220854 vtst.32	q0, q1, q2
+f3010912 vmul.p8	d0, d1, d2
+f3020954 vmul.p8	q0, q1, q2
+f2020401 vshl.s8	d0, d1, d2
+f2020411 vqshl.s8	d0, d1, d2
+f2020511 vqrshl.s8	d0, d1, d2
+f2120401 vshl.s16	d0, d1, d2
+f2120411 vqshl.s16	d0, d1, d2
+f2120511 vqrshl.s16	d0, d1, d2
+f2220401 vshl.s32	d0, d1, d2
+f2220411 vqshl.s32	d0, d1, d2
+f2220511 vqrshl.s32	d0, d1, d2
+f3020401 vshl.u8	d0, d1, d2
+f3020411 vqshl.u8	d0, d1, d2
+f3020511 vqrshl.u8	d0, d1, d2
+f3120401 vshl.u16	d0, d1, d2
+f3120411 vqshl.u16	d0, d1, d2
+f3120511 vqrshl.u16	d0, d1, d2
+f3220401 vshl.u32	d0, d1, d2
+f3220411 vqshl.u32	d0, d1, d2
+f3220511 vqrshl.u32	d0, d1, d2
+f2010b12 vpadd.i8	d0, d1, d2
+f2110b12 vpadd.i16	d0, d1, d2
+f2210b12 vpadd.i32	d0, d1, d2
+f3010d02 vpadd.f32	d0, d1, d2
+f3010f02 vpmax.f32	d0, d1, d2
+f3210f02 vpmin.f32	d0, d1, d2
+f2010d02 vadd.f32	d0, d1, d2
+f2020d44 vadd.f32	q0, q1, q2
+f2210d02 vsub.f32	d0, d1, d2
+f2220d44 vsub.f32	q0, q1, q2
+f3010d12 vmul.f32	d0, d1, d2
+f3020d54 vmul.f32	q0, q1, q2
+f2010d12 vmla.f32	d0, d1, d2
+f2020d54 vmla.f32	q0, q1, q2
+f2210d12 vmls.f32	d0, d1, d2
+f2220d54 vmls.f32	q0, q1, q2
+f2010f02 vmax.f32	d0, d1, d2
+f2020f44 vmax.f32	q0, q1, q2
+f2210f02 vmin.f32	d0, d1, d2
+f2220f44 vmin.f32	q0, q1, q2
+f2010f12 vrecps.f32	d0, d1, d2
+f2020f54 vrecps.f32	q0, q1, q2
+f2210f12 vrsqrts.f32	d0, d1, d2
+f2220f54 vrsqrts.f32	q0, q1, q2
+f2010e02 vceq.f32	d0, d1, d2
+f2020e44 vceq.f32	q0, q1, q2
+f3210e02 vcgt.f32	d0, d1, d2
+f3220e44 vcgt.f32	q0, q1, q2
+f3010e02 vcge.f32	d0, d1, d2
+f3020e44 vcge.f32	q0, q1, q2
+ee310b02 vadd.f64	d0, d1, d2
+ee310b42 vsub.f64	d0, d1, d2
+ee210b02 vmul.f64	d0, d1, d2
+f2010112 vand	d0, d1, d2
+f2020154 vand	q0, q1, q2
+f2110112 vbic	d0, d1, d2
+f2120154 vbic	q0, q1, q2
+f2210112 vorr	d0, d1, d2
+f2220154 vorr	q0, q1, q2
+f2310112 vorn	d0, d1, d2
+f2320154 vorn	q0, q1, q2
+f3010112 veor	d0, d1, d2
+f3020154 veor	q0, q1, q2
+f3110112 vbsl	d0, d1, d2
+f3120154 vbsl	q0, q1, q2
+f3210112 vbit	d0, d1, d2
+f3220154 vbit	q0, q1, q2
+f3310112 vbif	d0, d1, d2
+f3320154 vbif	q0, q1, q2
+f2810002 vaddl.s8	q0, d1, d2
+f2910002 vaddl.s16	q0, d1, d2
+f2a10002 vaddl.s32	q0, d1, d2
+f3810002 vaddl.u8	q0, d1, d2
+f3910002 vaddl.u16	q0, d1, d2
+f3a10002 vaddl.u32	q0, d1, d2
+f2810202 vsubl.s8	q0, d1, d2
+f2910202 vsubl.s16	q0, d1, d2
+f2a10202 vsubl.s32	q0, d1, d2
+f3810202 vsubl.u8	q0, d1, d2
+f3910202 vsubl.u16	q0, d1, d2
+f3a10202 vsubl.u32	q0, d1, d2
+f2820102 vaddw.s8	q0, q1, d2
+f2920102 vaddw.s16	q0, q1, d2
+f2a20102 vaddw.s32	q0, q1, d2
+f3820102 vaddw.u8	q0, q1, d2
+f3920102 vaddw.u16	q0, q1, d2
+f3a20102 vaddw.u32	q0, q1, d2
+f2820302 vsubw.s8	q0, q1, d2
+f2920302 vsubw.s16	q0, q1, d2
+f2a20302 vsubw.s32	q0, q1, d2
+f3820302 vsubw.u8	q0, q1, d2
+f3920302 vsubw.u16	q0, q1, d2
+f3a20302 vsubw.u32	q0, q1, d2
+f2810502 vabal.s8	q0, d1, d2
+f2910502 vabal.s16	q0, d1, d2
+f2a10502 vabal.s32	q0, d1, d2
+f3810502 vabal.u8	q0, d1, d2
+f3910502 vabal.u16	q0, d1, d2
+f3a10502 vabal.u32	q0, d1, d2
+f2810702 vabdl.s8	q0, d1, d2
+f2910702 vabdl.s16	q0, d1, d2
+f2a10702 vabdl.s32	q0, d1, d2
+f3810702 vabdl.u8	q0, d1, d2
+f3910702 vabdl.u16	q0, d1, d2
+f3a10702 vabdl.u32	q0, d1, d2
+f2810c02 vmull.s8	q0, d1, d2
+f2910c02 vmull.s16	q0, d1, d2
+f2a10c02 vmull.s32	q0, d1, d2
+f3810c02 vmull.u8	q0, d1, d2
+f3910c02 vmull.u16	q0, d1, d2
+f3a10c02 vmull.u32	q0, d1, d2
+f2810802 vmlal.s8	q0, d1, d2
+f2910802 vmlal.s16	q0, d1, d2
+f2a10802 vmlal.s32	q0, d1, d2
+f3810802 vmlal.u8	q0, d1, d2
+f3910802 vmlal.u16	q0, d1, d2
+f3a10802 vmlal.u32	q0, d1, d2
+f2810a02 vmlsl.s8	q0, d1, d2
+f2910a02 vmlsl.s16	q0, d1, d2
+f2a10a02 vmlsl.s32	q0, d1, d2
+f3810a02 vmlsl.u8	q0, d1, d2
+f3910a02 vmlsl.u16	q0, d1, d2
+f3a10a02 vmlsl.u32	q0, d1, d2
+f2910902 vqdmlal.s16	q0, d1, d2
+f2a10902 vqdmlal.s32	q0, d1, d2
+f2910b02 vqdmlsl.s16	q0, d1, d2
+f2a10b02 vqdmlsl.s32	q0, d1, d2
+f2910d02 vqdmull.s16	q0, d1, d2
+f2a10d02 vqdmull.s32	q0, d1, d2
+f2820404 vaddhn.i16	d0, q1, q2
+f2920404 vaddhn.i32	d0, q1, q2
+f2a20404 vaddhn.i64	d0, q1, q2
+f2820604 vsubhn.i16	d0, q1, q2
+f2920604 vsubhn.i32	d0, q1, q2
+f2a20604 vsubhn.i64	d0, q1, q2
+f3820404 vraddhn.i16	d0, q1, q2
+f3920404 vraddhn.i32	d0, q1, q2
+f3a20404 vraddhn.i64	d0, q1, q2
+f3820604 vrsubhn.i16	d0, q1, q2
+f3920604 vrsubhn.i32	d0, q1, q2
+f3a20604 vrsubhn.i64	d0, q1, q2
+f2810e02 vmull.p8	q0, d1, d2
+f28d0011 vshr.s8	d0, d1, #0x3
+f28d0052 vshr.s8	q0, q1, #0x3
+f29d0011 vshr.s16	d0, d1, #0x3
+f29d0052 vshr.s16	q0, q1, #0x3
+f2bd0011 vshr.s32	d0, d1, #0x3
+f2bd0052 vshr.s32	q0, q1, #0x3
+f2bd0091 vshr.s64	d0, d1, #0x3
+f2bd00d2 vshr.s64	q0, q1, #0x3
+f38d0011 vshr.u8	d0, d1, #0x3
+f38d0052 vshr.u8	q0, q1, #0x3
+f39d0011 vshr.u16	d0, d1, #0x3
+f39d0052 vshr.u16	q0, q1, #0x3
+f3bd0011 vshr.u32	d0, d1, #0x3
+f3bd0052 vshr.u32	q0, q1, #0x3
+f3bd0091 vshr.u64	d0, d1, #0x3
+f3bd00d2 vshr.u64	q0, q1, #0x3
+f28d0111 vsra.s8	d0, d1, #0x3
+f28d0152 vsra.s8	q0, q1, #0x3
+f29d0111 vsra.s16	d0, d1, #0x3
+f29d0152 vsra.s16	q0, q1, #0x3
+f2bd0111 vsra.s32	d0, d1, #0x3
+f2bd0152 vsra.s32	q0, q1, #0x3
+f38d0111 vsra.u8	d0, d1, #0x3
+f38d0152 vsra.u8	q0, q1, #0x3
+f39d0111 vsra.u16	d0, d1, #0x3
+f39d0152 vsra.u16	q0, q1, #0x3
+f3bd0111 vsra.u32	d0, d1, #0x3
+f3bd0152 vsra.u32	q0, q1, #0x3
+f28d0211 vrshr.s8	d0, d1, #0x3
+f28d0252 vrshr.s8	q0, q1, #0x3
+f29d0211 vrshr.s16	d0, d1, #0x3
+f29d0252 vrshr.s16	q0, q1, #0x3
+f2bd0211 vrshr.s32	d0, d1, #0x3
+f2bd0252 vrshr.s32	q0, q1, #0x3
+f38d0211 vrshr.u8	d0, d1, #0x3
+f38d0252 vrshr.u8	q0, q1, #0x3
+f39d0211 vrshr.u16	d0, d1, #0x3
+f39d0252 vrshr.u16	q0, q1, #0x3
+f3bd0211 vrshr.u32	d0, d1, #0x3
+f3bd0252 vrshr.u32	q0, q1, #0x3
+f28d0311 vrsra.s8	d0, d1, #0x3
+f28d0352 vrsra.s8	q0, q1, #0x3
+f29d0311 vrsra.s16	d0, d1, #0x3
+f29d0352 vrsra.s16	q0, q1, #0x3
+f2bd0311 vrsra.s32	d0, d1, #0x3
+f2bd0352 vrsra.s32	q0, q1, #0x3
+f38d0311 vrsra.u8	d0, d1, #0x3
+f38d0352 vrsra.u8	q0, q1, #0x3
+f39d0311 vrsra.u16	d0, d1, #0x3
+f39d0352 vrsra.u16	q0, q1, #0x3
+f3bd0311 vrsra.u32	d0, d1, #0x3
+f3bd0352 vrsra.u32	q0, q1, #0x3
+f28b0511 vshl.i8	d0, d1, #0x3
+f28b0552 vshl.i8	q0, q1, #0x3
+f2930511 vshl.i16	d0, d1, #0x3
+f2930552 vshl.i16	q0, q1, #0x3
+f2a30511 vshl.i32	d0, d1, #0x3
+f2a30552 vshl.i32	q0, q1, #0x3
+f2830591 vshl.i64	d0, d1, #0x3
+f28305d2 vshl.i64	q0, q1, #0x3
+f38b0511 vsli.8	d0, d1, #0x3
+f38b0552 vsli.8	q0, q1, #0x3
+f3930511 vsli.16	d0, d1, #0x3
+f3930552 vsli.16	q0, q1, #0x3
+f3a30511 vsli.32	d0, d1, #0x3
+f3a30552 vsli.32	q0, q1, #0x3
+f38d0411 vsri.8	d0, d1, #0x3
+f38d0452 vsri.8	q0, q1, #0x3
+f39d0411 vsri.16	d0, d1, #0x3
+f39d0452 vsri.16	q0, q1, #0x3
+f3bd0411 vsri.32	d0, d1, #0x3
+f3bd0452 vsri.32	q0, q1, #0x3
+f38b0611 vqshlu.s8	d0, d1, #0x3
+f38b0652 vqshlu.s8	q0, q1, #0x3
+f3930611 vqshlu.s16	d0, d1, #0x3
+f3930652 vqshlu.s16	q0, q1, #0x3
+f3a30611 vqshlu.s32	d0, d1, #0x3
+f3a30652 vqshlu.s32	q0, q1, #0x3
+f28b0711 vqshl.s8	d0, d1, #0x3
+f28b0752 vqshl.s8	q0, q1, #0x3
+f2930711 vqshl.s16	d0, d1, #0x3
+f2930752 vqshl.s16	q0, q1, #0x3
+f2a30711 vqshl.s32	d0, d1, #0x3
+f2a30752 vqshl.s32	q0, q1, #0x3
+f38b0711 vqshl.u8	d0, d1, #0x3
+f38b0752 vqshl.u8	q0, q1, #0x3
+f3930711 vqshl.u16	d0, d1, #0x3
+f3930752 vqshl.u16	q0, q1, #0x3
+f3a30711 vqshl.u32	d0, d1, #0x3
+f3a30752 vqshl.u32	q0, q1, #0x3
+f28b0a11 vshll.s8	q0, d1, #0x3
+f2930a11 vshll.s16	q0, d1, #0x3
+f2a30a11 vshll.s32	q0, d1, #0x3
+f38b0a11 vshll.u8	q0, d1, #0x3
+f3930a11 vshll.u16	q0, d1, #0x3
+f3a30a11 vshll.u32	q0, d1, #0x3
+f28c0812 vshrn.i16	d0, q1, #0x4
+f29c0812 vshrn.i32	d0, q1, #0x4
+f2bc0812 vshrn.i64	d0, q1, #0x4
+f28c0912 vqshrn.s16	d0, q1, #0x4
+f29c0912 vqshrn.s32	d0, q1, #0x4
+f38c0912 vqshrn.u16	d0, q1, #0x4
+f39c0912 vqshrn.u32	d0, q1, #0x4
+f28c0952 vqrshrn.s16	d0, q1, #0x4
+f29c0952 vqrshrn.s32	d0, q1, #0x4
+f38c0952 vqrshrn.u16	d0, q1, #0x4
+f39c0952 vqrshrn.u32	d0, q1, #0x4
+f38c0812 vqshrun.s16	d0, q1, #0x4
+f39c0812 vqshrun.s32	d0, q1, #0x4
+f38c0852 vqrshrun.s16	d0, q1, #0x4
+f39c0852 vqrshrun.s32	d0, q1, #0x4
+f2880a11 vmovl.s8	q0, d1
+f2900a11 vmovl.s16	q0, d1
+f2a00a11 vmovl.s32	q0, d1
+f3880a11 vmovl.u8	q0, d1
+f3900a11 vmovl.u16	q0, d1
+f3a00a11 vmovl.u32	q0, d1
+f3b10301 vabs.s8	d0, d1
+f3b10342 vabs.s8	q0, q1
+f3b50301 vabs.s16	d0, d1
+f3b50342 vabs.s16	q0, q1
+f3b90301 vabs.s32	d0, d1
+f3b90342 vabs.s32	q0, q1
+f3b10381 vneg.s8	d0, d1
+f3b103c2 vneg.s8	q0, q1
+f3b50381 vneg.s16	d0, d1
+f3b503c2 vneg.s16	q0, q1
+f3b90381 vneg.s32	d0, d1
+f3b903c2 vneg.s32	q0, q1
+f3b00701 vqabs.s8	d0, d1
+f3b00742 vqabs.s8	q0, q1
+f3b40701 vqabs.s16	d0, d1
+f3b40742 vqabs.s16	q0, q1
+f3b80701 vqabs.s32	d0, d1
+f3b80742 vqabs.s32	q0, q1
+f3b00781 vqneg.s8	d0, d1
+f3b007c2 vqneg.s8	q0, q1
+f3b40781 vqneg.s16	d0, d1
+f3b407c2 vqneg.s16	q0, q1
+f3b80781 vqneg.s32	d0, d1
+f3b807c2 vqneg.s32	q0, q1
+f3b00401 vcls.s8	d0, d1
+f3b00442 vcls.s8	q0, q1
+f3b40401 vcls.s16	d0, d1
+f3b40442 vcls.s16	q0, q1
+f3b80401 vcls.s32	d0, d1
+f3b80442 vcls.s32	q0, q1
+f3b00481 vclz.i8	d0, d1
+f3b004c2 vclz.i8	q0, q1
+f3b40481 vclz.i16	d0, d1
+f3b404c2 vclz.i16	q0, q1
+f3b80481 vclz.i32	d0, d1
+f3b804c2 vclz.i32	q0, q1
+f3b00501 vcnt.8	d0, d1
+f3b00542 vcnt.8	q0, q1
+f3b00581 vmvn	d0, d1
+f3b005c2 vmvn	q0, q1
+f3bb0401 vrecpe.u32	d0, d1
+f3bb0442 vrecpe.u32	q0, q1
+f3bb0501 vrecpe.f32	d0, d1
+f3bb0542 vrecpe.f32	q0, q1
+f3bb0481 vrsqrte.u32	d0, d1
+f3bb04c2 vrsqrte.u32	q0, q1
+f3bb0581 vrsqrte.f32	d0, d1
+f3bb05c2 vrsqrte.f32	q0, q1
+f3b20202 vmovn.i16	d0, q1
+f3ba0202 vmovn.i64	d0, q1
+f3b20282 vqmovn.s16	d0, q1
+f3b60282 vqmovn.s32	d0, q1
+f3ba0282 vqmovn.s64	d0, q1
+f3b202c2 vqmovn.u16	d0, q1
+f3b602c2 vqmovn.u32	d0, q1
+f3ba02c2 vqmovn.u64	d0, q1
+f3b20242 vqmovun.s16	d0, q1
+f3b60242 vqmovun.s32	d0, q1
+f3b90701 vabs.f32	d0, d1
+f3b90742 vabs.f32	q0, q1
+f3b90781 vneg.f32	d0, d1
+f3b907c2 vneg.f32	q0, q1
+f3b20081 vtrn.8	d0, d1
+f3b200c2 vtrn.8	q0, q1
+f3b60081 vtrn.16	d0, d1
+f3b600c2 vtrn.16	q0, q1
+f3ba0081 vtrn.32	d0, d1
+f3ba00c2 vtrn.32	q0, q1
+f3b20101 vuzp.8	d0, d1
+f3b20142 vuzp.8	q0, q1
+f3b60101 vuzp.16	d0, d1
+f3b60142 vuzp.16	q0, q1
+f3ba0081 vtrn.32	d0, d1
+f3ba0142 vuzp.32	q0, q1
+f3b20181 vzip.8	d0, d1
+f3b201c2 vzip.8	q0, q1
+f3b60181 vzip.16	d0, d1
+f3b601c2 vzip.16	q0, q1
+f3ba0081 vtrn.32	d0, d1
+f3ba01c2 vzip.32	q0, q1
+f3b20001 vswp	d0, d1
+f3b20042 vswp	q0, q1
+f2b10102 vext.8	d0, d1, d2, #0x1
+f2b20244 vext.16	q0, q1, q2, #0x1
+f2b10202 vext.16	d0, d1, d2, #0x1
+f2b20444 vext.32	q0, q1, q2, #0x1
+f2b10402 vext.32	d0, d1, d2, #0x1
+f2b20844 vext.64	q0, q1, q2, #0x1
+f3b10802 vtbl.8	d0, {d1}, d2
+f3b10903 vtbl.8	d0, {d1, d2}, d3
+f3b10842 vtbx.8	d0, {d1}, d2
+f3b10943 vtbx.8	d0, {d1, d2}, d3
+f2bc0e52 vcvt.f32.s32	q0, q1, #0x4
+f3bb0642 vcvt.f32.s32	q0, q1
+f3bc0e52 vcvt.f32.u32	q0, q1, #0x4
+f3bb06c2 vcvt.f32.u32	q0, q1
+f2bc0f52 vcvt.s32.f32	q0, q1, #0x4
+f3bb0742 vcvt.s32.f32	q0, q1
+f3bc0f52 vcvt.u32.f32	q0, q1, #0x4
+f3bb07c2 vcvt.u32.f32	q0, q1
+f2800e11 vmov.i8	d0, #0x1
+f2800e51 vmov.i8	q0, #0x1
+f2800811 vmov.i16	d0, #0x1
+f2800851 vmov.i16	q0, #0x1
+f2800011 vmov.i32	d0, #0x1
+f2800051 vmov.i32	q0, #0x1
+eec01b10 vdup.8	d0, r1
+eee01b10 vdup.8	q0, r1
+f3b30c01 vdup.8	d0, d1[1]
+f3b50c41 vdup.8	q0, d1[2]
+ee801b30 vdup.16	d0, r1
+eea01b30 vdup.16	q0, r1
+f3b60c01 vdup.16	d0, d1[1]
+f3ba0c41 vdup.16	q0, d1[2]
+ee801b10 vdup.32	d0, r1
+eea01b10 vdup.32	q0, r1
+f3bc0c01 vdup.32	d0, d1[1]
+f421070f vld1.8	{d0}, [r1]
+f4210a0f vld1.8	{d0, d1}, [r1]
+f421060f vld1.8	{d0, d1, d2}, [r1]
+f421020f vld1.8	{d0, d1, d2, d3}, [r1]
+f4210a0f vld1.8	{d0, d1}, [r1]
+f421074f vld1.16	{d0}, [r1]
+f4210a4f vld1.16	{d0, d1}, [r1]
+f421064f vld1.16	{d0, d1, d2}, [r1]
+f421024f vld1.16	{d0, d1, d2, d3}, [r1]
+f4210a4f vld1.16	{d0, d1}, [r1]
+f421078f vld1.32	{d0}, [r1]
+f4210a8f vld1.32	{d0, d1}, [r1]
+f421068f vld1.32	{d0, d1, d2}, [r1]
+f421028f vld1.32	{d0, d1, d2, d3}, [r1]
+f4210a8f vld1.32	{d0, d1}, [r1]
+f42107cf vld1.64	{d0}, [r1]
+f4210acf vld1.64	{d0, d1}, [r1]
+f42106cf vld1.64	{d0, d1, d2}, [r1]
+f42102cf vld1.64	{d0, d1, d2, d3}, [r1]
+f421080f vld2.8	{d0, d1}, [r1]
+f421030f vld2.8	{d0, d1, d2, d3}, [r1]
+f421000f vld4.8	{d0, d1, d2, d3}, [r1]
+f401070f vst1.8	{d0}, [r1]
+f401028f vst1.32	{d0, d1, d2, d3}, [r1]
+f3b60202 vmovn.i32	d0, q1
+f2870f10 vmov.f32	d0, #1.000000e+00
+f2870f50 vmov.f32	q0, #1.000000e+00
+eeb70b00 vmov.f64	d0, #1.000000e+00
+f3bc0c41 vdup.32	q0, d1[1]
+f3bf0c41 vdup.8	q0, d1[7]
+f3be0c41 vdup.16	q0, d1[3]
+f421040f vld3.8	{d0, d1, d2}, [r1]
+f421048f vld3.32	{d0, d1, d2}, [r1]
+f421008f vld4.32	{d0, d1, d2, d3}, [r1]
+f401080f vst2.8	{d0, d1}, [r1]
+f401040f vst3.8	{d0, d1, d2}, [r1]
+f401000f vst4.8	{d0, d1, d2, d3}, [r1]
+f40102cf vst1.64	{d0, d1, d2, d3}, [r1]
+f421070d vld1.8	{d0}, [r1]!
+f4210702 vld1.8	{d0}, [r1], r2
