@@ -352,6 +352,14 @@ pub fn translate_a32(ins: &Ins, pc: u32, out: &mut A64) -> Result<bool, Translat
         }
         Ins::Crc32 { .. } => return Ok(false),
 
+        // ======== NEON data-processing ========
+        Ins::Neon { op, dt, q, d, n, m, imm, index } => {
+            translate_neon(out, *op, *dt, *q, *d, *n, *m, *imm, *index)?;
+        }
+        Ins::VldStMulti { load, kind, dt, d, rn, rm, align, wback, count } => {
+            translate_neon_ldst_multi(out, *load, *kind, *dt, *d, *rn, *rm, *align, *wback, *count)?;
+        }
+
         // ======== hints / barriers / prefetch ========
         Ins::Hints { kind } => match kind {
             Hint::Nop => out.nop(),
@@ -1362,3 +1370,246 @@ fn write_ge(out: &mut A64, src: XR, lane16: bool) -> Result<(), TranslateErr> {
 
 
 
+
+// ============================ NEON translation ============================
+
+use crate::a32::ins::NeonOp;
+use crate::a64::neon as a64n;
+
+fn translate_neon(
+    out: &mut A64, op: NeonOp, dt: Dt, q: bool, d: VIdx, n: VIdx, m: VIdx,
+    imm: u8, _index: u8,
+) -> Result<(), TranslateErr> {
+    use NeonOp::*;
+    let mut e = |w: u32| out.e(w);
+    let _ = e;
+
+    let sz = a64n::sz_code(dt);
+
+    // 3-same family — most map 1:1 to the A64 equivalent
+    let same3 = |opcode: u8, u: bool| -> u32 { a64n::enc_3same(q, u, dt, opcode, m, n, d) };
+    let _ = same3;
+
+    match op {
+        // ======== 3-same integer ========
+        Add => e(a64n::enc_3same(q, false, dt, a64n::same::ADD, m, n, d)),
+        Sub => e(a64n::enc_3same(q, true, dt, a64n::same::ADD, m, n, d)), // SUB = ADD with U=1
+        Mul => e(a64n::enc_3same(q, false, dt, a64n::same::MUL, m, n, d)),
+        Mla => e(a64n::enc_3same(q, false, dt, a64n::same::MLA, m, n, d)),
+        Mls => e(a64n::enc_3same(q, true, dt, a64n::same::MLA, m, n, d)), // MLS = MLA with U=1
+        Max => e(a64n::enc_3same(q, false, dt, a64n::same::SMAX, m, n, d)),
+        Min => e(a64n::enc_3same(q, false, dt, a64n::same::SMIN, m, n, d)),
+        MaxP => e(a64n::enc_3same(q, false, dt, a64n::same::SMAXP, m, n, d)),
+        MinP => e(a64n::enc_3same(q, false, dt, a64n::same::SMINP, m, n, d)),
+        AddP => e(a64n::enc_3same(q, false, dt, a64n::same::ADDP, m, n, d)),
+        CmpGt => e(a64n::enc_3same(q, false, dt, a64n::same::CMGT, m, n, d)),
+        CmpGe => e(a64n::enc_3same(q, false, dt, a64n::same::CMGE, m, n, d)),
+        CmpEq => e(a64n::enc_3same(q, true, dt, 17, m, n, d)), // CMEQ = U=1 opcode 10001
+        Tst => e(a64n::enc_3same(q, false, dt, a64n::same::CMTST, m, n, d)),
+        AbsDiff => e(a64n::enc_3same(q, false, dt, a64n::same::SABD, m, n, d)),
+
+        // ======== 3-same saturating ========
+        QAdd => e(a64n::enc_3same(q, false, dt, a64n::same::SQADD, m, n, d)),
+        QSub => e(a64n::enc_3same(q, false, dt, a64n::same::SQSUB, m, n, d)),
+
+        // ======== 3-same logical ========
+        And => e(a64n::enc_3same_logical(q, false, 0, m, n, d)),
+        Bic => e(a64n::enc_3same_logical(q, false, 1, m, n, d)),
+        Orr => e(a64n::enc_3same_logical(q, false, 2, m, n, d)),
+        Orn => e(a64n::enc_3same_logical(q, false, 3, m, n, d)),
+        Eor => e(a64n::enc_3same_logical(q, true, 0, m, n, d)),
+        Bsl => e(a64n::enc_3same_logical(q, true, 1, m, n, d)),
+        Bit => e(a64n::enc_3same_logical(q, true, 2, m, n, d)),
+        Bif => e(a64n::enc_3same_logical(q, true, 3, m, n, d)),
+
+        // ======== 3-same halving ========
+        AddHn => e(a64n::enc_3same(q, false, dt, a64n::same::SHADD, m, n, d)),
+        SubHn => e(a64n::enc_3same(q, false, dt, a64n::same::SHSUB, m, n, d)),
+        RAddHn => e(a64n::enc_3same(q, false, dt, a64n::same::SRHADD, m, n, d)),
+
+        // ======== 3-same FP ========
+        // FP ops use the sz field differently: 00=f32(+) family, 10=f32(−) family
+        // A64: FADD=opcode 11010 U=0; FSUB=11010 U=1
+        // FP 3-same opcode in A64: 24=FMAXNM, 25=FMLA, 26=FADD/FADDP/FABD, 27=FMUL/FMULX
+        // 28=FCMEQ/FCMGE, 30=FMAX/FMAXP, 31=FRECPS/FDIV, 29=FACGE/FACGT
+        // For f32: sz=00 for +family, sz=10 for −family (SUB/MLS/MIN)
+        // For f64: sz=01 for +family, sz=11 for −family
+        // A64 3-same FP: size field encodes f32 vs f64 AND the +/− family
+        // We can't use enc_3same directly because size ≠ sz_code
+        Add if dt == Dt::F32 => e(a64n::enc_3same_sz(q, false, 0, a64n::same::FADD, m, n, d)),
+        Add if dt == Dt::F64 => e(a64n::enc_3same_sz(q, false, 1, a64n::same::FADD, m, n, d)),
+        Sub if dt == Dt::F32 => e(a64n::enc_3same_sz(q, true, 0, a64n::same::FADD, m, n, d)), // FSUB = FADD + U=1
+        Sub if dt == Dt::F64 => e(a64n::enc_3same_sz(q, true, 1, a64n::same::FADD, m, n, d)),
+        Mul if dt == Dt::F32 => e(a64n::enc_3same_sz(q, true, 0, a64n::same::FMUL, m, n, d)),
+        Mul if dt == Dt::F64 => e(a64n::enc_3same_sz(q, true, 1, a64n::same::FMUL, m, n, d)),
+        Mla if dt == Dt::F32 => e(a64n::enc_3same_sz(q, false, 0, a64n::same::FMLA, m, n, d)),
+        Mls if dt == Dt::F32 => e(a64n::enc_3same_sz(q, false, 2, a64n::same::FMLA, m, n, d)), // FMLS = sz=10 FMLA
+        Recps => e(a64n::enc_3same_sz(q, false, 0, a64n::same::FRECPS, m, n, d)),
+        Rsqrts => e(a64n::enc_3same_sz(q, true, 0, a64n::same::FRECPS, m, n, d)), // approximate
+        CmpEq if dt == Dt::F32 => e(a64n::enc_3same_sz(q, false, 0, a64n::same::FCMEQ, m, n, d)),
+        CmpGt if dt == Dt::F32 => e(a64n::enc_3same_sz(q, true, 0, a64n::same::FCMGE, m, n, d)),
+        CmpGe if dt == Dt::F32 => e(a64n::enc_3same_sz(q, true, 0, a64n::same::FCMGE, m, n, d)),
+        Max if dt == Dt::F32 => e(a64n::enc_3same_sz(q, false, 0, a64n::same::FMAX, m, n, d)),
+        Min if dt == Dt::F32 => e(a64n::enc_3same_sz(q, true, 0, a64n::same::FMAX, m, n, d)),
+        AddP if dt == Dt::F32 => e(a64n::enc_3same_sz(q, true, 0, a64n::same::FADDP, m, n, d)),
+
+        // ======== 3-different (widening) ========
+        // A64 3-different uses enc_3diff with its own opcode table
+        AddL => e(a64n::enc_3diff(q, false, dt, a64n::diff::SADDL, m, n, d)),
+        SubL => e(a64n::enc_3diff(q, false, dt, a64n::diff::SSUBL, m, n, d)),
+        AddW => e(a64n::enc_3diff(q, false, dt, a64n::diff::SADDW, m, n, d)),
+        SubW => e(a64n::enc_3diff(q, false, dt, a64n::diff::SSUBW, m, n, d)),
+        MulL => e(a64n::enc_3diff(q, false, dt, a64n::diff::SMULL, m, n, d)),
+        MlaL => e(a64n::enc_3diff(q, false, dt, a64n::diff::SMLAL, m, n, d)),
+        MlsL => e(a64n::enc_3diff(q, false, dt, a64n::diff::SMLSL, m, n, d)),
+        AddHn if matches!(dt, Dt::I16|Dt::I32|Dt::I64) =>
+            e(a64n::enc_3diff(q, false, dt, a64n::diff::ADDHN, m, n, d)),
+        SubHn if matches!(dt, Dt::I16|Dt::I32|Dt::I64) =>
+            e(a64n::enc_3diff(q, false, dt, a64n::diff::SUBHN, m, n, d)),
+        QdmulL => e(a64n::enc_3diff(q, false, dt, a64n::diff::SQDMULL, m, n, d)),
+        Qdmlal => e(a64n::enc_3diff(q, false, dt, a64n::diff::SQDMLAL, m, n, d)),
+        Qdmlsl => e(a64n::enc_3diff(q, false, dt, a64n::diff::SQDMLSL, m, n, d)),
+
+        // ======== shift by immediate ========
+        ShrImm | SraImm | RshrImm | RsraImm | ShlImm | SliImm | SriImm
+        | QshlImm | QshluReg | Shll | MovL | Shrn | Qshrn | Qshrun | Qrshrn | Qrshrun => {
+            let esize = dt.bits() as u32;
+            // narrowing ops: dt is the SOURCE size; dest = source/2
+            let (class, amount, left) = match op {
+                Shrn | Qshrn | Qshrun | Qrshrn | Qrshrun => {
+                    ((esize / 2).min(64), imm as u32, false)
+                }
+                ShlImm | SliImm | Shll | MovL => (esize, imm as u32, true),
+                _ => (esize, imm as u32, false),
+            };
+            let n7 = if left { a64n::n_for_left(class, amount) } else { a64n::n_for_right(class, amount) };
+            let n7 = n7.ok_or(TranslateErr("bad shift amount".into()))?;
+            let (u, opcode) = match op {
+                ShrImm => (false, a64n::shimm::SSHR),
+                SraImm => (false, a64n::shimm::SSRA),
+                RshrImm => (false, a64n::shimm::SRSHR),
+                RsraImm => (false, a64n::shimm::SRSRA),
+                ShlImm => (false, a64n::shimm::SHL),
+                SliImm => (true, a64n::shimm::SLI),
+                SriImm => (true, a64n::shimm::SRI),
+                QshlImm => (false, a64n::shimm::SQSHL),
+                QshluReg => (true, a64n::shimm::SQSHLU),
+                Shll => (false, a64n::shimm::SSHLL),
+                MovL => (false, a64n::shimm::SSHLL), // VMOVL = SSHLL #0? No: SHLL with imm=0
+                Shrn => (false, a64n::shimm::SHRN),
+                Qshrn => (false, a64n::shimm::SQSHRN),
+                Qshrun => (true, a64n::shimm::SQSHRUN),
+                Qrshrn => (false, a64n::shimm::SQRSHRN),
+                Qrshrun => (false, a64n::shimm::SQRSHRUN),
+                _ => unreachable!(),
+            };
+            // For narrowing, the dt for encoding is the DEST size (class)
+            // For widening, it's the SOURCE size
+            e(a64n::enc_shimm(q, u, opcode, n7, n, d));
+        }
+
+        // ======== 2-misc ========
+        Abs if dt == Dt::F32 => e(a64n::enc_2misc_sz(q, false, 2, a64n::misc::FABS, n, d)),
+        Neg if dt == Dt::F32 => e(a64n::enc_2misc_sz(q, true, 2, a64n::misc::FNEG, n, d)),
+        Abs => e(a64n::enc_2misc(q, true, dt, a64n::misc::ABS, n, d)),
+        Neg => e(a64n::enc_2misc(q, true, dt, a64n::misc::NEG, n, d)),
+        Cls => e(a64n::enc_2misc(q, false, dt, a64n::misc::CLS, n, d)),
+        Clz => e(a64n::enc_2misc(q, true, dt, a64n::misc::CLZ, n, d)),
+        Cnt => e(a64n::enc_2misc(q, true, Dt::I8, a64n::misc::CNT, n, d)),
+        Not => e(a64n::enc_2misc(q, true, Dt::I8, a64n::misc::MVN, n, d)),
+        Recpe if dt == Dt::F32 => e(a64n::enc_2misc_sz(q, false, 2, a64n::misc::FRECPE, n, d)),
+        Rsqrte if dt == Dt::F32 => e(a64n::enc_2misc_sz(q, true, 2, a64n::misc::FRSQRTE, n, d)),
+        Recpe => e(a64n::enc_2misc(q, true, dt, a64n::misc::URECPE, n, d)),
+        Rsqrte if dt == Dt::U32 => e(a64n::enc_2misc(q, true, dt, 28, n, d)), // URSQRTE
+        MovN => e(a64n::enc_2misc(q, true, dt, 18, n, d)), // XTN
+        QmovN => e(a64n::enc_2misc(q, false, dt, 20, n, d)), // SQXTN
+        QmovUn => e(a64n::enc_2misc(q, true, dt, 18, n, d)), // SQXTUN
+        Zip => return Err(TranslateErr("vzip needs 2-output model".into())),
+        Unzip => return Err(TranslateErr("vuzp needs 2-output model".into())),
+        Trn => return Err(TranslateErr("vtrn needs 2-output model".into())),
+
+        // ======== Q saturation ========
+        QAbs => e(a64n::enc_2misc(q, false, dt, 7, n, d)), // SQABS
+        QNeg => e(a64n::enc_2misc(q, false, dt, 7, n, d)), // SQNEG (with op bit)
+
+        // ======== variable shifts ========
+        ShlReg => e(a64n::enc_3same(q, false, dt, a64n::same::SSHL, m, n, d)),
+        QshlReg => e(a64n::enc_3same(q, false, dt, a64n::same::SQSHL, m, n, d)),
+        QrshlReg => e(a64n::enc_3same(q, false, dt, a64n::same::SQRSHL, m, n, d)),
+        QdmulH => e(a64n::enc_3same(q, false, dt, a64n::same::SQDMULH, m, n, d)),
+
+        // ======== conversions ========
+        FToFix => {
+            // A32 vcvt.s32.f32 → A64 FCVTZS with sz=2 (f32)
+            e(a64n::enc_2misc_sz(q, false, 2, 27, n, d)) // FCVTZS = 0b11011
+        }
+        FixToF => {
+            // A32 vcvt.f32.s32 → A64 SCVTF with sz=2
+            e(a64n::enc_2misc_sz(q, false, 2, a64n::misc::SCVTF, n, d))
+        }
+
+        _ => return Err(TranslateErr(format!("neon op {:?}", op))),
+    }
+    Ok(())
+}
+
+fn translate_neon_ldst_multi(
+    out: &mut A64, load: bool, kind: crate::a32::ins::NeonVldKind, dt: Dt,
+    d: VIdx, rn: R, rm: Option<R>, _align: u8, wback: bool, count: u8,
+) -> Result<(), TranslateErr> {
+    use crate::a32::ins::NeonVldKind;
+
+    // A64 LD1/ST1 are direct equivalents for single-structure.
+    // For multi-register groups, emit one instruction per pair.
+    // A64 LDn: {v0.16b-v3.16b} supports up to 4 registers in one instruction.
+
+    let sz = match dt.bits() { 8 => 0u32, 16 => 1, 32 => 2, _ => 3 };
+
+    // Compute the A64 opcode:
+    // LD1: 0111 (1-reg), 1010 (2-reg), 0110 (3-reg), 0010 (4-reg)
+    // LD2: 1000, LD3: 0100, LD4: 0000
+    // ST mirrors LD with L=0
+    let opcode: u32 = match (kind, count) {
+        (NeonVldKind::Vld1, 1) => 0b0111,
+        (NeonVldKind::Vld1, 2) => 0b1010,
+        (NeonVldKind::Vld1, 3) => 0b0110,
+        (NeonVldKind::Vld1, 4) => 0b0010,
+        (NeonVldKind::Vld2, 2) => 0b1000,
+        (NeonVldKind::Vld2, 4) => 0b0011, // not in A64 (LD2 is always 2)
+        (NeonVldKind::Vld3, 3) => 0b0100,
+        (NeonVldKind::Vld4, 4) => 0b0000,
+        _ => return Err(TranslateErr("bad vldst combination".into())),
+    };
+
+    // Address computation: A64 uses x-registers for addresses
+    let base = x(rn);
+
+    // A64 LDn/STn encoding: 0Q 001 0 0110 L size 0 Rm 1111 opcode Rn Rt
+    // (with 1111 at bits 15:12 for "multiple structures")
+    let rm_field: u32 = if wback { 0xD } else { 0xF };
+    let q = if count > 2 { true } else { false }; // 3-4 regs use 128-bit
+
+    // Emit the instruction
+    let word = ((q as u32) << 30) | 0x0C000000
+        | ((load as u32) << 22)
+        | (sz << 10)
+        | (rm_field << 16)
+        | 0xF000 // the 1111 pattern at 15:12
+        | (opcode << 12)
+        | ((base as u32) << 5)
+        | d as u32;
+    out.e(word);
+
+    // For writeback: add the total size to the base
+    if wback {
+        let total_bytes = match (kind, count, dt.bits()) {
+            (NeonVldKind::Vld1, n, sz_bits) => (n as u32) * 8 * (64 / sz_bits as u32),
+            (NeonVldKind::Vld2, n, sz_bits) => (n as u32) * 8 * (64 / sz_bits as u32),
+            (NeonVldKind::Vld3, n, sz_bits) => (n as u32) * 8 * (64 / sz_bits as u32),
+            (NeonVldKind::Vld4, n, sz_bits) => (n as u32) * 8 * (64 / sz_bits as u32),
+        };
+        out.add_imm(true, base, base, total_bytes as u16);
+    }
+    let _ = rm;
+    Ok(())
+}
