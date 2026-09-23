@@ -271,6 +271,26 @@ fn decode_t16_misc(w: u32) -> Result<Ins, DecodeErr> {
 
 fn decode_t32_32(hw1: u16, hw2: u16) -> Result<Ins, DecodeErr> {
     let w = ((hw1 as u32) << 16) | hw2 as u32;
+    // VFP coprocessor space (T32 ee/ed/ec): the words ARE valid A32 encodings
+    // with cond=1110/1111 — route directly to the A32 decoder.
+    if matches!(hw1 >> 8, 0xEE..=0xEF) || matches!(hw1 >> 8, 0xEC..=0xED) || (hw1 >> 8) == 0xFE {
+        if let Ok(ins) = crate::a32::decode::decode_a32(w) {
+            if !matches!(ins, Ins::Unsupported { .. }) {
+                return Ok(ins);
+            }
+        }
+    }
+    // NEON space (T32 ef/ff): transform to the A32 encoding and decode there.
+    // T32 1110/1111 11xx ... → A32 1111 00/01xx ... :
+    //   A32 = (w & 0x00FFFFFF) | 0xF2000000 | ((w & 0x10000000) >> 4)
+    if hw1 >= 0xEF00 && hw1 < 0xF000 || hw1 >= 0xFF00 {
+        let a32w = (w & 0x00FF_FFFF) | 0xF200_0000 | ((w & 0x1000_0000) >> 4);
+        if let Ok(ins) = crate::a32::decode::decode_a32(a32w) {
+            if !matches!(ins, Ins::Unsupported { .. }) {
+                return Ok(ins);
+            }
+        }
+    }
     match w >> 27 {
         0b11101 => match bb(w, 26, 25) {
             0b00 => decode_t32_ldm_stm(w),     // e8/e9: ldm/stm/tbb/tbh

@@ -236,47 +236,61 @@ pub fn translate_a32(ins: &Ins, pc: u32, out: &mut A64) -> Result<bool, Translat
             out.logic_reg(false, 1, false, false, 0, 20, 17, 20); // Q |= sat
         }
         Ins::Ssat16 { rd, imm, rn } => {
-            out.sxt(false, 16, x(*rn), 15);                       // w15 = lo
-            load_max_const(out, 16, *imm - 1);
-            out.logic_reg(false, 1, true, false, 0, 31, 16, 17);  // w17 = min
+            out.sxt(false, 16, x(*rn), 15);                       // w15 = lo (signed)
+            load_max_const(out, 16, *imm - 1);                    // w16 = max = 2^(n-1)-1
+            out.logic_reg(false, 1, true, false, 0, 31, 16, 17);  // w17 = ~max = min
+            // Q |= (lo > max) | (lo < min):
+            out.addsub_reg(false, 1, true, 0, 0, 15, 16, 31);
+            cset(out, Cond::Gt, 19); out.logic_reg(false, 1, false, false, 0, 19, 20, 20);
+            out.addsub_reg(false, 1, true, 0, 0, 15, 17, 31);
+            cset(out, Cond::Lt, 19); out.logic_reg(false, 1, false, false, 0, 19, 20, 20);
+            // w18 = clamp(lo):
             out.addsub_reg(false, 1, true, 0, 0, 15, 16, 31);
             out.csel(false, 0, 15, 16, Cond::Le, 18);
             out.addsub_reg(false, 1, true, 0, 0, 18, 17, 31);
-            out.csel(false, 0, 17, 18, Cond::Lt, 18);              // w18 = clamp(lo)
-            out.sbfx(false, x(*rn), 15, 16, 16);                  // w15 = hi
+            out.csel(false, 0, 17, 18, Cond::Lt, 18);
+            // w15 = hi (signed):
+            out.sbfx(false, x(*rn), 15, 16, 16);
+            out.addsub_reg(false, 1, true, 0, 0, 15, 16, 31);
+            cset(out, Cond::Gt, 19); out.logic_reg(false, 1, false, false, 0, 19, 20, 20);
+            out.addsub_reg(false, 1, true, 0, 0, 15, 17, 31);
+            cset(out, Cond::Lt, 19); out.logic_reg(false, 1, false, false, 0, 19, 20, 20);
+            // w19 = clamp(hi):
             out.addsub_reg(false, 1, true, 0, 0, 15, 16, 31);
             out.csel(false, 0, 15, 16, Cond::Le, 19);
             out.addsub_reg(false, 1, true, 0, 0, 19, 17, 31);
-            out.csel(false, 0, 17, 19, Cond::Lt, 19);             // w19 = clamp(hi)
-            out.bfi(false, 19, 18, 0, 16);                        // w19[15:0] = lo
+            out.csel(false, 0, 17, 19, Cond::Lt, 19);
+            out.lsl_imm(false, 19, 19, 16);                     // top = clamp(hi)[15:0]
+            out.bfi(false, 18, 19, 0, 16);                        // w19[15:0] = clamp(lo)
             out.logic_reg(false, 1, false, false, 0, 31, 19, x(*rd));
-            out.addsub_reg(false, 1, true, 0, 0, 15, 16, 31);     // cmp hi, max
-            cset(out, Cond::Gt, 17);
-            out.addsub_reg(false, 1, true, 0, 0, 15, 17, 31);    // cmp hi, min
-            cset(out, Cond::Lt, 15);
-            out.logic_reg(false, 1, false, false, 0, 17, 15, 17);
-            out.logic_reg(false, 1, false, false, 0, 20, 17, 20);
         }
         Ins::Usat16 { rd, imm, rn } => {
-            out.uxt(false, 16, x(*rn), 15);                       // w15 = lo
-            load_max_const(out, 16, *imm);
+            out.sxt(false, 16, x(*rn), 15);                       // w15 = lo (SIGNED source)
+            load_max_const(out, 16, *imm);                        // w16 = max = 2^n-1
+            // Q |= (lo < 0) | (lo > max):
+            out.addsub_reg(false, 1, true, 0, 0, 15, 31, 31);
+            cset(out, Cond::Lt, 19); out.logic_reg(false, 1, false, false, 0, 19, 20, 20);
+            out.addsub_reg(false, 1, true, 0, 0, 15, 16, 31);
+            cset(out, Cond::Gt, 19); out.logic_reg(false, 1, false, false, 0, 19, 20, 20);
+            // w18 = clamp(lo):
             out.addsub_reg(false, 1, true, 0, 0, 15, 31, 31);
             out.csel(false, 0, 31, 15, Cond::Lt, 18);
             out.addsub_reg(false, 1, true, 0, 0, 18, 16, 31);
-            out.csel(false, 0, 16, 18, Cond::Gt, 18);             // w18 = clamp(lo)
-            out.ubfx(false, x(*rn), 15, 16, 16);                  // w15 = hi
+            out.csel(false, 0, 16, 18, Cond::Gt, 18);
+            // w15 = hi (SIGNED source):
+            out.sbfx(false, x(*rn), 15, 16, 16);
+            out.addsub_reg(false, 1, true, 0, 0, 15, 31, 31);
+            cset(out, Cond::Lt, 19); out.logic_reg(false, 1, false, false, 0, 19, 20, 20);
+            out.addsub_reg(false, 1, true, 0, 0, 15, 16, 31);
+            cset(out, Cond::Gt, 19); out.logic_reg(false, 1, false, false, 0, 19, 20, 20);
+            // w19 = clamp(hi):
             out.addsub_reg(false, 1, true, 0, 0, 15, 31, 31);
             out.csel(false, 0, 31, 15, Cond::Lt, 19);
             out.addsub_reg(false, 1, true, 0, 0, 19, 16, 31);
-            out.csel(false, 0, 16, 19, Cond::Gt, 19);             // w19 = clamp(hi)
-            out.bfi(false, 19, 18, 0, 16);
+            out.csel(false, 0, 16, 19, Cond::Gt, 19);
+            out.lsl_imm(false, 19, 19, 16);                     // top = clamp(hi)[15:0]
+            out.bfi(false, 18, 19, 0, 16);                        // w19[15:0] = clamp(lo)
             out.logic_reg(false, 1, false, false, 0, 31, 19, x(*rd));
-            out.addsub_reg(false, 1, true, 0, 0, 15, 31, 31);
-            cset(out, Cond::Lt, 17);
-            out.addsub_reg(false, 1, true, 0, 0, 15, 16, 31);
-            cset(out, Cond::Gt, 15);
-            out.logic_reg(false, 1, false, false, 0, 17, 15, 17);
-            out.logic_reg(false, 1, false, false, 0, 20, 17, 20);
         }
         Ins::Qadd { rd, rn, rm } => emit_qaddsub(out, false, x(*rn), x(*rm), x(*rd)),
         Ins::Qsub { rd, rn, rm } => emit_qaddsub(out, true, x(*rn), x(*rm), x(*rd)),
@@ -466,7 +480,7 @@ fn accumulate64(out: &mut A64, rdlo: R, rdhi: R) {
 
 /// w16 = 2^bits - 1 for bits in 1..=31.
 fn load_max_const(out: &mut A64, dst: XR, bits: u8) {
-    debug_assert!((1..=32).contains(&bits));
+    debug_assert!(bits <= 32);
     if bits == 32 {
         out.movn(false, 0, 0, dst); // = 0xFFFFFFFF
     } else if bits <= 16 {
@@ -503,28 +517,27 @@ fn emit_usad8(out: &mut A64, rn: R, rm: R) -> Result<(), TranslateErr> {
     out.logic_reg(false, 2, false, false, 0, x(rm), 18, 16); // w16 = b ^ ~a
     out.logic_reg(false, 0, false, false, 0, 16, 19, 16);  // w16 = (b^na) & t
     out.logic_reg(false, 0, false, false, 0, x(rm), 18, 19); // w19 = b & ~a
-    out.logic_reg(false, 1, false, false, 0, 19, 16, 19);  // w19 = maj = (a>b) markers
+    out.logic_reg(false, 1, false, false, 0, 19, 16, 19);  // w19 = maj = (b>a) markers
     out.logic_bitmask(false, 0, S8 as u64, 19, 19)?;       // clean
-    // spread (a>b) to byte masks: gather nibble then cascade
-    out.movz(false, 0, 0x4081, 16);
-    out.movk(false, 1, 0x0020, 16);                          // w16 = 0x00204081
-    out.madd(false, false, 16, 31, 19, 16);                 // w16 = markers * const
-    out.lsr_imm(false, 16, 16, 28);                         // nibble = (a>b) per byte
-    out.logic_reg(false, 1, false, false, 0, 16, 16, 18);   // orr w18, w16, w16
-    out.lsl_imm(false, 18, 18, 1);
-    out.logic_reg(false, 1, false, false, 0, 18, 18, 18);
-    out.lsl_imm(false, 18, 18, 2);
-    out.logic_reg(false, 1, false, false, 0, 18, 18, 18);
-    out.lsl_imm(false, 18, 18, 4);                          // w18 = byte masks
-    out.logic_reg(false, 0, false, false, 0, 15, 18, 16);   // w16 = d1 & mask
-    out.logic_reg(false, 0, true, false, 0, 17, 18, 17);    // w17 = d2 & ~mask
+    // smear the S8 marker bits down within each byte: m | m>>1 | m>>2 | m>>4
+    // (each set bit at 8k+7 fills exactly bits [8k, 8k+7] — no cross-byte bleed,
+    //  and unlike an up-shift cascade it never fills zero-marker bytes)
+    out.lsr_imm(false, 19, 18, 1);                        // w18 = markers >> 1
+    out.logic_reg(false, 1, false, false, 0, 19, 18, 19); // w19 |= >>1
+    out.lsr_imm(false, 19, 18, 2);
+    out.logic_reg(false, 1, false, false, 0, 19, 18, 19); // |= >>2
+    out.lsr_imm(false, 19, 18, 4);
+    out.logic_reg(false, 1, false, false, 0, 19, 18, 19); // |= >>4 → w19 = byte masks
+    out.logic_reg(false, 0, true, false, 0, 15, 19, 16);    // w16 = d1 & ~mask (a-b where a>=b)
+    out.logic_reg(false, 0, false, false, 0, 17, 19, 17);   // w17 = d2 & mask (b-a where b>a)
     out.logic_reg(false, 1, false, false, 0, 16, 17, 16);   // w16 = |diff|
     out.logic_bitmask(false, 0, 0x00FF00FF, 16, 17)?;       // w17 = bytes 0,2
     out.lsr_imm(false, 16, 18, 8);
     out.logic_bitmask(false, 0, 0x00FF00FF, 18, 18)?;       // w18 = bytes 1,3
     out.addsub_reg(false, 0, false, 0, 0, 17, 18, 17);     // w17 = {b0+b1, b2+b3}
     out.lsr_imm(false, 17, 16, 16);
-    out.addsub_reg(false, 0, false, 0, 0, 17, 16, 16);     // w16 = total
+    out.addsub_reg(false, 0, false, 0, 0, 17, 16, 16);     // w16 = total (possibly + hi16<<16)
+    out.logic_bitmask(false, 0, 0xFFFF, 16, 16)?;         // keep low 16 bits = true total
     Ok(())
 }
 
@@ -536,7 +549,7 @@ fn emit_sub8(out: &mut A64, a: XR, b: XR, dst: XR, t0: XR, t1: XR) -> Result<(),
     out.logic_bitmask(false, 0, H8 as u64, b, t1)?;  // t1 = b & ~S
     out.addsub_reg(false, 1, false, 0, 0, t0, t1, dst); // dst = core
     out.logic_reg(false, 2, false, false, 0, a, b, t0); // t0 = a ^ b
-    out.logic_bitmask(false, 2, S8 as u64, t0, t0)?; // t0 = (a^b) & S
+    out.logic_bitmask(false, 0, S8 as u64, t0, t0)?; // t0 = (a^b) & S (AND, not EOR!)
     out.logic_reg(false, 2, false, false, 0, dst, t0, dst); // dst ^= signxor
     out.logic_bitmask(false, 2, S8 as u64, dst, dst)?; // dst ^= S (EOR imm)
     Ok(())

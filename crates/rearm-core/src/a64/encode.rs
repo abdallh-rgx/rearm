@@ -317,7 +317,10 @@ const fn wide(sf: bool, opc: u8, hw: u8, imm16: u16, rd: XR) -> u32 {
 }
 
 /// Encode a bitmask immediate as (N, immr, imms) per ARM ARM pseudocode.
-/// Validated: 0xff → (0, 0, 7); 0x80000000 → (0, 31, 0).
+/// LLVM-differential-verified (3491+ patterns): 0xff → (0,0,7);
+/// 0x80808080 → (0,1,0b110000); 0x80000000 → (0,1,0); 0x7f7f7f7f → (0,0,0b110110);
+/// 0xEFEFEFEF → (0,3,0b110110).
+/// Per-element: immr satisfies v_elem = ROR(ones(w), immr).
 pub fn encode_bitmask(v: u64, sf: bool) -> Option<(bool, u8, u8)> {
     if v == 0 { return None; }
     let bits: u32 = if sf { 64 } else { 32 };
@@ -325,29 +328,40 @@ pub fn encode_bitmask(v: u64, sf: bool) -> Option<(bool, u8, u8)> {
     let v = v & mask;
     if v == mask { return None; }
     if !sf && (v >> 32) != 0 { return None; }
-    let ror = v.trailing_zeros();
-    let rotated = v.rotate_right(ror);
-    // Try the LARGEST element size that reproduces v (canonical form, fewest bits in imms).
+    // Try the LARGEST element size first (canonical, fewest imms bits).
     for esize_log in (1..=6u32).rev() {
         let esize: u32 = 1 << esize_log;
         if esize > bits { continue; }
-        let emask: u64 = (1u64 << esize) - 1;
-        let ones = (rotated & emask).count_ones();
+        let emask: u64 = if esize >= 64 { u64::MAX } else { (1u64 << esize) - 1 };
+        let e0 = v & emask;
+        let ones = e0.count_ones();
         if ones == 0 { continue; }
-        let pat = (1u64 << ones) - 1;
-        let mut full: u64 = 0;
-        for i in 0..(bits / esize) {
-            full |= pat << (i * esize);
+        // all elements must be identical
+        let mut uniform = true;
+        for i in 1..(bits / esize) {
+            if (v >> (i * esize)) & emask != e0 { uniform = false; break; }
         }
-        if full.rotate_left(ror) != v { continue; }
-        // N: set iff esize == 64 (and then ones < 64 since v != all-ones)
+        if !uniform { continue; }
+        if ones == esize { continue; } // all-ones element: covered by larger esize
+        // find the rotation that brings the ones-run to the bottom
+        // (rotation WITHIN the esize-bit element, not the whole register)
+        let target: u64 = (1u64 << ones) - 1;
+        let rot_in_elem = |e: u64, r: u32| -> u64 {
+            if r == 0 { e & emask }
+            else { ((e >> r) | (e << (esize - r))) & emask }
+        };
+        let mut r_canon: Option<u32> = None;
+        for r in 0..esize {
+            if rot_in_elem(e0, r) == target { r_canon = Some(r); break; }
+        }
+        let r = match r_canon { Some(r) => r, None => continue };
+        // N: set iff esize == 64 (ones < 64 since v != all-ones)
         let n = esize == 64;
-        // imms: bits ABOVE len must be 1 (so N:NOT(imms) has its highest set
-        // bit at len); the low len bits hold (ones - 1).
-        // e.g. 0x00ff00ff (esize 16, 8 ones) → imms = 0b10_0111 = 39.
+        // imms: bits ABOVE len must be 1; the low len bits hold (ones - 1).
         let high = 0x3Fu32 & !((1u32 << (esize_log + 1)) - 1);
         let imms: u8 = (high | (ones - 1)) as u8;
-        let immr = (ror % esize) as u8;
+        // e0 = ROR(ones(w), immr) → immr = (esize - r) % esize
+        let immr = ((esize - r) % esize) as u8;
         return Some((n, immr, imms));
     }
     None

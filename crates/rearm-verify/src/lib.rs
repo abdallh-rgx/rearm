@@ -240,12 +240,12 @@ fn dual_products64(a: &str, b: &str, sw: bool) -> (String, String) {
 /// Saturate a 33-bit signed value to 32-bit (QADD/QSUB reference).
 fn sat32_ref(v33: &str) -> String {
     let v = ext(v33, 31, 0);
-    let over = format!("(bvsgt {} #x0ffffffff)", v33);
-    let under = format!("(bvslt {} #x180000000)", v33);
+    let over = format!("(bvsgt {} (_ bv2147483647 33))", v33);
+    let under = format!("(bvslt {} (_ bv6442450944 33))", v33);
     ite_s(&over, "#x7fffffff".to_string(), ite_s(&under, "#x80000000".to_string(), v))
 }
 fn sat_happened(v33: &str) -> String {
-    format!("(or (bvsgt {} #x0ffffffff) (bvslt {} #x180000000))", v33, v33)
+    format!("(or (bvsgt {} (_ bv2147483647 33)) (bvslt {} (_ bv6442450944 33)))", v33, v33)
 }
 
 fn set_q(st: &mut St, sat: &str) {
@@ -460,14 +460,14 @@ fn parallel_ref(kind: ParKind, shape: ParShape, rd: R, rn: R, rm: R, st: &mut St
                 } else {
                     format!("(bvadd {} {})", zext1(&ua), zext1(&ub))
                 };
-                let max = imm32((1u32 << lw) - 1);
+                let max = format!("(_ bv{} 33)", (1u32 << lw) - 1);
                 let over = if is_sub {
-                    format!("(bvult {} #x00000000)", exact) // borrow → 0
+                    format!("(bvult {} {})", ua, ub) // borrow → 0 (lane compare)
                 } else {
                     format!("(bvugt {} {})", exact, max)
                 };
                 if is_sub {
-                    res_lanes.push(ite1(&over, "#x0000", &ext(&exact, lw - 1, 0)));
+                    res_lanes.push(ite1(&over, &format!("(_ bv0 {})", lw), &ext(&exact, lw - 1, 0)));
                 } else {
                     res_lanes.push(ite1(&over, &ext(&max, lw - 1, 0), &ext(&exact, lw - 1, 0)));
                 }
@@ -480,7 +480,7 @@ fn parallel_ref(kind: ParKind, shape: ParShape, rd: R, rn: R, rm: R, st: &mut St
                     format!("(bvadd {} {})", ext1(&sa), ext1(&sb))
                 };
                 // floor(exact / 2) as lw-bit: (exact >> 1)[lw-1:0] (arithmetic on exact)
-                res_lanes.push(ext(&format!("(bvashr {} #x000000001)", exact), lw - 1, 0));
+                res_lanes.push(ext(&format!("(bvashr {} (_ bv1 33))", exact), lw - 1, 0));
             }
             ParKind::Uh => {
                 let exact = if is_sub {
@@ -488,7 +488,7 @@ fn parallel_ref(kind: ParKind, shape: ParShape, rd: R, rn: R, rm: R, st: &mut St
                 } else {
                     format!("(bvadd {} {})", zext1(&ua), zext1(&ub))
                 };
-                res_lanes.push(ext(&format!("(bvlshr {} #x000000001)", exact), lw - 1, 0));
+                res_lanes.push(ext(&format!("(bvlshr {} (_ bv1 33))", exact), lw - 1, 0));
             }
         }
         let _ = &mut halv_carry;
@@ -525,7 +525,7 @@ fn parallel_ref(kind: ParKind, shape: ParShape, rd: R, rn: R, rm: R, st: &mut St
 
 fn clz_ref(e: &str) -> String {
     // nested ite: if bit(31-i) == 1 → i else next
-    let mut acc = "31".to_string(); // all zeros
+    let mut acc = imm32(31); // all zeros
     for i in 0..32u32 {
         let bit_is_one = format!("(= ((_ extract {} {}) {}) #b1)", 31 - i, 31 - i, e);
         // if bit31-i is 1, clz = i
@@ -752,7 +752,7 @@ fn a32_effect(ins: &Ins, pc: u32, st: &mut St) -> Result<(), String> {
                      ite_s(&format!("(bvslt {} {})", lo, min), min.clone(), lo));
             let ch = ite_s(&format!("(bvsgt {} {})", hi, max), max.clone(),
                      ite_s(&format!("(bvslt {} {})", hi, min), min.clone(), hi));
-            setw(st, *rd as usize, format!("(concat {} {})", ch, cl));
+            setw(st, *rd as usize, format!("(concat ((_ extract 15 0) {}) ((_ extract 15 0) {}))", ch, cl));
             set_q(st, &over);
             Ok(())
         }
@@ -764,11 +764,11 @@ fn a32_effect(ins: &Ins, pc: u32, st: &mut St) -> Result<(), String> {
             let hi = format!("((_ sign_extend 16) {})", ext(&src, 31, 16));
             let over = format!("(or (bvslt {} #x00000000) (bvsgt {} {}) (bvslt {} #x00000000) (bvsgt {} {}))",
                 lo, lo, max, hi, hi, max);
-            let cl = ite_s(&format!("(bvslt {} #x00000000)", lo), "#x0000".to_string(),
-                     ite_s(&format!("(bvsgt {} {})", lo, max), format!("#x{:04x}", ((1u32 << n) - 1) as u16), lo));
-            let ch = ite_s(&format!("(bvslt {} #x00000000)", hi), "#x0000".to_string(),
-                     ite_s(&format!("(bvsgt {} {})", hi, max), format!("#x{:04x}", ((1u32 << n) - 1) as u16), hi));
-            setw(st, *rd as usize, format!("(concat {} {})", ch, cl));
+            let cl = ite_s(&format!("(bvslt {} #x00000000)", lo), "#x00000000".to_string(),
+                     ite_s(&format!("(bvsgt {} {})", lo, max), max.clone(), lo));
+            let ch = ite_s(&format!("(bvslt {} #x00000000)", hi), "#x00000000".to_string(),
+                     ite_s(&format!("(bvsgt {} {})", hi, max), max.clone(), hi));
+            setw(st, *rd as usize, format!("(concat ((_ extract 15 0) {}) ((_ extract 15 0) {}))", ch, cl));
             set_q(st, &over);
             Ok(())
         }
@@ -864,7 +864,7 @@ fn a32_effect(ins: &Ins, pc: u32, st: &mut St) -> Result<(), String> {
         }
         Ins::Usad8 { rd, rn, rm } => {
             let a = g(st, *rn, pc); let b = g(st, *rm, pc);
-            let mut total = "0".to_string();
+            let mut total = "#x00000000".to_string();
             for i in 0..4u32 {
                 let ua = format!("((_ zero_extend 24) {})", ext(&a, i * 8 + 7, i * 8));
                 let ub = format!("((_ zero_extend 24) {})", ext(&b, i * 8 + 7, i * 8));
@@ -876,7 +876,7 @@ fn a32_effect(ins: &Ins, pc: u32, st: &mut St) -> Result<(), String> {
         }
         Ins::Usada8 { rd, rn, rm, ra } => {
             let a = g(st, *rn, pc); let b = g(st, *rm, pc);
-            let mut total = "0".to_string();
+            let mut total = "#x00000000".to_string();
             for i in 0..4u32 {
                 let ua = format!("((_ zero_extend 24) {})", ext(&a, i * 8 + 7, i * 8));
                 let ub = format!("((_ zero_extend 24) {})", ext(&b, i * 8 + 7, i * 8));
@@ -929,8 +929,8 @@ fn decode_bitmask_raw(n: bool, immr: u32, imms: u32) -> u64 {
     let nn: u64 = ((n as u64) << 6) | (((!imms) & 0x3F) as u64);
     if nn == 0 { return u64::MAX; }
     let len = 63 - nn.leading_zeros();
-    let esize: u64 = 1u64 << len;
-    let levels = (esize - 1) as u32;
+    let esize: u32 = 1u32 << len;
+    let levels = esize - 1;
     let s = imms & levels;
     let diff = immr & levels;
     if s == levels {
@@ -938,12 +938,16 @@ fn decode_bitmask_raw(n: bool, immr: u32, imms: u32) -> u64 {
     }
     let wbits = (s + 1).min(bits);
     let we: u64 = if wbits >= 64 { u64::MAX } else { (1u64 << wbits) - 1 };
-    let wd = we.rotate_left(diff % bits);
+    // ARM ARM: element = ROR(ones(w), immr) within esize, then replicate.
+    // (LLVM-differential-verified; NOT a whole-word rotate.)
+    let emask: u64 = if esize >= 64 { u64::MAX } else { (1u64 << esize) - 1 };
+    let wd: u64 = if diff == 0 { we & emask }
+        else { ((we >> diff) | (we << (esize - diff))) & emask };
     let mut v: u64 = 0;
     let mut i: u32 = 0;
     while i < bits {
-        v |= wd.rotate_left(i % bits);
-        i += esize as u32;
+        v |= wd << i;
+        i += esize;
     }
     v
 }
