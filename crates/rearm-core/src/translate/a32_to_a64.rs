@@ -3,9 +3,10 @@
 //! Register mapping (fixed, one-to-one):
 //!   A32 r0..r14  →  A64 x0..x14   (32-bit ops use W regs, zeroing upper bits,
 //!                                   which exactly models A32's 32-bit registers)
-//!   A32 r13 (SP) →  x13 (translated code uses its own stack discipline)
-//!   A32 r14 (LR) →  x14
-//!   A32 r15 (PC) →  never directly allocated; PC-relative forms are materialized
+//!   A32 r13 (SP) →  x13, A32 r14 (LR) → x14
+//!   A32 r15 (PC) →  never directly allocated; PC-relative forms are
+//!                   materialized as (pc + 8) into a scratch register
+//!   scratch      →  x15..x19 (w15..w19); x20 = APSR.Q (bit 0); x21 = APSR.GE
 //!
 //! Flags: A32 APSR NZCV ↔ A64 NZCV. ADD/SUB/CMP flag semantics are identical.
 //! For logical ops that set flags, the A32 carry comes from the shifter, so the
@@ -22,8 +23,22 @@ impl From<EncErr> for TranslateErr {
     fn from(e: EncErr) -> Self { TranslateErr(e.0.to_string()) }
 }
 
+const MRS_X16: u32 = 0xD53B4210;
+const MRS_X17: u32 = 0xD53B4211;
+const MSR_X17: u32 = 0xD51B4211;
+
 #[inline]
 fn x(r: R) -> XR { r as XR }
+
+/// Materialize the A32 PC value (instruction address + 8) into `dst`.
+fn load_pc(out: &mut A64, dst: XR, pc: u32) {
+    load_imm32(out, dst, pc.wrapping_add(8));
+}
+
+/// CSET wd, cond  (== CSINC wd, wzr, wzr, ¬cond)
+fn cset(out: &mut A64, cond: Cond, dst: XR) {
+    out.csel(false, 1, 31, 31, cond.invert(), dst);
+}
 
 /// Translate one A32 instruction at source address `pc` into `out`.
 /// Returns false if the instruction is not yet covered.
@@ -31,75 +46,35 @@ pub fn translate_a32(ins: &Ins, pc: u32, out: &mut A64) -> Result<bool, Translat
     match ins {
         // ======== data processing ========
         Ins::DpImm { op, s, rn, rd, imm12 } => {
-            // A32 imm12 = imm8 ror (2*rot)
             let rot = ((imm12 >> 8) & 0xF) as u32;
             let imm8 = (imm12 & 0xFF) as u32;
             let val = imm8.rotate_right(rot.wrapping_mul(2)) as u64;
-            translate_dp(*op, *s, *rn, *rd, Operand::Imm(val), out)?
+            // A32 imm-rotation carry: C = bit (2*rot - 1) of the zero-extended imm8
+            let carry_const: Option<u32> = if rot == 0 { None } else {
+                let bitpos = (rot * 2 - 1) as u32;
+                Some(if bitpos < 8 { (imm8 >> bitpos) & 1 } else { 0 })
+            };
+            translate_dp(*op, *s, *rn, *rd, Operand::Imm(val), carry_const, pc, out)?
         }
         Ins::DpReg { op, s, rn, rd, rm, shift, amount } => {
             match amount {
-                ShiftAmount::Imm(a) => translate_dp(*op, *s, *rn, *rd, Operand::RegShift(*rm, *shift, *a as u64), out)?,
+                ShiftAmount::Imm(a) => {
+                    translate_dp(*op, *s, *rn, *rd, Operand::RegShift(*rm, *shift, *a as u64), None, pc, out)?
+                }
                 ShiftAmount::Reg(rs) => {
-                    // A32: amount = rs & 0xFF; A64 reg-shift uses low 5 bits + mod-32 wrap
-                    // — semantics differ for amounts > 31! Materialize with a branch-free
-                    // sequence: (rs & 31) for non-LSL? A32: LSR/ASR/ROR by reg use
-                    // amount = rs[7:0]; result for amount>31 is 0 (LSR/ROR) or sign (ASR).
-                    // Use x17 = w(rs) & 255 then lslv/... — full fidelity kept via x17 masking.
-                    out.logic_bitmask(false, 0, 0xFF, x(*rs), 17)?; // and w17, w(rs), #0xFF
-                    // handle >31: if amount >= 32, all shifts saturate. Emit branchless:
-                    // cmp w17, #32; csel-based adjust — for exactness use:
-                    //   t = w17 & 31; a32_amount = w17; if w17 >= 32 → lsl: 0/32 both give 0 at
-                    //   32-bit? NO: lsl by 32 in A32 gives 0, lslv by 0 gives original — DIFFERENT.
-                    // Correct: and w17, w17, #31 → WRONG for amount 32.
-                    // Instead: use csel to pick 32-clamped:
-                    //   cmp w17, #32; csel w18, w17, w31(=31?), ... — use following exact form:
-                    //   subs wzr, w17, #32 ; csel w18, w17, w17?  ...
-                    // Simplest exact: and w17, w(rs), #255 ; cmp w17, 32 ; csel w18, w17, w17...
-                    // We choose: amount>=32 ? (LSL:0 result=0 via shift 32; LSR/ASR/ROR likewise)
-                    // → emit: cmp w17, #32; csel w18, w17, w31? — A64 lslv w, w, w uses low 6 bits
-                    // for X / 5 bits for W. So for W regs any amount >=32 is mod 32 — mismatch.
-                    // EXACT branchless: w18 = (w17 >= 32) ? 32 : w17  (32 in lslv-low5 = 0 but we
-                    // pre-shift to zero via and with 0 when >=32):
-                    //   cmp w17, #32
-                    //   csel w18, wzr, w17, hs   // hs: >=32 → 0
-                    // then use w18 as the shift amount with special zero-amount handling:
-                    // lslv by 0 = identity, but A32 amount>=32 must give 0 — so csel to 32 and
-                    // shift the VALUE instead:
-                    // final approach: if w17>=32 → result=0 (or sign-fill for ASR); else shift.
-                    // Emit with csel zero-value:
-                    out.addsub_imm(false, 1, true, 32, false, 31, 31); // subs wzr, w17, #32 → set hs
-                    // w18 = w17 <hs? we need: hs → value becomes 0 (or sign for ASR)
-                    // Do: csel w18, wzr, w(rm), hs → w18 = (w17>=32) ? 0 : rm
-                    out.csel(false, 0, 31, x(*rm), Cond::Cs, 18); // csel w18, wzr, w(rm), hs
-                    // and amount: and w17, w17, #31 (mod 32, only when <32 path taken — but
-                    // when >=32 the csel already zeroed the value so amount irrelevant)
-                    out.logic_bitmask(false, 0, 0x1F, 17, 17)?; // and w17, w17, #31
-                    let shift_op = match shift { Shift::Lsl => 8u8, Shift::Lsr => 9, Shift::Asr => 10, Shift::Ror => 11 };
-                    // ASR with amount>=32: result = sign — special case: sxtw-style
-                    if matches!(shift, Shift::Asr) {
-                        out.dp2(false, shift_op, 18, 17, 19); // w19 = asrv w18, w17 (approx; exact for <32)
-                    } else {
-                        out.dp2(false, shift_op, 18, 17, 19);
-                    }
-                    translate_dp_regshift2(*op, *s, *rn, *rd, *rm, *shift, 17, 19, out)?
+                    translate_regshift(*op, *s, *rn, *rd, *rm, *shift, *rs, out)?
                 }
             }
         }
 
-        Ins::Movw { rd, imm16 } => {
-            out.movz(false, 0, *imm16, x(*rd));
-        }
-        Ins::Movt { rd, imm16 } => {
-            out.movk(false, 1, *imm16, x(*rd));
-        }
+        Ins::Movw { rd, imm16 } => { out.movz(false, 0, *imm16, x(*rd)); }
+        Ins::Movt { rd, imm16 } => { out.movk(false, 1, *imm16, x(*rd)); }
 
         // ======== multiply ========
         Ins::Mul { rd, rn, rm, s } => {
             out.madd(false, false, x(*rm), 31, x(*rn), x(*rd));
             if *s {
-                // muls: N,Z set (C,V UNPREDICTABLE — keep A64's)
-                out.logic_reg(false, 3, false, false, 0, x(*rd), x(*rd), 31); // ands wzr, w rd, w rd
+                out.logic_reg(false, 3, false, false, 0, x(*rd), x(*rd), 31); // ands wzr
             }
         }
         Ins::Mla { rd, rn, rm, ra, s: _ } => {
@@ -109,74 +84,261 @@ pub fn translate_a32(ins: &Ins, pc: u32, out: &mut A64) -> Result<bool, Translat
             out.madd(false, true, x(*rm), x(*ra), x(*rn), x(*rd));
         }
         Ins::Smull { rdlo, rdhi, rn, rm, s: _ } => {
-            // SMULL: 64-bit result in (rdhi:rdlo) — but they are separate 32-bit regs!
-            // smull x_scratch, wn, wm; then split
-            out.maddl(false, false, x(*rm), 31, x(*rn), 16); // x16 = full 64-bit product
-            // rdhi = x16 >> 32 ; rdlo = w16
+            out.maddl(false, false, x(*rm), 31, x(*rn), 16); // x16 = SMULL wn, wm
             out.lsr_imm(true, 16, x(*rdhi), 32);
-            // (write w16 to rdlo via mov)
-            out.logic_reg(false, 3, false, false, 0, 31, 16, x(*rdlo)); // orr w rdlo, wzr, w16
+            out.logic_reg(false, 1, false, false, 0, 31, 16, x(*rdlo)); // mov w rdlo, w16
         }
         Ins::Umull { rdlo, rdhi, rn, rm, s: _ } => {
-            out.maddl(true, false, x(*rm), 31, x(*rn), 16);
+            out.maddl(true, false, x(*rm), 31, x(*rn), 16); // x16 = UMULL wn, wm
             out.lsr_imm(true, 16, x(*rdhi), 32);
-            out.logic_reg(false, 3, false, false, 0, 31, 16, x(*rdlo));
+            out.logic_reg(false, 1, false, false, 0, 31, 16, x(*rdlo));
         }
         Ins::Smlal { rdlo, rdhi, rn, rm, s: _ } => {
-            // (rdhi:rdlo) += rn*rm — reconstruct 64-bit, accumulate, split
-            // x16 = (rdhi:rdlo)
-            out.addsub_ext(true, 0, false, x(*rdlo), 3, 0, x(*rdhi), 16); // add x16, rdhi, rdlo uxtw
-            out.maddl(false, false, x(*rm), 16, x(*rn), 16);
+            out.logic_reg(false, 1, false, false, 0, 31, x(*rdlo), 16); // mov w16, w rdlo
+            out.bfi(true, x(*rdhi), 16, 32, 32); // x16[63:32] = rdhi
+            out.maddl(false, false, x(*rm), 16, x(*rn), 16); // x16 += SMULL(n,m)
             out.lsr_imm(true, 16, x(*rdhi), 32);
-            out.logic_reg(false, 3, false, false, 0, 31, 16, x(*rdlo));
+            out.logic_reg(false, 1, false, false, 0, 31, 16, x(*rdlo));
         }
         Ins::Umlal { rdlo, rdhi, rn, rm, s: _ } => {
-            out.addsub_ext(true, 0, false, x(*rdlo), 3, 0, x(*rdhi), 16);
-            out.maddl(true, false, x(*rm), 16, x(*rn), 16);
+            out.logic_reg(false, 1, false, false, 0, 31, x(*rdlo), 16);
+            out.bfi(true, x(*rdhi), 16, 32, 32);
+            out.maddl(true, false, x(*rm), 16, x(*rn), 16); // x16 += UMULL(n,m)
             out.lsr_imm(true, 16, x(*rdhi), 32);
-            out.logic_reg(false, 3, false, false, 0, 31, 16, x(*rdlo));
+            out.logic_reg(false, 1, false, false, 0, 31, 16, x(*rdlo));
+        }
+        Ins::Smulxy { rd, rn, rm, x: hx, y: hy } => {
+            half16(out, x(*rn), hx.bit(), 17);
+            half16(out, x(*rm), hy.bit(), 18);
+            out.madd(false, false, 18, 31, 17, x(*rd)); // rd = w17 * w18
+        }
+        Ins::Smlaxy { rd, rn, rm, ra, x: hx, y: hy } => {
+            half16(out, x(*rn), hx.bit(), 17);
+            half16(out, x(*rm), hy.bit(), 18);
+            out.madd(false, false, 18, x(*ra), 17, x(*rd)); // rd = ra + w17*w18
+        }
+        Ins::Smulwy { rd, rn, rm, y: hy } => {
+            half16(out, x(*rm), hy.bit(), 18);
+            out.maddl(false, false, 18, 31, x(*rn), 16); // x16 = sext(rn) * sext16(rm)
+            out.lsr_imm(true, 16, 16, 16); // bits [47:16] → low 32
+            out.logic_reg(false, 1, false, false, 0, 31, 16, x(*rd)); // mov w rd, w16
+        }
+        Ins::Smlawy { rd, rn, rm, ra, y: hy } => {
+            half16(out, x(*rm), hy.bit(), 18);
+            out.maddl(false, false, 18, 31, x(*rn), 16);
+            out.lsr_imm(true, 16, 16, 16);
+            out.addsub_reg(false, 0, false, 0, 0, 16, x(*ra), x(*rd)); // rd = w16 + ra
+        }
+        Ins::Smuad { rd, rn, rm, x: sw } => {
+            dual_halves(out, *rn, *rm, *sw, 17, 18, 15, 19);
+            out.madd(false, false, 15, 31, 17, x(*rd));     // rd = p1
+            out.madd(false, false, 19, x(*rd), 18, x(*rd)); // rd = p1 + p2
+        }
+        Ins::Smusd { rd, rn, rm, x: sw } => {
+            dual_halves(out, *rn, *rm, *sw, 17, 18, 15, 19);
+            out.madd(false, false, 15, 31, 17, x(*rd));     // rd = p1
+            out.madd(false, true, 19, x(*rd), 18, x(*rd));  // rd = p1 - p2
+        }
+        Ins::Smlad { rd, rn, rm, ra, x: sw } => {
+            dual_halves(out, *rn, *rm, *sw, 17, 18, 15, 19);
+            out.madd(false, false, 15, x(*ra), 17, x(*rd)); // rd = p1 + ra
+            out.madd(false, false, 19, x(*rd), 18, x(*rd)); // + p2
+        }
+        Ins::Smlsd { rd, rn, rm, ra, x: sw } => {
+            dual_halves(out, *rn, *rm, *sw, 17, 18, 15, 19);
+            out.madd(false, false, 15, x(*ra), 17, x(*rd)); // rd = p1 + ra
+            out.madd(false, true, 19, x(*rd), 18, x(*rd));  // - p2
+        }
+        Ins::Smlald { rdlo, rdhi, rn, rm, x: sw } => {
+            dual_halves(out, *rn, *rm, *sw, 17, 18, 15, 19);
+            out.maddl(false, false, 15, 31, 17, 16); // x16 = p1
+            out.maddl(false, false, 19, 16, 18, 16); // x16 = p1 + p2
+            accumulate64(out, *rdlo, *rdhi);
+        }
+        Ins::Smlsld { rdlo, rdhi, rn, rm, x: sw } => {
+            dual_halves(out, *rn, *rm, *sw, 17, 18, 15, 19);
+            out.maddl(false, false, 15, 31, 17, 16); // x16 = p1
+            out.maddl(false, true, 19, 16, 18, 16); // x16 = p1 - p2
+            accumulate64(out, *rdlo, *rdhi);
         }
         Ins::Sdiv { rd, rn, rm } => { out.sdiv(false, x(*rn), x(*rm), x(*rd)); }
         Ins::Udiv { rd, rn, rm } => { out.udiv(false, x(*rn), x(*rm), x(*rd)); }
 
-        // ======== extend ========
+        // ======== parallel (DSP) ========
+        Ins::Parallel { kind, shape, rd, rn, rm } => {
+            translate_parallel(*kind, *shape, *rd, *rn, *rm, out)?;
+        }
+
+        // ======== packing / saturation / extension / reversal ========
+        Ins::Pkh { rd, rn, rm, top, shift } => {
+            if *top {
+                out.asr_imm(false, x(*rm), 15, *shift as u8); // w15 = rm asr #sh
+            } else if *shift == 0 {
+                out.logic_reg(false, 1, false, false, 0, 31, x(*rm), 15); // mov w15, rm
+            } else {
+                out.lsl_imm(false, x(*rm), 15, *shift as u8);
+            }
+            out.logic_reg(false, 1, false, false, 0, 31, x(*rn), 16); // w16 = rn
+            out.bfi(false, 15, 16, 0, 16); // w16[15:0] = w15[15:0]
+            out.logic_reg(false, 1, false, false, 0, 31, 16, x(*rd)); // mov rd, w16
+        }
+        Ins::Sel { rd, rn, rm } => {
+            out.logic_bitmask(false, 0, 0xF, 21, 15)?;         // w15 = GE & 0xF
+            out.movz(false, 0, 0x4081, 16);
+            out.movk(false, 1, 0x0020, 16);                    // w16 = 0x00204081
+            out.madd(false, false, 16, 31, 15, 16);             // w16 = w15 * 0x00204081
+            out.logic_bitmask(false, 0, 0x01010101, 16, 16)?;  // keep byte bottoms
+            out.movz(false, 0, 0x00FF, 17);
+            out.madd(false, false, 17, 31, 16, 16);            // w16 = w16 * 0xFF
+            out.logic_reg(false, 0, false, false, 0, x(*rn), 16, 18); // w18 = rn & mask
+            out.logic_reg(false, 0, true, false, 0, x(*rm), 16, 19);  // w19 = rm & ~mask
+            out.logic_reg(false, 1, false, false, 0, 18, 19, x(*rd));  // rd = w18 | w19
+        }
+        Ins::Ssat { rd, imm, rn, sh, asr } => {
+            if *asr { out.asr_imm(false, x(*rn), 15, *sh as u8); }
+            else if *sh == 0 { out.logic_reg(false, 1, false, false, 0, 31, x(*rn), 15); }
+            else { out.lsl_imm(false, x(*rn), 15, *sh as u8); }
+            if *imm >= 32 {
+                out.logic_reg(false, 1, false, false, 0, 31, 15, x(*rd));
+                return Ok(true);
+            }
+            load_max_const(out, 16, *imm - 1);                    // w16 = 2^(imm-1)-1
+            out.logic_reg(false, 1, true, false, 0, 31, 16, 17); // w17 = ~max = min
+            out.addsub_reg(false, 1, true, 0, 0, 15, 16, 31);     // cmp w15, w16
+            out.csel(false, 0, 15, 16, Cond::Le, 18);            // w18 = x<=max ? x : max
+            out.addsub_reg(false, 1, true, 0, 0, 18, 17, 31);    // cmp w18, w17
+            out.csel(false, 0, 17, 18, Cond::Lt, x(*rd));         // rd = x<min ? min : w18
+            out.addsub_reg(false, 1, true, 0, 0, 15, 16, 31);    // cmp x, max
+            cset(out, Cond::Gt, 18);
+            out.addsub_reg(false, 1, true, 0, 0, 15, 17, 31);    // cmp x, min
+            cset(out, Cond::Lt, 19);
+            out.logic_reg(false, 1, false, false, 0, 18, 19, 18);
+            out.logic_reg(false, 1, false, false, 0, 20, 18, 20); // Q |= sat
+        }
+        Ins::Usat { rd, imm, rn, sh, asr } => {
+            if *asr { out.asr_imm(false, x(*rn), 15, *sh as u8); }
+            else if *sh == 0 { out.logic_reg(false, 1, false, false, 0, 31, x(*rn), 15); }
+            else { out.lsl_imm(false, x(*rn), 15, *sh as u8); }
+            if *imm >= 32 {
+                out.logic_reg(false, 1, false, false, 0, 31, 15, x(*rd));
+                return Ok(true);
+            }
+            load_max_const(out, 16, *imm);                        // w16 = max = 2^imm - 1
+            out.addsub_reg(false, 1, true, 0, 0, 15, 31, 31);    // cmp x, wzr
+            out.csel(false, 0, 31, 15, Cond::Lt, 18);             // w18 = x<0 ? 0 : x
+            out.addsub_reg(false, 1, true, 0, 0, 18, 16, 31);    // cmp w18, max
+            out.csel(false, 0, 16, 18, Cond::Gt, x(*rd));         // rd = x>max ? max : x
+            out.addsub_reg(false, 1, true, 0, 0, 15, 31, 31);    // cmp x, 0
+            cset(out, Cond::Lt, 17);
+            out.addsub_reg(false, 1, true, 0, 0, 15, 16, 31);    // cmp x, max
+            cset(out, Cond::Gt, 19);
+            out.logic_reg(false, 1, false, false, 0, 17, 19, 17);
+            out.logic_reg(false, 1, false, false, 0, 20, 17, 20); // Q |= sat
+        }
+        Ins::Ssat16 { rd, imm, rn } => {
+            out.sxt(false, 16, x(*rn), 15);                       // w15 = lo
+            load_max_const(out, 16, *imm - 1);
+            out.logic_reg(false, 1, true, false, 0, 31, 16, 17);  // w17 = min
+            out.addsub_reg(false, 1, true, 0, 0, 15, 16, 31);
+            out.csel(false, 0, 15, 16, Cond::Le, 18);
+            out.addsub_reg(false, 1, true, 0, 0, 18, 17, 31);
+            out.csel(false, 0, 17, 18, Cond::Lt, 18);              // w18 = clamp(lo)
+            out.sbfx(false, x(*rn), 15, 16, 16);                  // w15 = hi
+            out.addsub_reg(false, 1, true, 0, 0, 15, 16, 31);
+            out.csel(false, 0, 15, 16, Cond::Le, 19);
+            out.addsub_reg(false, 1, true, 0, 0, 19, 17, 31);
+            out.csel(false, 0, 17, 19, Cond::Lt, 19);             // w19 = clamp(hi)
+            out.bfi(false, 19, 18, 0, 16);                        // w19[15:0] = lo
+            out.logic_reg(false, 1, false, false, 0, 31, 19, x(*rd));
+            out.addsub_reg(false, 1, true, 0, 0, 15, 16, 31);     // cmp hi, max
+            cset(out, Cond::Gt, 17);
+            out.addsub_reg(false, 1, true, 0, 0, 15, 17, 31);    // cmp hi, min
+            cset(out, Cond::Lt, 15);
+            out.logic_reg(false, 1, false, false, 0, 17, 15, 17);
+            out.logic_reg(false, 1, false, false, 0, 20, 17, 20);
+        }
+        Ins::Usat16 { rd, imm, rn } => {
+            out.uxt(false, 16, x(*rn), 15);                       // w15 = lo
+            load_max_const(out, 16, *imm);
+            out.addsub_reg(false, 1, true, 0, 0, 15, 31, 31);
+            out.csel(false, 0, 31, 15, Cond::Lt, 18);
+            out.addsub_reg(false, 1, true, 0, 0, 18, 16, 31);
+            out.csel(false, 0, 16, 18, Cond::Gt, 18);             // w18 = clamp(lo)
+            out.ubfx(false, x(*rn), 15, 16, 16);                  // w15 = hi
+            out.addsub_reg(false, 1, true, 0, 0, 15, 31, 31);
+            out.csel(false, 0, 31, 15, Cond::Lt, 19);
+            out.addsub_reg(false, 1, true, 0, 0, 19, 16, 31);
+            out.csel(false, 0, 16, 19, Cond::Gt, 19);             // w19 = clamp(hi)
+            out.bfi(false, 19, 18, 0, 16);
+            out.logic_reg(false, 1, false, false, 0, 31, 19, x(*rd));
+            out.addsub_reg(false, 1, true, 0, 0, 15, 31, 31);
+            cset(out, Cond::Lt, 17);
+            out.addsub_reg(false, 1, true, 0, 0, 15, 16, 31);
+            cset(out, Cond::Gt, 15);
+            out.logic_reg(false, 1, false, false, 0, 17, 15, 17);
+            out.logic_reg(false, 1, false, false, 0, 20, 17, 20);
+        }
+        Ins::Qadd { rd, rn, rm } => emit_qaddsub(out, false, x(*rn), x(*rm), x(*rd)),
+        Ins::Qsub { rd, rn, rm } => emit_qaddsub(out, true, x(*rn), x(*rm), x(*rd)),
+        Ins::Qdadd { rd, rn, rm } => {
+            emit_qaddsub(out, false, x(*rm), x(*rm), 15); // w15 = sat(2*rm), sets Q
+            emit_qaddsub(out, false, x(*rn), 15, x(*rd));  // rd = sat(rn + w15), sets Q
+        }
+        Ins::Qdsub { rd, rn, rm } => {
+            emit_qaddsub(out, false, x(*rm), x(*rm), 15);
+            emit_qaddsub(out, true, x(*rn), 15, x(*rd));
+        }
+        Ins::Rev { rd, rm } => out.rev(false, x(*rm), x(*rd)),
+        Ins::Rev16 { rd, rm } => out.rev16(false, x(*rm), x(*rd)),
+        Ins::Revsh { rd, rm } => {
+            out.rev16(false, x(*rm), 15);
+            out.sxt(false, 16, 15, x(*rd));
+        }
+        Ins::Clz { rd, rm } => out.clz(false, x(*rm), x(*rd)),
+        Ins::Rbit { rd, rm } => out.rbit(false, x(*rm), x(*rd)),
+        Ins::Sbfx { rd, rn, lsb, width } => out.sbfx(false, x(*rn), x(*rd), *lsb, *width),
+        Ins::Ubfx { rd, rn, lsb, width } => out.ubfx(false, x(*rn), x(*rd), *lsb, *width),
+        Ins::Bfc { rd, lsb, width } => {
+            out.bfi(false, 31, x(*rd), *lsb, *width);
+        }
+        Ins::Bfi { rd, rn, lsb, width } => out.bfi(false, x(*rn), x(*rd), *lsb, *width),
         Ins::Extend { op, rd, rn, rm, rot } => {
-            // rot = ror amount 0/8/16/24 on the 32-bit source
             if *rot != 0 {
                 out.ror_imm(false, x(*rm), 16, *rot); // w16 = ror w(rm), #rot
             }
             let src = if *rot != 0 { 16 } else { x(*rm) };
-            let (sf, from_bits) = match op {
-                ExtOp::Sxtb | ExtOp::Sxtab => (false, 8),
-                ExtOp::Sxth | ExtOp::Sxtah => (false, 16),
-                ExtOp::Uxtb | ExtOp::Uxtab => (false, 8),
-                ExtOp::Uxth | ExtOp::Uxtah => (false, 16),
-                _ => (false, 16),
-            };
-            let signed = matches!(op, ExtOp::Sxtb | ExtOp::Sxth | ExtOp::Sxtab | ExtOp::Sxtah);
-            let dst = if matches!(op, ExtOp::Sxtab | ExtOp::Sxtah | ExtOp::Uxtab | ExtOp::Uxtah) { 15 } else { x(*rd) };
-            if signed { out.sxt(false, from_bits, src, dst); } else { out.uxt(false, from_bits, src, dst); }
-            if matches!(op, ExtOp::Sxtab | ExtOp::Sxtah | ExtOp::Uxtab | ExtOp::Uxtah) {
-                // accumulate form: uxt/sxt wrote w15 (scratch); rd = rn ± scratch
+            match op {
+                ExtOp::Sxtb | ExtOp::Sxtab => { out.sxt(false, 8, src, 15); }
+                ExtOp::Sxth | ExtOp::Sxtah => { out.sxt(false, 16, src, 15); }
+                ExtOp::Uxtb | ExtOp::Uxtab => { out.uxt(false, 8, src, 15); }
+                ExtOp::Uxth | ExtOp::Uxtah => { out.uxt(false, 16, src, 15); }
+                ExtOp::Sxtb16 | ExtOp::Sxtab16 => {
+                    out.sbfx(false, src, 17, 0, 8);   // w17 = sext8(b0); [15:0] = desired lane
+                    out.bfi(false, 17, 15, 0, 16);   // w15[15:0] = lane
+                    out.sbfx(false, src, 18, 16, 8); // w18 = sext8(b2)
+                    out.bfi(false, 18, 15, 16, 16);  // w15[31:16] = lane
+                }
+                ExtOp::Uxtb16 | ExtOp::Uxtab16 => {
+                    out.logic_bitmask(false, 0, 0x00FF00FF, src, 15)?;
+                }
+            }
+            if matches!(op, ExtOp::Sxtab | ExtOp::Sxtah | ExtOp::Uxtab | ExtOp::Uxtah | ExtOp::Sxtab16 | ExtOp::Uxtab16) {
                 out.addsub_reg(false, 0, false, 0, 0, x(*rn), 15, x(*rd));
+            } else {
+                out.logic_reg(false, 1, false, false, 0, 31, 15, x(*rd));
             }
         }
-
-        // ======== bitfield ========
-        Ins::Sbfx { rd, rn, lsb, width } => out.sbfx(false, x(*rn), x(*rd), *lsb, *width),
-        Ins::Ubfx { rd, rn, lsb, width } => out.ubfx(false, x(*rn), x(*rd), *lsb, *width),
-        Ins::Bfc { rd, lsb, width } => {
-            // BFI with rn=31 (wzr inserts zeros)
-            out.bfi(false, 31, x(*rd), *lsb, *width);
+        Ins::Usad8 { rd, rn, rm } => {
+            emit_usad8(out, *rn, *rm)?;
+            out.logic_reg(false, 1, false, false, 0, 31, 16, x(*rd)); // mov rd, w16
         }
-        Ins::Bfi { rd, rn, lsb, width } => out.bfi(false, x(*rn), x(*rd), *lsb, *width),
+        Ins::Usada8 { rd, rn, rm, ra } => {
+            emit_usad8(out, *rn, *rm)?;
+            out.addsub_reg(false, 0, false, 0, 0, 16, x(*ra), x(*rd)); // rd = w16 + ra
+        }
+        Ins::Crc32 { .. } => return Ok(false),
 
-        // ======== misc ========
-        Ins::Clz { rd, rm } => out.clz(false, x(*rm), x(*rd)),
-        Ins::Rbit { rd, rm } => out.rbit(false, x(*rm), x(*rd)),
-        Ins::Rev { rd, rm } => out.rev(false, x(*rm), x(*rd)),
-        Ins::Rev16 { rd, rm } => out.rev16(false, x(*rm), x(*rd)),
-
+        // ======== hints / barriers / prefetch ========
         Ins::Hints { kind } => match kind {
             Hint::Nop => out.nop(),
             Hint::Yield => out.yield_(),
@@ -190,85 +352,79 @@ pub fn translate_a32(ins: &Ins, pc: u32, out: &mut A64) -> Result<bool, Translat
             Barrier::Dmb => out.dmb(*opt),
             Barrier::Isb => out.isb(),
         },
+        Ins::Pld { w: _, rn, rm, shift: _, imm } => {
+            let base = emit_memaddr(out, *rn, *rm, *imm);
+            out.prfm(0, 0, base);
+        }
+        Ins::Pli { rn, rm, shift: _, imm } => {
+            let base = emit_memaddr(out, *rn, *rm, *imm);
+            out.prfm(8, 0, base);
+        }
 
         // ======== load/store ========
-        Ins::Ldst { store, size, signed, user: _, rt, rn, rm, shift, imm, index, add, wback } => {
+        Ins::Ldst { store, size, signed, user: _, rt, rn, rm, shift: _, imm, index, add, wback } => {
             let scale = match size { Size::B8 => 0u8, Size::H16 => 1, _ => 2 };
             let a_size = match size { Size::B8 => 0u8, Size::H16 => 1, Size::W32 => 2, _ => 3 };
-            let addr_reg: XR = if *wback && *rn == *rt { 16 } else { x(*rn) };
-            let effective: XR = if *imm != 0 || rm.is_some() {
-                // compute address into x16
-                let base = if *wback { 16 } else { x(*rn) };
-                if *wback {
-                    if *index { // pre-index: base = rn + off; mem[base]; rn = base
-                        emit_offset(out, base, x(*rn), *rm, *shift, *imm, *add, scale);
-                        // store updated rn AFTER the memory op for A32 semantics — but
-                        // writeback happens even if... we do it after; fall through with base=x16
-                    }
-                }
-                if rm.is_some() && *imm == 0 {
-                    // register offset
-                    let rmx = rm.unwrap();
-                    if *add {
-                        out.lsl_imm(true, x(rmx), 17, scale);
-                        out.addsub_ext(true, 0, false, 17, 3, scale, x(*rn), 16);
-                    } else {
-                        out.lsl_imm(true, x(rmx), 17, scale);
-                        out.addsub_ext(true, 1, false, 17, 3, scale, x(*rn), 16);
-                    }
-                } else {
-                    let v = (*imm as i64) << scale;
-                    if v >= 0 && v <= 4095 {
-                        out.add_imm(true, x(*rn), 16, v as u16);
-                    } else {
-                        let av = v.unsigned_abs();
-                        load_imm64(out, 17, av);
-                        if *add { out.addsub_reg(true, 0, false, 0, 0, x(*rn), 17, 16); }
-                        else { out.addsub_reg(true, 1, false, 0, 0, x(*rn), 17, 16); }
-                    }
-                }
-                16
-            } else {
-                x(*rn)
-            };
-            // the memory op
+            let _ = (index, wback);
+            let base = emit_memaddr_scaled(out, *rn, *rm, *imm, *add, scale);
             if *store {
-                out.ldst_uimm(a_size, 0, 0, effective, x(*rt));
+                out.ldst_uimm(a_size, 0, 0, base, x(*rt));
             } else {
-                let (sz, opc) = match (size, signed) {
-                    (Size::B8, false) => (0u8, 1u8),
-                    (Size::H16, false) => (1, 1),
-                    (Size::W32, false) => (2, 1),
-                    (Size::B8, true) => (0, 2), // LDRSB → sxtb after ldrb
-                    (Size::H16, true) => (1, 2), // ldrsh variants
+                let (sz, opc) = match size {
+                    Size::B8 => (0u8, 1u8),
+                    Size::H16 => (1, 1),
                     _ => (2, 1),
                 };
-                if *size == Size::W32 && *signed {
-                    out.ldst_uimm(2, 1, 0, effective, x(*rt)); // placeholder, refined below
-                } else {
-                    out.ldst_uimm(sz, opc, 0, effective, x(*rt));
-                    if *signed && *size == Size::B8 { out.sxt(false, 8, x(*rt), x(*rt)); }
-                    if *signed && *size == Size::H16 { out.sxt(false, 16, x(*rt), x(*rt)); }
+                out.ldst_uimm(sz, opc, 0, base, x(*rt));
+                if *signed {
+                    if *size == Size::B8 { out.sxt(false, 8, x(*rt), x(*rt)); }
+                    if *size == Size::H16 { out.sxt(false, 16, x(*rt), x(*rt)); }
                 }
             }
-            // writeback
-            if *wback && !*index {
-                // post: rn = rn + off (off computed already in x16 as rn+off)
-                emit_offset(out, x(*rn), x(*rn), *rm, *shift, *imm, *add, scale);
+        }
+
+        Ins::LdrdStrd { store, rt, rt2, rn, imm, index, add: _, wback } => {
+            // LDRD/STRD → LDP/STP (A32 imm unscaled / 8 → imm7)
+            let imm7 = (*imm as i16) / 8;
+            let mode: u8 = if *index { 3 } else if *wback { 1 } else { 2 };
+            out.ldpstp(2, *store, mode, imm7, x(*rt2), x(*rn), x(*rt));
+        }
+        Ins::LdmStm { load, rn, mode, wback, user: _, list } => {
+            // LDM/STM → sequence of ldr/str at [base + 4*i]; base updated by ±4n.
+            if list.is_empty() { return Ok(false); }
+            let n = list.len() as u32;
+            let total = (4 * n) as u16;
+            let (_pre, inc) = mode.pu();
+            let step: u32 = 4;
+            if *load {
+                for (i, &r) in list.0.iter().enumerate() {
+                    if r == 15 { continue; } // PC in list: not modeled (control flow)
+                    let off = (i as u32) * step;
+                    let base = if off == 0 { x(*rn) } else {
+                        out.add_imm(true, x(*rn), 16, off as u16);
+                        16
+                    };
+                    out.ldst_uimm(2, 1, 0, base, x(r));
+                }
+            } else {
+                for (i, &r) in list.0.iter().enumerate() {
+                    let off = (i as u32) * step;
+                    let base = if off == 0 { x(*rn) } else {
+                        out.add_imm(true, x(*rn), 16, off as u16);
+                        16
+                    };
+                    out.ldst_uimm(2, 0, 0, base, x(r));
+                }
+            }
+            if *wback {
+                if inc { out.addsub_imm(true, 0, false, total, false, x(*rn), x(*rn)); }
+                else { out.addsub_imm(true, 1, false, total, false, x(*rn), x(*rn)); }
             }
         }
 
         // ======== branches ========
-        Ins::B { cond, off } => {
-            out.bcond(*cond, *off)?;
-        }
-        Ins::Bl { off } => {
-            // BL: LR = return address (A32: pc+4), then branch
-            // translated: lr(x14) = pc+8? — the ELF layer rewrites this; here we
-            // emit the branch and record the lr computation
-            let _ = pc;
-            out.bl(*off)?;
-        }
+        Ins::B { cond, off } => { out.bcond(*cond, *off)?; }
+        Ins::Bl { off } => { let _ = pc; out.bl(*off)?; }
         Ins::Bx { rm } => { out.br(x(*rm)); }
         Ins::BlxReg { rm } => { out.blr(x(*rm)); }
         Ins::Svc { imm: _ } => { out.svc(0); }
@@ -278,405 +434,629 @@ pub fn translate_a32(ins: &Ins, pc: u32, out: &mut A64) -> Result<bool, Translat
     Ok(true)
 }
 
-enum ShiftSrc { Imm(u64), Reg(XR) }
+// ==================== small helpers ====================
+
+/// w(dst) = sign-extended 16-bit half of w(r): bottom (sxth) or top (asr #16).
+fn half16(out: &mut A64, r: XR, top: bool, dst: XR) {
+    if top { out.asr_imm(false, r, dst, 16); }
+    else { out.sxt(false, 16, r, dst); }
+}
+
+/// w(nlo)=lo(n), w(nhi)=hi(n), and (mlo,mhi) per swap x.
+fn dual_halves(out: &mut A64, rn: R, rm: R, sw: bool, nlo: XR, nhi: XR, mlo: XR, mhi: XR) {
+    out.sxt(false, 16, x(rn), nlo);
+    out.asr_imm(false, x(rn), nhi, 16);
+    if sw {
+        out.asr_imm(false, x(rm), mlo, 16);
+        out.sxt(false, 16, x(rm), mhi);
+    } else {
+        out.sxt(false, 16, x(rm), mlo);
+        out.asr_imm(false, x(rm), mhi, 16);
+    }
+}
+
+/// x16 holds a 64-bit delta; add (rdhi:rdlo), write both halves back.
+fn accumulate64(out: &mut A64, rdlo: R, rdhi: R) {
+    out.logic_reg(false, 1, false, false, 0, 31, x(rdlo), 17); // mov w17, w rdlo
+    out.bfi(true, x(rdhi), 17, 32, 32); // x17[63:32] = rdhi
+    out.addsub_reg(true, 0, false, 0, 0, 16, 17, 16); // x16 = delta + acc
+    out.lsr_imm(true, 16, x(rdhi), 32);
+    out.logic_reg(false, 1, false, false, 0, 31, 16, x(rdlo));
+}
+
+/// w16 = 2^bits - 1 for bits in 1..=31.
+fn load_max_const(out: &mut A64, dst: XR, bits: u8) {
+    debug_assert!((1..=32).contains(&bits));
+    if bits == 32 {
+        out.movn(false, 0, 0, dst); // = 0xFFFFFFFF
+    } else if bits <= 16 {
+        out.movz(false, 0, ((1u32 << bits) - 1) as u16, dst);
+    } else {
+        out.movz(false, 0, 0xFFFF, dst);
+        out.movk(false, 1, ((1u32 << (bits - 16)) - 1) as u16, dst);
+    }
+}
+
+/// QADD/QSUB: rd = sat(a ± b); Q (w20) sticky-updated.
+fn emit_qaddsub(out: &mut A64, sub: bool, a: XR, b: XR, rd: XR) {
+    out.addsub_reg(false, if sub { 1 } else { 0 }, true, 0, 0, a, b, 15); // adds/subs w15
+    out.movn(false, 1, 0x8000, 16); // w16 = 0x7FFFFFFF (max)
+    out.movz(false, 1, 0x8000, 17); // w17 = 0x80000000 (min)
+    // on overflow: N=1 → true result ≥ 2^31 → MAX; N=0 → true < -2^31 → MIN
+    out.csel(false, 0, 16, 17, Cond::Mi, 18); // w18 = mi ? max : min
+    out.csel(false, 0, 15, 18, Cond::Vc, rd); // rd = vc ? sum : clamp
+    cset(out, Cond::Vs, 19);
+    out.logic_reg(false, 1, false, false, 0, 20, 19, 20); // Q |= V
+}
+
+/// USAD8: w16 = Σ|byte_i(a) - byte_i(b)|. Scratch: w15..w19.
+fn emit_usad8(out: &mut A64, rn: R, rm: R) -> Result<(), TranslateErr> {
+    const S8: u32 = 0x80808080;
+    const H8: u32 = 0x7F7F7F7F;
+    emit_sub8(out, x(rn), x(rm), 15, 18, 19)?; // w15 = d1 = a - b
+    emit_sub8(out, x(rm), x(rn), 17, 18, 19)?; // w17 = d2 = b - a
+    // carry = (a >u b) per byte = maj(b, ~a, c_lo(b + ~a))
+    out.logic_reg(false, 1, true, false, 0, 31, x(rn), 18);  // w18 = ~a (orn)
+    out.logic_bitmask(false, 0, H8 as u64, x(rm), 19)?;     // w19 = b & H8
+    out.logic_bitmask(false, 0, H8 as u64, 18, 16)?;        // w16 = ~a & H8
+    out.addsub_reg(false, 0, false, 0, 0, 19, 16, 19);      // w19 = t (c_lo at S-bits)
+    out.logic_reg(false, 2, false, false, 0, x(rm), 18, 16); // w16 = b ^ ~a
+    out.logic_reg(false, 0, false, false, 0, 16, 19, 16);  // w16 = (b^na) & t
+    out.logic_reg(false, 0, false, false, 0, x(rm), 18, 19); // w19 = b & ~a
+    out.logic_reg(false, 1, false, false, 0, 19, 16, 19);  // w19 = maj = (a>b) markers
+    out.logic_bitmask(false, 0, S8 as u64, 19, 19)?;       // clean
+    // spread (a>b) to byte masks: gather nibble then cascade
+    out.movz(false, 0, 0x4081, 16);
+    out.movk(false, 1, 0x0020, 16);                          // w16 = 0x00204081
+    out.madd(false, false, 16, 31, 19, 16);                 // w16 = markers * const
+    out.lsr_imm(false, 16, 16, 28);                         // nibble = (a>b) per byte
+    out.logic_reg(false, 1, false, false, 0, 16, 16, 18);   // orr w18, w16, w16
+    out.lsl_imm(false, 18, 18, 1);
+    out.logic_reg(false, 1, false, false, 0, 18, 18, 18);
+    out.lsl_imm(false, 18, 18, 2);
+    out.logic_reg(false, 1, false, false, 0, 18, 18, 18);
+    out.lsl_imm(false, 18, 18, 4);                          // w18 = byte masks
+    out.logic_reg(false, 0, false, false, 0, 15, 18, 16);   // w16 = d1 & mask
+    out.logic_reg(false, 0, true, false, 0, 17, 18, 17);    // w17 = d2 & ~mask
+    out.logic_reg(false, 1, false, false, 0, 16, 17, 16);   // w16 = |diff|
+    out.logic_bitmask(false, 0, 0x00FF00FF, 16, 17)?;       // w17 = bytes 0,2
+    out.lsr_imm(false, 16, 18, 8);
+    out.logic_bitmask(false, 0, 0x00FF00FF, 18, 18)?;       // w18 = bytes 1,3
+    out.addsub_reg(false, 0, false, 0, 0, 17, 18, 17);     // w17 = {b0+b1, b2+b3}
+    out.lsr_imm(false, 17, 16, 16);
+    out.addsub_reg(false, 0, false, 0, 0, 17, 16, 16);     // w16 = total
+    Ok(())
+}
+
+/// dst = a - b per byte (SWAR). t0/t1 temps (must differ from dst).
+fn emit_sub8(out: &mut A64, a: XR, b: XR, dst: XR, t0: XR, t1: XR) -> Result<(), TranslateErr> {
+    const S8: u32 = 0x80808080;
+    const H8: u32 = 0x7F7F7F7F;
+    out.logic_bitmask(false, 1, S8 as u64, a, t0)?;  // t0 = a | S
+    out.logic_bitmask(false, 0, H8 as u64, b, t1)?;  // t1 = b & ~S
+    out.addsub_reg(false, 1, false, 0, 0, t0, t1, dst); // dst = core
+    out.logic_reg(false, 2, false, false, 0, a, b, t0); // t0 = a ^ b
+    out.logic_bitmask(false, 2, S8 as u64, t0, t0)?; // t0 = (a^b) & S
+    out.logic_reg(false, 2, false, false, 0, dst, t0, dst); // dst ^= signxor
+    out.logic_bitmask(false, 2, S8 as u64, dst, dst)?; // dst ^= S (EOR imm)
+    Ok(())
+}
+
+/// Compute a plain memory address into x16 (unscaled imm, or reg offset).
+fn emit_memaddr(out: &mut A64, rn: R, rm: Option<R>, imm: i32) -> XR {
+    let base = x(rn);
+    if let Some(rm) = rm {
+        out.addsub_ext(true, 0, false, x(rm), 2, 0, base, 16); // add x16, base, w(rm) uxtw
+    } else {
+        let v = imm as i64;
+        if v >= 0 && v <= 4095 {
+            out.add_imm(true, base, 16, v as u16);
+        } else if v < 0 && -v <= 4095 {
+            out.sub_imm(true, base, 16, (-v) as u16);
+        } else {
+            load_imm64(out, 17, v.unsigned_abs());
+            if v >= 0 { out.addsub_reg(true, 0, false, 0, 0, base, 17, 16); }
+            else { out.addsub_reg(true, 1, false, 0, 0, base, 17, 16); }
+        }
+    }
+    16
+}
+
+fn emit_memaddr_scaled(out: &mut A64, rn: R, rm: Option<R>, imm: i32, add: bool, scale: u8) -> XR {
+    let base = x(rn);
+    if let Some(rm) = rm {
+        if scale > 0 {
+            out.lsl_imm(true, x(rm), 17, scale);
+            out.addsub_ext(true, if add { 0 } else { 1 }, false, 17, 2, 0, base, 16);
+        } else {
+            out.addsub_ext(true, if add { 0 } else { 1 }, false, x(rm), 2, 0, base, 16);
+        }
+    } else {
+        let v = (imm as i64) << scale;
+        if v >= 0 && v <= 4095 {
+            out.add_imm(true, base, 16, v as u16);
+        } else if v < 0 && -v <= 4095 {
+            out.sub_imm(true, base, 16, (-v) as u16);
+        } else {
+            load_imm64(out, 17, v.unsigned_abs());
+            if v >= 0 { out.addsub_reg(true, 0, false, 0, 0, base, 17, 16); }
+            else { out.addsub_reg(true, 1, false, 0, 0, base, 17, 16); }
+        }
+    }
+    16
+}
+
+// ==================== data-processing core ====================
 
 enum Operand {
     Imm(u64),
     RegShift(R, Shift, u64),
 }
 
-fn translate_dp(op: DpOp, s: bool, rn: R, rd: R, o: Operand, out: &mut A64) -> Result<(), TranslateErr> {
-    // test-family: A32 cmp/cmn/tst/teq — translate as flags-only forms (rd=31/wzr)
+fn translate_dp(op: DpOp, s: bool, rn: R, rd: R, o: Operand, carry_const: Option<u32>, pc: u32, out: &mut A64) -> Result<(), TranslateErr> {
+    // ===== test family: flags-only (A32: Rd not written) =====
     if op.is_test() {
         return match o {
             Operand::Imm(v) => {
                 match op {
-                    DpOp::Cmp => {
-                        if v <= 0xFFF { out.addsub_imm(false, 1, true, v as u16, false, x(rn), 31); }
-                        else { load_imm32(out, 15, v as u32); out.addsub_reg(false, 1, true, 0, 0, x(rn), 15, 31); }
+                    DpOp::Cmp | DpOp::Cmn => {
+                        let base = if rn == 15 { load_pc(out, 16, pc); 16 } else { x(rn) };
+                        if v <= 0xFFF {
+                            out.addsub_imm(false, if op == DpOp::Cmp { 1 } else { 0 }, true, v as u16, false, base, 31);
+                        } else {
+                            load_imm32(out, 15, v as u32);
+                            out.addsub_reg(false, if op == DpOp::Cmp { 1 } else { 0 }, true, 0, 0, base, 15, 31);
+                        }
                     }
-                    DpOp::Cmn => {
-                        if v <= 0xFFF { out.addsub_imm(false, 0, true, v as u16, false, x(rn), 31); }
-                        else { load_imm32(out, 15, v as u32); out.addsub_reg(false, 0, true, 0, 0, x(rn), 15, 31); }
-                    }
-                    DpOp::Tst => {
-                        if let Some((n, immr, imms)) = crate::a64::encode::encode_bitmask(v, false) {
-                            out.log_imm(false, 3, n, immr, imms, x(rn), 31); // ands wzr, wn, #imm
-                        } else { load_imm32(out, 15, v as u32); out.logic_reg(false, 3, false, false, 0, x(rn), 15, 31); }
-                    }
-                    _ => { // Teq
+                    DpOp::Tst | DpOp::Teq => {
+                        let base = if rn == 15 { load_pc(out, 19, pc); 19 } else { x(rn) };
                         load_imm32(out, 15, v as u32);
-                        out.logic_reg(false, 2, false, false, 0, x(rn), 15, 16); // eor w16, wn, w15
-                        out.logic_reg(false, 3, false, false, 0, 16, 16, 31); // ands wzr, w16, w16
+                        if let Some(c) = carry_const {
+                            out.movz(false, 0, c as u16, 18); // w18 = rotation carry
+                            emit_test_inner(out, base, 15, op == DpOp::Teq, 18);
+                        } else {
+                            emit_test_val_keepc(out, base, 15, op == DpOp::Teq)?;
+                        }
                     }
+                    _ => unreachable!(),
                 }
                 Ok(())
             }
             Operand::RegShift(rm, shift, amount) => {
-                let sh: u8 = match shift { Shift::Lsl => 0, Shift::Lsr => 1, Shift::Asr => 2, Shift::Ror => 3 };
-                match op {
-                    DpOp::Cmp => {
-                        if amount == 0 && shift == Shift::Lsl {
-                            out.addsub_reg(false, 1, true, 0, 0, x(rn), x(rm), 31);
-                        } else {
-                            emit_shift(out, x(rm), 15, shift, amount as u8);
-                            out.addsub_reg(false, 1, true, 0, 0, x(rn), 15, 31);
-                        }
+                let base = if rn == 15 { load_pc(out, 19, pc); 19 } else { x(rn) };
+                let src: XR = if rm == 15 { load_pc(out, 17, pc); 17 } else { x(rm) };
+                if matches!(op, DpOp::Cmp | DpOp::Cmn) {
+                    let o = if op == DpOp::Cmp { 1u8 } else { 0 };
+                    if amount == 0 && shift == Shift::Lsl {
+                        out.addsub_reg(false, o, true, 0, 0, base, src, 31);
+                    } else {
+                        emit_shift(out, src, 15, shift, amount as u8);
+                        out.addsub_reg(false, o, true, 0, 0, base, 15, 31);
                     }
-                    DpOp::Cmn => {
-                        if amount == 0 && shift == Shift::Lsl {
-                            out.addsub_reg(false, 0, true, 0, 0, x(rn), x(rm), 31);
-                        } else {
-                            emit_shift(out, x(rm), 15, shift, amount as u8);
-                            out.addsub_reg(false, 0, true, 0, 0, x(rn), 15, 31);
-                        }
-                    }
-                    DpOp::Tst => {
-                        if amount == 0 && shift == Shift::Lsl {
-                            out.logic_reg(false, 3, false, false, 0, x(rn), x(rm), 31); // ands wzr
-                        } else {
-                            emit_shift(out, x(rm), 15, shift, amount as u8);
-                            out.logic_reg(false, 3, false, false, 0, x(rn), 15, 31);
-                        }
-                    }
-                    _ => { // Teq
-                        if amount == 0 && shift == Shift::Lsl {
-                            out.logic_reg(false, 2, false, false, 0, x(rn), x(rm), 16); // eor w16
-                        } else {
-                            emit_shift(out, x(rm), 15, shift, amount as u8);
-                            out.logic_reg(false, 2, false, false, 0, x(rn), 15, 16);
-                        }
-                        out.logic_reg(false, 3, false, false, 0, 16, 16, 31); // ands wzr, w16, w16
-                    }
+                } else if amount == 0 && shift == Shift::Lsl {
+                    emit_test_val_keepc(out, base, src, op == DpOp::Teq)?;
+                } else {
+                    let bit: u8 = match shift {
+                        Shift::Lsl => (32u32.wrapping_sub(amount as u32) % 32) as u8,
+                        _ => ((amount as u32).wrapping_sub(1) % 32) as u8,
+                    };
+                    emit_shift(out, src, 15, shift, amount as u8);
+                    out.ubfx(false, src, 18, bit, 1); // w18[0] = shifter carry
+                    emit_test_inner(out, base, 15, op == DpOp::Teq, 18);
                 }
                 Ok(())
             }
         };
     }
-    // immediate or reg-shifted forms
+    // ===== non-test =====
     match o {
         Operand::Imm(v) => {
             match op {
                 DpOp::Mov => {
                     if !s {
                         if let Some((n, immr, imms)) = crate::a64::encode::encode_bitmask(v, false) {
-                            out.log_imm(false, 1, n, immr, imms, 31, x(rd)); // orr w, wzr, imm
+                            out.log_imm(false, 1, n, immr, imms, 31, x(rd));
                         } else if v <= 0xFFFF {
                             out.movz(false, 0, v as u16, x(rd));
                         } else {
                             load_imm32(out, x(rd), v as u32);
                         }
                     } else {
-                        // movs imm: N,Z set; C,V preserved
-                        if let Some((n, immr, imms)) = crate::a64::encode::encode_bitmask(v, false) {
-                            out.e(0xD53B4210);
-                            out.log_imm(false, 1, n, immr, imms, 31, 15); // orr w15, wzr, #imm
-                            out.logic_reg(false, 3, false, false, 0, 15, 15, x(rd)); // ands w rd, w15, w15
-                            out.e(0xD53B4211);
-                            out.lsr_imm(true, 16, 18, 28);
-                            out.bfi(true, 18, 17, 28, 2);
-                            out.e(0xD51B4211);
-                        } else {
-                            load_imm32(out, 15, v as u32);
-                            out.e(0xD53B4210);
-                            out.logic_reg(false, 3, false, false, 0, 15, 15, x(rd)); // ands w rd, w15, w15
-                            out.e(0xD53B4211);
-                            out.lsr_imm(true, 16, 18, 28);
-                            out.bfi(true, 18, 17, 28, 2);
-                            out.e(0xD51B4211);
-                        }
+                        load_imm32(out, 15, v as u32);
+                        emit_logic_flags(out, 15, x(rd), carry_const)?;
                     }
                 }
                 DpOp::Mvn => {
                     if !s {
                         if let Some((n, immr, imms)) = crate::a64::encode::encode_bitmask(!v & 0xFFFF_FFFF, false) {
                             out.log_imm(false, 1, n, immr, imms, 31, 16);
-                            out.logic_reg(false, 1, true, false, 0, 31, 16, x(rd));
+                            out.logic_reg(false, 1, true, false, 0, 31, 16, x(rd)); // orn
                         } else if v <= 0xFFFF {
-                            out.movn(false, 0, v as u16, x(rd)); // mvn imm = movn imm
+                            out.movn(false, 0, v as u16, x(rd));
                         } else {
                             load_imm32(out, 16, v as u32);
-                            out.logic_reg(false, 1, true, false, 0, 31, 16, x(rd)); // orn w rd, wzr, w16
+                            out.logic_reg(false, 1, true, false, 0, 31, 16, x(rd));
                         }
                     } else {
-                        // mvns imm: N,Z set; C,V preserved (shifter carry from imm rot)
-                        // rd = ~imm; then ands wzr, w rd, w rd for N/Z; restore C,V
-                        if let Some((n, immr, imms)) = crate::a64::encode::encode_bitmask(!v & 0xFFFF_FFFF, false) {
-                            out.log_imm(false, 1, n, immr, imms, 31, 16); // w16 = ~imm
-                            out.e(0xD53B4210);
-                            out.logic_reg(false, 1, true, false, 0, 31, 16, x(rd)); // orn w rd, wzr, w16
-                            out.logic_reg(false, 3, false, false, 0, x(rd), x(rd), 31); // ands wzr
-                            out.e(0xD53B4211);
-                            out.lsr_imm(true, 16, 18, 28);
-                            out.bfi(true, 18, 17, 28, 2);
-                            out.e(0xD51B4211);
-                        } else if v <= 0xFFFF {
-                            out.e(0xD53B4210);
-                            out.movn(false, 0, v as u16, x(rd)); // rd = ~imm
-                            out.logic_reg(false, 3, false, false, 0, x(rd), x(rd), 31); // ands wzr
-                            out.e(0xD53B4211);
-                            out.lsr_imm(true, 16, 18, 28);
-                            out.bfi(true, 18, 17, 28, 2);
-                            out.e(0xD51B4211);
-                        } else {
-                            load_imm32(out, 16, v as u32);
-                            out.e(0xD53B4210);
-                            out.logic_reg(false, 1, true, false, 0, 31, 16, x(rd)); // orn
-                            out.logic_reg(false, 3, false, false, 0, x(rd), x(rd), 31); // ands wzr
-                            out.e(0xD53B4211);
-                            out.lsr_imm(true, 16, 18, 28);
-                            out.bfi(true, 18, 17, 28, 2);
-                            out.e(0xD51B4211);
-                        }
+                        load_imm32(out, 16, v as u32);
+                        out.logic_reg(false, 1, true, false, 0, 31, 16, 15); // w15 = ~imm
+                        emit_logic_flags(out, 15, x(rd), carry_const)?;
                     }
                 }
                 DpOp::And | DpOp::Bic => {
                     let (opc, n) = if op == DpOp::And { (0u8, false) } else { (0, true) };
+                    let base = if rn == 15 { load_pc(out, 17, pc); 17 } else { x(rn) };
                     if op == DpOp::Bic {
                         load_imm32(out, 16, v as u32);
-                        out.logic_reg(false, opc, n, false, 0, x(rn), 16, x(rd));
+                        out.logic_reg(false, opc, n, false, 0, base, 16, x(rd));
                     } else if let Some((bn, immr, imms)) = crate::a64::encode::encode_bitmask(v, false) {
-                        out.log_imm(false, opc, bn, immr, imms, x(rn), x(rd));
+                        out.log_imm(false, opc, bn, immr, imms, base, x(rd));
                     } else {
                         load_imm32(out, 16, v as u32);
-                        out.logic_reg(false, opc, false, false, 0, x(rn), 16, x(rd));
+                        out.logic_reg(false, opc, false, false, 0, base, 16, x(rd));
                     }
-                    if s { fix_logic_flags_ands(out, x(rd)); }
+                    if s { emit_logic_flags(out, 0, x(rd), carry_const)?; }
                 }
                 DpOp::Orr | DpOp::Eor => {
-                    if op != DpOp::Eor {
-                        if let Some((bn, immr, imms)) = crate::a64::encode::encode_bitmask(v, false) {
-                            let opc = if op == DpOp::Orr { 1u8 } else { 1 };
-                            out.log_imm(false, opc, bn, immr, imms, x(rn), x(rd));
-                            if s && op == DpOp::Orr { fix_logic_flags_orr(out, x(rd)); }
-                            return Ok(());
-                        }
-                    }
+                    let base = if rn == 15 { load_pc(out, 17, pc); 17 } else { x(rn) };
+                    let opc = if op == DpOp::Orr { 1u8 } else { 2 };
                     load_imm32(out, 16, v as u32);
-                    let opc = match op { DpOp::Orr => 1u8, _ => 2 };
-                    let n = false;
-                    out.logic_reg(false, opc, n, false, 0, x(rn), 16, x(rd));
-                    if s { fix_logic_flags_orr(out, x(rd)); }
+                    out.logic_reg(false, opc, false, false, 0, base, 16, x(rd));
+                    if s { emit_logic_flags(out, 0, x(rd), carry_const)?; }
                 }
                 DpOp::Add | DpOp::Sub | DpOp::Rsb => {
                     let sub = op == DpOp::Sub;
                     let rsb = op == DpOp::Rsb;
+                    let base = if rn == 15 { load_pc(out, 17, pc); 17 } else { x(rn) };
                     if !rsb && v <= 0xFFF {
-                        out.addsub_imm(false, if sub { 1 } else { 0 }, s, v as u16, false, x(rn), x(rd));
+                        out.addsub_imm(false, if sub { 1 } else { 0 }, s, v as u16, false, base, x(rd));
                     } else if !rsb && v > 0xFFF && (v >> 12) <= 0xFFF && (v & 0xFFF) == 0 {
-                        out.addsub_imm(false, if sub { 1 } else { 0 }, s, (v >> 12) as u16, true, x(rn), x(rd));
+                        out.addsub_imm(false, if sub { 1 } else { 0 }, s, (v >> 12) as u16, true, base, x(rd));
                     } else {
                         load_imm32(out, 16, v as u32);
                         if rsb {
-                            out.addsub_reg(false, 1, s, 0, 0, 16, x(rn), x(rd));
+                            out.addsub_reg(false, 1, s, 0, 0, 16, base, x(rd));
                         } else {
-                            out.addsub_reg(false, if sub { 1 } else { 0 }, s, 0, 0, x(rn), 16, x(rd));
+                            out.addsub_reg(false, if sub { 1 } else { 0 }, s, 0, 0, base, 16, x(rd));
                         }
                     }
                 }
                 DpOp::Adc | DpOp::Sbc | DpOp::Rsc => {
+                    let base = if rn == 15 { load_pc(out, 17, pc); 17 } else { x(rn) };
                     load_imm32(out, 16, v as u32);
-                    translate_adc_sbc(op, s, rn, 16, rd, out)?;
+                    translate_adc_sbc(op, s, base, 16, rd, out)?;
                 }
-                _ => return Err(TranslateErr("cmp/tst imm via dp".to_string())),
+                _ => return Err(TranslateErr("test imm".to_string())),
             }
         }
         Operand::RegShift(rm, shift, amount) => {
-            let sh: u8 = match shift { Shift::Lsl => 0, Shift::Lsr => 1, Shift::Asr => 2, Shift::Ror => 3 };
             match op {
                 DpOp::Mov => {
-                    // mov reg, reg, shift (A32: rd = shifted rm)
-                    let bit = match shift {
-                        Shift::Lsl => 32u32.wrapping_sub(amount as u32) % 32,
-                        _ => (amount as u32).wrapping_sub(1) % 32,
+                    let bit: u8 = match shift {
+                        Shift::Lsl => (32u32.wrapping_sub(amount as u32) % 32) as u8,
+                        _ => ((amount as u32).wrapping_sub(1) % 32) as u8,
                     };
+                    let src: XR = if rm == 15 { load_pc(out, 17, pc); 17 } else { x(rm) };
                     if s {
-                        // movs: N,Z set; C = shifter carry; V preserved — exact mrs/msr sequence
                         if amount == 0 && shift == Shift::Lsl {
-                            out.e(0xD53B4210);  // mrs x16, nzcv
-                            out.logic_reg(false, 3, false, false, 0, x(rm), x(rm), x(rd)); // ands w rd, w rm, w rm
-                            out.e(0xD53B4211);  // mrs x17, nzcv
-                            out.lsr_imm(true, 16, 18, 28); // x18[1:0] = {C_old, V_old}
-                            out.bfi(true, 18, 17, 28, 2);  // restore C,V
-                            out.e(0xD51B4211);  // msr nzcv, x17
+                            out.e(MRS_X16);
+                            out.logic_reg(false, 3, false, false, 0, src, src, x(rd)); // ands w rd
+                            out.e(MRS_X17);
+                            out.lsr_imm(true, 16, 18, 28);
+                            out.bfi(true, 18, 17, 28, 2);
+                            out.e(MSR_X17);
                         } else if amount != 0 && amount < 32 {
-                            emit_shift(out, x(rm), x(rd), shift, amount as u8);
-                            out.e(0xD53B4210);
-                            out.logic_reg(false, 3, false, false, 0, x(rd), x(rd), 31); // ands wzr, w rd, w rd
-                            out.e(0xD53B4211);
-                            out.ubfx(false, x(rm), 18, bit as u8, 1); // w18[0] = shifter carry
+                            emit_shift(out, src, x(rd), shift, amount as u8);
+                            out.e(MRS_X16);
+                            out.logic_reg(false, 3, false, false, 0, x(rd), x(rd), 31); // ands wzr
+                            out.e(MRS_X17);
+                            out.ubfx(false, src, 18, bit, 1);
                             out.bfi(true, 18, 17, 29, 1);
-                            out.ubfx(true, 16, 19, 28, 1); // w19[0] = old V
+                            out.ubfx(true, 16, 19, 28, 1);
                             out.bfi(true, 19, 17, 28, 1);
-                            out.e(0xD51B4211);
+                            out.e(MSR_X17);
                         } else {
                             return Err(TranslateErr("movs-shift unsupported".to_string()));
                         }
                     } else if amount == 0 && shift == Shift::Lsl {
-                        out.logic_reg(false, 1, false, false, 0, 31, x(rm), x(rd));
-                    } else if shift == Shift::Lsl { out.lsl_imm(false, x(rm), x(rd), amount as u8); }
-                    else if shift == Shift::Lsr { out.lsr_imm(false, x(rm), x(rd), amount as u8); }
-                    else if shift == Shift::Asr { out.asr_imm(false, x(rm), x(rd), amount as u8); }
-                    else { out.ror_imm(false, x(rm), x(rd), amount as u8); }
+                        out.logic_reg(false, 1, false, false, 0, 31, src, x(rd));
+                    } else {
+                        emit_shift(out, src, x(rd), shift, amount as u8);
+                    }
                 }
                 DpOp::Mvn => {
+                    let bit: u8 = match shift {
+                        Shift::Lsl => (32u32.wrapping_sub(amount as u32) % 32) as u8,
+                        _ => ((amount as u32).wrapping_sub(1) % 32) as u8,
+                    };
+                    let src: XR = if rm == 15 { load_pc(out, 17, pc); 17 } else { x(rm) };
                     if !s {
                         if amount == 0 && shift == Shift::Lsl {
-                            out.logic_reg(false, 1, true, false, 0, 31, x(rm), x(rd)); // orn w rd, wzr, rm
+                            out.logic_reg(false, 1, true, false, 0, 31, src, x(rd)); // orn
                         } else {
-                            emit_shift(out, x(rm), 15, shift, amount as u8);
-                            out.logic_reg(false, 1, true, false, 0, 31, 15, x(rd)); // orn
+                            emit_shift(out, src, 15, shift, amount as u8);
+                            out.logic_reg(false, 1, true, false, 0, 31, 15, x(rd));
                         }
                     } else if amount == 0 && shift == Shift::Lsl {
-                        // mvns: N,Z set; C,V preserved
-                        out.e(0xD53B4210);
-                        out.logic_reg(false, 1, true, false, 0, 31, x(rm), x(rd)); // orns w rd, wzr, rm
-                        out.e(0xD53B4211);
+                        out.e(MRS_X16);
+                        out.logic_reg(false, 1, true, false, 0, 31, src, x(rd)); // orns
+                        out.e(MRS_X17);
                         out.lsr_imm(true, 16, 18, 28);
                         out.bfi(true, 18, 17, 28, 2);
-                        out.e(0xD51B4211);
+                        out.e(MSR_X17);
                     } else if amount != 0 && amount < 32 {
-                        let bit = match shift {
-                            Shift::Lsl => 32u32.wrapping_sub(amount as u32) % 32,
-                            _ => (amount as u32).wrapping_sub(1) % 32,
-                        };
-                        emit_shift(out, x(rm), 15, shift, amount as u8);
-                        out.e(0xD53B4210);
+                        emit_shift(out, src, 15, shift, amount as u8);
+                        out.e(MRS_X16);
                         out.logic_reg(false, 1, true, false, 0, 31, 15, x(rd)); // orns
-                        out.e(0xD53B4211);
-                        out.ubfx(false, x(rm), 18, bit as u8, 1);
+                        out.e(MRS_X17);
+                        out.ubfx(false, src, 18, bit, 1);
                         out.bfi(true, 18, 17, 29, 1);
                         out.ubfx(true, 16, 19, 28, 1);
                         out.bfi(true, 19, 17, 28, 1);
-                        out.e(0xD51B4211);
+                        out.e(MSR_X17);
                     } else {
                         return Err(TranslateErr("mvns shift".to_string()));
                     }
                 }
                 DpOp::And | DpOp::Bic | DpOp::Orr | DpOp::Eor => {
-                    let opc = match op { DpOp::And => 0u8, DpOp::Bic => 0, DpOp::Orr => 1, _ => 2 };
+                    let opc = match op { DpOp::And | DpOp::Bic => 0u8, DpOp::Orr => 1, _ => 2 };
                     let n = matches!(op, DpOp::Bic);
+                    let src: XR = if rm == 15 { load_pc(out, 17, pc); 17 } else { x(rm) };
+                    let base: XR = if rn == 15 { load_pc(out, 19, pc); 19 } else { x(rn) };
                     if !s {
                         if amount == 0 && shift == Shift::Lsl {
-                            out.logic_reg(false, opc, n, false, 0, x(rn), x(rm), x(rd));
+                            out.logic_reg(false, opc, n, false, 0, base, src, x(rd));
                         } else {
-                            emit_shift(out, x(rm), 16, shift, amount as u8);
-                            out.logic_reg(false, opc, n, false, 0, x(rn), 16, x(rd));
+                            emit_shift(out, src, 15, shift, amount as u8);
+                            out.logic_reg(false, opc, n, false, 0, base, 15, x(rd));
                         }
                     } else if amount == 0 && shift == Shift::Lsl {
-                        // A32: N,Z set; C,V preserved. Exact:
-                        out.e(0xD53B4210);            // mrs x16, nzcv
+                        out.e(MRS_X16);
                         if opc == 0 {
-                            out.logic_reg(false, 3, n, false, 0, x(rn), x(rm), x(rd)); // ands w rd, w rn, w rm
+                            out.logic_reg(false, 3, n, false, 0, base, src, x(rd)); // ands w rd
                         } else {
-                            // ORR/EOR: compute result without flags, then N/Z via ands wzr, w rd, w rd
-                            out.logic_reg(false, opc, n, false, 0, x(rn), x(rm), x(rd)); // orr/eor w rd, ...
-                            out.logic_reg(false, 3, false, false, 0, x(rd), x(rd), 31); // ands wzr, w rd, w rd
+                            out.logic_reg(false, opc, n, false, 0, base, src, x(rd));
+                            out.logic_reg(false, 3, false, false, 0, x(rd), x(rd), 31); // ands wzr
                         }
-                        out.e(0xD53B4211);            // mrs x17, nzcv
+                        out.e(MRS_X17);
                         out.lsr_imm(true, 16, 18, 28);
-                        out.bfi(true, 18, 17, 28, 2); // restore C+V
-                        out.e(0xD51B4211);            // msr nzcv, x17
+                        out.bfi(true, 18, 17, 28, 2);
+                        out.e(MSR_X17);
                     } else if amount != 0 && amount < 32 {
-                        // shifted: N,Z from result; C = shifter carry; V preserved
-                        let bit = match shift {
-                            Shift::Lsl => 32u32.wrapping_sub(amount as u32) % 32,
-                            _ => (amount as u32).wrapping_sub(1) % 32,
+                        let bit: u8 = match shift {
+                            Shift::Lsl => (32u32.wrapping_sub(amount as u32) % 32) as u8,
+                            _ => ((amount as u32).wrapping_sub(1) % 32) as u8,
                         };
-                        emit_shift(out, x(rm), 15, shift, amount as u8);
-                        out.e(0xD53B4210);            // mrs x16, nzcv
+                        emit_shift(out, src, 15, shift, amount as u8);
+                        out.e(MRS_X16);
                         if opc == 0 {
-                            out.logic_reg(false, 3, n, false, 0, x(rn), 15, x(rd)); // ands w rd, w rn, w15
+                            out.logic_reg(false, 3, n, false, 0, base, 15, x(rd)); // ands
                         } else {
-                            out.logic_reg(false, opc, n, false, 0, x(rn), 15, x(rd)); // orr/eor
-                            out.logic_reg(false, 3, false, false, 0, x(rd), x(rd), 31); // ands wzr, w rd, w rd
+                            out.logic_reg(false, opc, n, false, 0, base, 15, x(rd));
+                            out.logic_reg(false, 3, false, false, 0, x(rd), x(rd), 31);
                         }
-                        out.e(0xD53B4211);            // mrs x17, nzcv
-                        out.ubfx(false, x(rm), 18, bit as u8, 1); // w18[0] = shifter carry
-                        out.bfi(true, 18, 17, 29, 1);  // C = carry
-                        out.ubfx(true, 16, 19, 28, 1); // w19[0] = old V (V@bit28)
-                        out.bfi(true, 19, 17, 28, 1);  // V restored
-                        out.e(0xD51B4211);            // msr nzcv, x17
+                        out.e(MRS_X17);
+                        out.ubfx(false, src, 18, bit, 1);
+                        out.bfi(true, 18, 17, 29, 1);
+                        out.ubfx(true, 16, 19, 28, 1);
+                        out.bfi(true, 19, 17, 28, 1);
+                        out.e(MSR_X17);
                     } else {
                         return Err(TranslateErr("shift>=32 logic-S".to_string()));
                     }
                 }
                 DpOp::Add | DpOp::Sub | DpOp::Rsb => {
-                    let sh = sh;
                     let is_sub = op != DpOp::Add;
+                    let src: XR = if rm == 15 { load_pc(out, 17, pc); 17 } else { x(rm) };
+                    let base: XR = if rn == 15 { load_pc(out, 16, pc); 16 } else { x(rn) };
                     if op == DpOp::Rsb {
-                        emit_shift(out, x(rm), 16, shift, amount as u8);
-                        out.addsub_reg(false, 1, s, 0, 0, 16, x(rn), x(rd));
-                    } else if amount == 0 && sh == 0 {
-                        out.addsub_reg(false, if is_sub { 1 } else { 0 }, s, 0, 0, x(rn), x(rm), x(rd));
+                        emit_shift(out, src, 16, shift, amount as u8);
+                        out.addsub_reg(false, 1, s, 0, 0, 16, base, x(rd));
+                    } else if amount == 0 && shift == Shift::Lsl {
+                        out.addsub_reg(false, if is_sub { 1 } else { 0 }, s, 0, 0, base, src, x(rd));
                     } else {
-                        emit_shift(out, x(rm), 16, shift, amount as u8);
-                        out.addsub_reg(false, if is_sub { 1 } else { 0 }, s, 0, 0, x(rn), 16, x(rd));
+                        emit_shift(out, src, 16, shift, amount as u8);
+                        out.addsub_reg(false, if is_sub { 1 } else { 0 }, s, 0, 0, base, 16, x(rd));
                     }
                 }
                 DpOp::Adc | DpOp::Sbc | DpOp::Rsc => {
-                    emit_shift(out, x(rm), 16, shift, amount as u8);
-                    translate_adc_sbc(op, s, rn, 16, rd, out)?;
+                    let src: XR = if rm == 15 { load_pc(out, 17, pc); 17 } else { x(rm) };
+                    let base: XR = if rn == 15 { load_pc(out, 16, pc); 16 } else { x(rn) };
+                    if amount == 0 && shift == Shift::Lsl {
+                        translate_adc_sbc(op, s, base, src, rd, out)?;
+                    } else {
+                        emit_shift(out, src, 16, shift, amount as u8);
+                        translate_adc_sbc(op, s, base, 16, rd, out)?;
+                    }
                 }
-                _ => return Err(TranslateErr("tst/teq/cmp/cmn reg".to_string())),
+                _ => return Err(TranslateErr("test reg".to_string())),
             }
         }
     }
     Ok(())
 }
 
+/// TST/TEQ where C is preserved (rot 0 / no shift): flags N,Z from op; C,V kept.
+fn emit_test_val_keepc(out: &mut A64, base: XR, val: XR, teq: bool) -> Result<(), TranslateErr> {
+    if teq {
+        // the eor temp must avoid x16/x17 (mrs targets) and the base/src regs
+        let t: XR = if base != 19 { 19 } else if val != 17 { 17 } else { 15 };
+        out.logic_reg(false, 2, false, false, 0, base, val, t); // eor wt, base, val
+        out.e(MRS_X16);
+        out.logic_reg(false, 3, false, false, 0, t, t, 31);      // ands wzr, wt, wt
+    } else {
+        out.e(MRS_X16);
+        out.logic_reg(false, 3, false, false, 0, base, val, 31); // ands wzr, base, val
+    }
+    out.e(MRS_X17);
+    // C preserved: copy bit 29 from x16; V preserved: copy bit 28 from x16.
+    out.lsr_imm(true, 16, 18, 28);
+    out.logic_bitmask(false, 0, 0x3, 18, 18)?; // keep {C,V} at bits 1:0
+    out.bfi(true, 18, 17, 28, 2);
+    out.e(MSR_X17);
+    Ok(())
+}
+
+/// TST/TEQ with the new C bit in w(car) (bit 0): N,Z from op; C = car; V preserved.
+fn emit_test_inner(out: &mut A64, base: XR, val: XR, teq: bool, car: XR) {
+    if teq {
+        // the eor temp must avoid x16/x17 (mrs targets) and the base/src regs
+        let t: XR = if base != 19 { 19 } else if val != 17 { 17 } else { 15 };
+        out.logic_reg(false, 2, false, false, 0, base, val, t); // eor wt, base, val
+        out.e(MRS_X16);
+        out.logic_reg(false, 3, false, false, 0, t, t, 31);      // ands wzr, wt, wt
+    } else {
+        out.e(MRS_X16);
+        out.logic_reg(false, 3, false, false, 0, base, val, 31); // ands wzr, base, val
+    }
+    out.e(MRS_X17);
+    out.bfi(true, car, 17, 29, 1);  // C = car bit 0
+    out.ubfx(true, 16, 18, 28, 1); // old V
+    out.bfi(true, 18, 17, 28, 1);  // restore V
+    out.e(MSR_X17);
+}
+
+/// Logic-flags fixup: N,Z from w(val) (result also written to w(dst) if val≠0);
+/// C = carry const (or preserved); V preserved.
+fn emit_logic_flags(out: &mut A64, val: XR, dst: XR, carry_const: Option<u32>) -> Result<(), TranslateErr> {
+    out.e(MRS_X16);
+    if val != 0 {
+        out.logic_reg(false, 3, false, false, 0, val, val, dst); // ands w dst, w val, w val
+    } else {
+        out.logic_reg(false, 3, false, false, 0, dst, dst, 31); // ands wzr, w dst, w dst
+    }
+    out.e(MRS_X17);
+    match carry_const {
+        Some(c) => {
+            out.movz(false, 0, c as u16, 18);
+            out.bfi(true, 18, 17, 29, 1);
+        }
+        None => {
+            out.lsr_imm(true, 16, 18, 29);
+            out.logic_bitmask(false, 0, 0x1, 18, 18)?; // w18 = oldC
+            out.bfi(true, 18, 17, 29, 1);
+        }
+    }
+    out.ubfx(true, 16, 19, 28, 1); // old V
+    out.bfi(true, 19, 17, 28, 1);  // restore V
+    out.e(MSR_X17);
+    Ok(())
+}
+
+// ==================== register-specified shift ====================
+//
+// A32: amount = Rs[7:0]. Semantics per type (n = amount):
+//   LSL: n==0 → x; 1..32 → x<<n (n=32 → 0); >32 → 0; carry = x[32-n] (n=32 → x[0]; >32 → 0)
+//   LSR: n==0 → x; 1..32 → x>>u n; >32 → 0;  carry = x[n-1] (n=32 → x[31]; >32 → 0)
+//   ASR: n==0 → x; 1..32 → x>>a n; >32 → sign; carry = x[min(n,32)-1] (x[31] for n≥32)
+//   ROR: n==0 → x; else → ror(x, n mod 32); carry = x[n'−1 mod 32] (n'≠0), x[31] if n'==0
+
+fn translate_regshift(op: DpOp, s: bool, rn: R, rd: R, rm: R, shift: Shift, rs: R, out: &mut A64) -> Result<(), TranslateErr> {
+    // w19 = amount = w(rs) & 0xFF (kept; survives the mrs x16/x17 dance)
+    out.logic_bitmask(false, 0, 0xFF, x(rs), 19)?;
+    // value → w18; carry bit → w15 (bit 0)
+    match shift {
+        Shift::Lsl => {
+            out.addsub_imm(false, 1, true, 32, false, 19, 31); // subs wzr, w19, #32
+            out.csel(false, 0, 31, x(rm), Cond::Cs, 18);        // csel w18, wzr, rm, hs
+            out.logic_bitmask(false, 0, 0x1F, 19, 17)?;          // w17 = n & 31
+            out.dp2(false, 8, 18, 17, 18);                       // lslv w18, w18, w17
+            out.addsub_reg(false, 1, false, 0, 0, 31, 19, 15);  // neg w15, w19
+            out.logic_bitmask(false, 0, 0x1F, 15, 15)?;         // w15 = (32-n)&31
+            out.dp2(false, 9, x(rm), 15, 15);                    // lsrv w15, rm, w15
+            out.addsub_imm(false, 1, true, 33, false, 19, 31);   // subs wzr, w19, #33
+            out.csel(false, 0, 31, 15, Cond::Cs, 15);            // n>=33 → carry 0
+        }
+        Shift::Lsr => {
+            out.addsub_imm(false, 1, true, 32, false, 19, 31);
+            out.csel(false, 0, 31, x(rm), Cond::Cs, 18);
+            out.logic_bitmask(false, 0, 0x1F, 19, 17)?;
+            out.dp2(false, 9, 18, 17, 18);                       // lsrv
+            out.addsub_imm(false, 1, false, 1, false, 19, 15);   // sub w15, w19, #1
+            out.logic_bitmask(false, 0, 0x1F, 15, 15)?;
+            out.dp2(false, 9, x(rm), 15, 15);                    // carry = rm[n-1]
+            out.addsub_imm(false, 1, true, 33, false, 19, 31);
+            out.csel(false, 0, 31, 15, Cond::Cs, 15);            // n>=33 → 0
+        }
+        Shift::Asr => {
+            out.logic_bitmask(false, 0, 0x1F, 19, 17)?;          // w17 = n & 31
+            out.dp2(false, 10, x(rm), 17, 18);                   // asrv w18, rm, w17
+            out.asr_imm(false, x(rm), 16, 31);                    // w16 = signfill
+            out.addsub_imm(false, 1, true, 32, false, 19, 31);
+            out.csel(false, 0, 16, 18, Cond::Cs, 18);            // value = hs ? signfill : asrv
+            out.addsub_imm(false, 1, false, 1, false, 19, 15);   // w15 = n-1
+            out.logic_bitmask(false, 0, 0x1F, 15, 15)?;          // & 31
+            out.addsub_imm(false, 1, true, 33, false, 19, 31);   // hs = n >= 33
+            out.movz(false, 0, 31, 16);
+            out.csel(false, 0, 16, 15, Cond::Cs, 15);            // idx = n>=33 ? 31 : (n-1)&31
+            out.dp2(false, 9, x(rm), 15, 15);                    // lsrv → carry
+        }
+        Shift::Ror => {
+            out.logic_bitmask(false, 0, 0x1F, 19, 17)?;          // w17 = n & 31
+            out.dp2(false, 11, x(rm), 17, 18);                   // rorv w18, rm, w17
+            out.addsub_imm(false, 1, false, 1, false, 17, 15);   // sub w15, w17, #1
+            out.logic_bitmask(false, 0, 0x1F, 15, 15)?;
+            out.dp2(false, 9, x(rm), 15, 15);                    // carry
+        }
+    }
+    regshift_finish(out, op, s, rn, rd, 18, 15, 19)
+}
+
 #[allow(clippy::too_many_arguments)]
-fn translate_dp_regshift2(op: DpOp, s: bool, rn: R, rd: R, rm: R, shift: Shift, amount_reg: XR, shifted_val: XR, out: &mut A64) -> Result<(), TranslateErr> {
-    let _ = (rm, shift, amount_reg);
+fn regshift_finish(out: &mut A64, op: DpOp, s: bool, rn: R, rd: R, val: XR, car: XR, amount: XR) -> Result<(), TranslateErr> {
     match op {
-        DpOp::Add | DpOp::Sub => {
-            out.addsub_reg(false, if op == DpOp::Sub { 1 } else { 0 }, s, 0, 0, x(rn), shifted_val, x(rd));
+        DpOp::Add | DpOp::Sub | DpOp::Rsb => {
+            if op == DpOp::Rsb {
+                out.addsub_reg(false, 1, s, 0, 0, val, x(rn), x(rd));
+            } else {
+                out.addsub_reg(false, if op == DpOp::Sub { 1 } else { 0 }, s, 0, 0, x(rn), val, x(rd));
+            }
         }
-        DpOp::And | DpOp::Orr | DpOp::Eor | DpOp::Bic  | DpOp::Mov | DpOp::Mvn => {
-            let opc = match op { DpOp::And | DpOp::Bic => 0u8, DpOp::Orr  => 1, DpOp::Eor => 2, _ => 3 };
-            let n = matches!(op, DpOp::Bic  | DpOp::Mvn);
-            out.logic_reg(false, opc, n, s, 0, x(rn), shifted_val, x(rd));
+        DpOp::Cmp | DpOp::Cmn => {
+            out.addsub_reg(false, if op == DpOp::Cmp { 1 } else { 0 }, true, 0, 0, x(rn), val, 31);
         }
-        _ => return Err(TranslateErr("regshift op".to_string())),
+        DpOp::And | DpOp::Bic | DpOp::Orr | DpOp::Eor | DpOp::Mov | DpOp::Mvn => {
+            let opc = match op { DpOp::And | DpOp::Bic => 0u8, DpOp::Orr | DpOp::Mov => 1, _ => 2 };
+            let n = matches!(op, DpOp::Bic | DpOp::Mvn);
+            let (a, b) = if matches!(op, DpOp::Mov | DpOp::Mvn) { (31u8, val) } else { (x(rn), val) };
+            if !s {
+                out.logic_reg(false, opc, n, false, 0, a, b, x(rd));
+            } else {
+                // N,Z from result; C = (n==0) ? oldC : carry; V preserved
+                out.e(MRS_X16);
+                out.logic_reg(false, opc, n, false, 0, a, b, x(rd));
+                out.logic_reg(false, 3, false, false, 0, x(rd), x(rd), 31); // ands wzr
+                out.e(MRS_X17);
+                out.lsr_imm(true, 16, 18, 29);
+                out.logic_bitmask(false, 0, 0x1, 18, 18)?;       // w18 = oldC
+                out.addsub_imm(false, 1, true, 0, false, amount, 31); // cmp amount, #0
+                out.csel(false, 0, 18, car, Cond::Eq, 18);       // eq → oldC else carry
+                out.bfi(true, 18, 17, 29, 1);
+                out.ubfx(true, 16, 19, 28, 1);
+                out.bfi(true, 19, 17, 28, 1);
+                out.e(MSR_X17);
+            }
+        }
+        DpOp::Adc | DpOp::Sbc | DpOp::Rsc => {
+            translate_adc_sbc(op, s, x(rn), val, rd, out)?;
+        }
+        DpOp::Tst | DpOp::Teq => {
+            emit_test_inner(out, x(rn), val, op == DpOp::Teq, car);
+        }
     }
     Ok(())
 }
 
-#[allow(dead_code)]
-fn translate_dp_regshift_old(op: DpOp, s: bool, rn: R, rd: R, rm: R, shift: Shift, rs: XR, out: &mut A64) -> Result<(), TranslateErr> {
-    // shift amount is in w16 (already masked to 255)
+fn translate_adc_sbc(op: DpOp, s: bool, rn: XR, rm: XR, rd: R, out: &mut A64) -> Result<(), TranslateErr> {
     match op {
-        DpOp::Add | DpOp::Sub => {
-            // x17 = shifted value via lslv/lsrv/asrv/rorv (A64 uses amount mod 32 for w regs — A32 reg-shift also uses mod 32 except the byte semantics match)
-            let opd = match shift { Shift::Lsl => 8u8, Shift::Lsr => 9, Shift::Asr => 10, _ => 11 };
-            out.dp2(false, opd, x(rm), 16, 17);
-            out.addsub_reg(false, if op == DpOp::Sub { 1 } else { 0 }, s, 0, 0, x(rn), 17, x(rd));
-        }
-        DpOp::And | DpOp::Orr | DpOp::Eor | DpOp::Bic  => {
-            let opd = match shift { Shift::Lsl => 8u8, Shift::Lsr => 9, Shift::Asr => 10, _ => 11 };
-            out.dp2(false, opd, x(rm), 16, 17);
-            let opc = match op { DpOp::And | DpOp::Bic => 0u8, DpOp::Orr  => 1, _ => 2 };
-            let n = matches!(op, DpOp::Bic);
-            out.logic_reg(false, opc, n, false, 0, x(rn), 17, x(rd));
-            if s { /* shifter-carry flags */ }
-        }
-        _ => return Err(TranslateErr("regshift op".to_string())),
-    }
-    Ok(())
-}
-
-fn translate_adc_sbc(op: DpOp, s: bool, rn: R, rm: XR, rd: R, out: &mut A64) -> Result<(), TranslateErr> {
-    let (o, ss) = match op {
-        DpOp::Adc => (0u8, s),
-        DpOp::Sbc => (1, s),
+        DpOp::Adc => out.adc(false, 0, s, rn, rm, x(rd)),
+        DpOp::Sbc => out.adc(false, 1, s, rn, rm, x(rd)),
         DpOp::Rsc => {
-            // Rsc rd, rn, rm: = rm - rn - !C
-            out.adc(false, 1, s, rm, x(rn), x(rd));
-            return Ok(());
+            // Rsc rd, rn, rm: = rm - rn - !C = rm + ~rn + C
+            out.adc(false, 1, s, rm, rn, x(rd));
         }
-        _ => (0, s),
-    };
-    out.adc(false, o, ss, x(rn), rm, x(rd));
+        _ => {}
+    }
     Ok(())
 }
 
@@ -689,22 +1069,12 @@ fn emit_shift(out: &mut A64, src: XR, dst: XR, shift: Shift, amount: u8) {
     }
 }
 
-/// A32 logic-flags for ORR/AND/EOR-with-S: N,Z from result; C = shifter carry; V unchanged.
-fn fix_logic_flags_orr(_out: &mut A64, _rd: XR) { /* handled by verifier-level folding */ }
-fn fix_logic_flags_ands(_out: &mut A64, _rd: XR) { }
-fn emit_a32_shifter_carry(_out: &mut A64, _rm: XR, _scratch: XR, _shift: Shift, _amount: u8) { }
-
 /// Emit `dst = imm` (32-bit) using MOVZ/MOVK pairs.
 pub fn load_imm32(out: &mut A64, dst: XR, v: u32) {
     let lo = (v & 0xFFFF) as u16;
     let hi = (v >> 16) as u16;
     if hi == 0 {
         out.movz(false, 0, lo, dst);
-    } else if hi == 0xFFFF && lo != 0xFFFF && (v as i32) < 0 && (v >> 16) == 0xFFFF && (v & 0xFFFF) as i16 as i32 == (v as i16 as i32) {
-        // movn if !lo fits
-        out.movn(false, 0, (!lo) & 0xFFFF, dst);
-    } else if (v as i32) < 0 && lo == 0 && hi == 0xFFFF {
-        out.movn(false, 0, 0, dst);
     } else {
         out.movz(false, 0, lo, dst);
         out.movk(false, 1, hi, dst);
@@ -718,20 +1088,264 @@ pub fn load_imm64(out: &mut A64, dst: XR, v: u64) {
     }
 }
 
-fn emit_offset(out: &mut A64, dst: XR, base: XR, rm: Option<R>, shift: Shift, imm: i32, add: bool, scale: u8) {
-    if let Some(rm) = rm {
-        out.lsl_imm(true, x(rm), 17, scale);
-        out.addsub_ext(true, if add { 0 } else { 1 }, false, 17, 3, scale, base, dst);
+// ==================== parallel (DSP) translation ====================
+//
+// SWAR lane identities (verified by exhaustive numeric case analysis):
+//   add lanes:  r = ((a & H) + (b & H)) ⊕ ((a ⊕ b) & S)          [core = (a&H)+(b&H)]
+//   sub lanes:  r = ((a | S) - (b & ~S)) ⊕ S ⊕ ((a ⊕ b) & S)
+//   carry out of lane add:  maj = ((a & b) | ((a ⊕ b) & core)) & S
+//   17th bit (exact sum sign): c17 = (maj ⊕ (a ⊕ b)) & S
+//   signed lt (a <s b per lane): (a & ~b & S) | (~(a ⊕ b) & r & S)
+//   unsigned borrow (a<u b): maj(b, ~a, c_lo(b + ~a)) & S
+//   halving add:  ((r >>u 1) & ~S) | (c17 or carry)
+//   halving sub:  ((r >>u 1) & ~S) | (lt or borrow)
+//   signed sat value per lane: H + (signs >> (L-1)) — (max+sign → min when sign=1)
+
+fn translate_parallel(kind: ParKind, shape: ParShape, rd: R, rn: R, rm: R, out: &mut A64) -> Result<(), TranslateErr> {
+    use ParKind::*;
+    use ParShape::*;
+    let lane16 = matches!(shape, Add16 | Addsubx | Subaddx | Sub16);
+    let (s_mask, h_mask): (u64, u64) = if lane16 { (0x80008000, 0x7FFF7FFF) } else { (0x80808080, 0x7F7F7F7F) };
+    let s_shift: u8 = if lane16 { 15 } else { 7 };
+    let is_sub = matches!(shape, Sub16 | Sub8);
+    let crossed = matches!(shape, Addsubx | Subaddx);
+
+    // w15 = a; w16 = b (ror16 for crossed shapes)
+    out.logic_reg(false, 1, false, false, 0, 31, x(rn), 15); // mov w15, a
+    if crossed {
+        out.ror_imm(false, x(rm), 16, 16);
     } else {
-        let v = (imm as i64) << scale;
-        if v >= 0 && v <= 4095 {
-            out.add_imm(true, base, dst, v as u16);
-        } else if v < 0 && -v <= 4095 {
-            out.sub_imm(true, base, dst, (-v) as u16);
-        } else {
-            load_imm64(out, 17, v.unsigned_abs());
-            if add { out.addsub_reg(true, 0, false, 0, 0, base, 17, dst); }
-            else { out.addsub_reg(true, 1, false, 0, 0, base, 17, dst); }
+        out.logic_reg(false, 1, false, false, 0, 31, x(rm), 16); // mov w16, b
+    }
+
+    // lane result → w17; core saved → w19 for kinds needing maj
+    let need_core = matches!(kind, S | U | Uq | Sh | Uh);
+    if !is_sub {
+        out.logic_bitmask(false, 0, h_mask, 15, 17)?; // w17 = a & H
+        out.logic_bitmask(false, 0, h_mask, 16, 18)?; // w18 = b & H
+        out.addsub_reg(false, 0, false, 0, 0, 17, 18, 17); // w17 = core
+        if need_core {
+            out.logic_reg(false, 1, false, false, 0, 31, 17, 19); // w19 = core
+        }
+        out.logic_reg(false, 2, false, false, 0, 15, 16, 18); // w18 = a ^ b
+        out.logic_bitmask(false, 0, s_mask, 18, 18)?;        // w18 = (a^b) & S
+        out.logic_reg(false, 2, false, false, 0, 17, 18, 17); // w17 = r
+    } else {
+        out.logic_bitmask(false, 1, s_mask, 15, 17)?;        // w17 = a | S
+        out.logic_bitmask(false, 0, h_mask, 16, 18)?;         // w18 = b & ~S
+        out.addsub_reg(false, 1, false, 0, 0, 17, 18, 17);    // w17 = core
+        out.logic_reg(false, 2, false, false, 0, 15, 16, 18); // w18 = a ^ b
+        out.logic_bitmask(false, 0, s_mask, 18, 18)?;        // w18 = (a^b) & S
+        out.logic_reg(false, 2, false, false, 0, 17, 18, 17); // ⊕ signxor
+        out.logic_bitmask(false, 2, s_mask, 17, 17)?;        // w17 = r (EOR imm)
+    }
+
+    // w15 = a, w16 = b, w17 = r (lane result), w19 = core (ADD kinds), w18 free
+    match kind {
+        S | U => {
+            // GE markers (1 = GE set) → w15
+            if !is_sub {
+                // carry = ((a&b) | ((a^b)&core)) & S ; c17 = (carry ⊕ (a^b)) & S
+                out.logic_reg(false, 2, false, false, 0, 15, 16, 18);  // w18 = a^b
+                out.logic_reg(false, 0, false, false, 0, 18, 19, 19);  // w19 = (a^b)&core
+                out.logic_reg(false, 0, false, false, 0, 15, 16, 15);  // w15 = a&b (a dead)
+                out.logic_reg(false, 1, false, false, 0, 15, 19, 15);  // maj raw
+                out.logic_bitmask(false, 0, s_mask, 15, 15)?;          // carry markers
+                if kind == S {
+                    out.logic_reg(false, 2, false, false, 0, 15, 18, 15); // ⊕ (a^b)
+                    out.logic_bitmask(false, 0, s_mask, 15, 15)?;      // c17
+                    out.logic_bitmask(false, 2, s_mask, 15, 15)?;      // invert → GE
+                }
+            } else if kind == S {
+                // GE = ¬lt ; lt = (a & ~b & S) | (~(a^b) & r & S)
+                out.logic_reg(false, 0, true, false, 0, 15, 16, 18);   // w18 = a & ~b
+                out.logic_reg(false, 2, false, false, 0, 15, 16, 19);  // w19 = a^b
+                out.logic_reg(false, 0, true, false, 0, 17, 19, 19);   // w19 = r & ~(a^b)
+                out.logic_reg(false, 1, false, false, 0, 18, 19, 15);  // w15 = lt raw
+                out.logic_bitmask(false, 0, s_mask, 15, 15)?;         // lt markers
+                out.logic_bitmask(false, 2, s_mask, 15, 15)?;         // invert → GE
+            } else {
+                // GE = ¬borrow ; borrow = maj(b, ~a, c_lo(b + ~a))
+                out.logic_reg(false, 1, true, false, 0, 31, 15, 19);  // w19 = ~a (orn)
+                out.logic_bitmask(false, 0, h_mask, 19, 18)?;          // w18 = ~a & H
+                out.logic_bitmask(false, 0, h_mask, 16, 15)?;          // w15 = b & H
+                out.addsub_reg(false, 0, false, 0, 0, 15, 18, 15);    // w15 = t
+                out.logic_reg(false, 2, false, false, 0, 16, 19, 18); // w18 = b ^ ~a
+                out.logic_reg(false, 0, false, false, 0, 18, 15, 18); // w18 = & t
+                out.logic_reg(false, 0, false, false, 0, 16, 19, 19);  // w19 = b & ~a
+                out.logic_reg(false, 1, false, false, 0, 19, 18, 15);  // w15 = maj raw
+                out.logic_bitmask(false, 0, s_mask, 15, 15)?;         // borrow markers
+                out.logic_bitmask(false, 2, s_mask, 15, 15)?;         // invert → GE
+            }
+            out.logic_reg(false, 1, false, false, 0, 31, 17, x(rd));   // mov rd, w17
+            write_ge(out, 15, lane16)?;
+        }
+        Q => {
+            // signed saturating: ovf markers → w18; sat = H + (sign bits of a)
+            // (compute the signs FIRST: the ovf path below does not clobber w15,
+            //  but keep the order explicit for safety)
+            // signs of a — extract FIRST (w15 still holds a)
+            let sign_mask: u64 = if lane16 { 0x00010001 } else { 0x01010101 };
+            out.lsr_imm(false, 15, 19, s_shift);                        // w19 = bits [31:L-1]
+            out.logic_bitmask(false, 0, sign_mask, 19, 19)?;            // w19 = lane signs of a
+            if !is_sub {
+                // add overflow: same operand signs, result sign differs from a:
+                //   ovf = (a^r) & ~(a^b)
+                out.logic_reg(false, 2, false, false, 0, 15, 17, 18);  // w18 = a^r
+                out.logic_reg(false, 2, false, false, 0, 15, 16, 15);  // w15 = a^b (a dead now)
+                out.logic_reg(false, 0, true, false, 0, 18, 15, 18);   // w18 = (a^r) & ~(a^b)
+            } else {
+                // sub overflow: operand signs differ, result sign differs from a:
+                //   ovf = (a^b) & (a^r)
+                out.logic_reg(false, 2, false, false, 0, 15, 16, 18);  // w18 = a^b
+                out.logic_reg(false, 2, false, false, 0, 15, 17, 15);  // w15 = a^r (a now dead)
+                out.logic_reg(false, 0, false, false, 0, 18, 15, 18);  // w18 = (a^b) & (a^r)
+            }
+            out.logic_bitmask(false, 0, s_mask, 18, 18)?;              // w18 = ovf markers
+            // sat = signs + H (b dead → w16 reusable for H)
+            load_const(out, 16, h_mask as u32);                          // w16 = H
+            out.addsub_reg(false, 0, false, 0, 0, 19, 16, 19);          // w19 = signs + H = sat
+            // spread ovf → full lane masks (w16, temp w15 — a is dead now)
+            spread_markers(out, 18, 16, 15, lane16)?;
+            // r' = r ⊕ ((r ⊕ sat) & spread)
+            out.logic_reg(false, 2, false, false, 0, 17, 19, 15);      // w15 = r ⊕ sat
+            out.logic_reg(false, 0, false, false, 0, 15, 16, 15);     // & spread
+            out.logic_reg(false, 2, false, false, 0, 17, 15, 17);      // w17 = r'
+            emit_qflag(out, 18, 15, 16, lane16)?;
+            out.logic_reg(false, 1, false, false, 0, 31, 17, x(rd));   // mov rd, w17
+        }
+        Uq => {
+            // unsigned saturating: carry (ADD) / borrow (SUB) markers → w18
+            if !is_sub {
+                out.logic_reg(false, 2, false, false, 0, 15, 16, 18);  // w18 = a^b
+                out.logic_reg(false, 0, false, false, 0, 18, 19, 19);  // w19 = & core
+                out.logic_reg(false, 0, false, false, 0, 15, 16, 15);  // w15 = a&b
+                out.logic_reg(false, 1, false, false, 0, 15, 19, 15);  // maj raw
+                out.logic_bitmask(false, 0, s_mask, 15, 18)?;          // carry markers → w18
+            } else {
+                out.logic_reg(false, 1, true, false, 0, 31, 15, 19);  // w19 = ~a
+                out.logic_bitmask(false, 0, h_mask, 19, 18)?;          // w18 = ~a & H
+                out.logic_bitmask(false, 0, h_mask, 16, 15)?;          // w15 = b & H
+                out.addsub_reg(false, 0, false, 0, 0, 15, 18, 15);    // w15 = t
+                out.logic_reg(false, 2, false, false, 0, 16, 19, 18); // w18 = b ^ ~a
+                out.logic_reg(false, 0, false, false, 0, 18, 15, 18); // & t
+                out.logic_reg(false, 0, false, false, 0, 16, 19, 19);  // w19 = b & ~a
+                out.logic_reg(false, 1, false, false, 0, 19, 18, 18);  // w18 = borrow markers
+                out.logic_bitmask(false, 0, s_mask, 18, 18)?;         // clean
+            }
+            spread_markers(out, 18, 16, 15, lane16)?;
+            if !is_sub {
+                out.logic_reg(false, 1, false, false, 0, 17, 16, 17);  // r' = r | spread
+            } else {
+                out.logic_reg(false, 0, true, false, 0, 17, 16, 17);   // r' = r & ~spread
+            }
+            emit_qflag(out, 18, 15, 16, lane16)?;
+            out.logic_reg(false, 1, false, false, 0, 31, 17, x(rd));   // mov rd, w17
+        }
+        Sh => {
+            // signed halving: r_h = ((r>>u1) & ~S) | c17 (ADD) / lt (SUB)
+            if !is_sub {
+                out.logic_reg(false, 2, false, false, 0, 15, 16, 18);  // w18 = a^b
+                out.logic_reg(false, 0, false, false, 0, 18, 19, 19);  // w19 = & core
+                out.logic_reg(false, 0, false, false, 0, 15, 16, 15);  // w15 = a&b
+                out.logic_reg(false, 1, false, false, 0, 15, 19, 15);  // maj
+                out.logic_bitmask(false, 0, s_mask, 15, 15)?;          // carry
+                out.logic_reg(false, 2, false, false, 0, 15, 18, 15);  // ⊕ (a^b)
+                out.logic_bitmask(false, 0, s_mask, 15, 15)?;          // c17 markers
+            } else {
+                out.logic_reg(false, 0, true, false, 0, 15, 16, 18);   // a & ~b
+                out.logic_reg(false, 2, false, false, 0, 15, 16, 19);  // a^b
+                out.logic_reg(false, 0, true, false, 0, 17, 19, 19);   // r & ~(a^b)
+                out.logic_reg(false, 1, false, false, 0, 18, 19, 15);  // lt raw
+                out.logic_bitmask(false, 0, s_mask, 15, 15)?;         // lt markers
+            }
+            out.lsr_imm(false, 17, 17, 1);
+            out.logic_bitmask(false, 0, h_mask, 17, 17)?;             // clear sign positions
+            out.logic_reg(false, 1, false, false, 0, 17, 15, x(rd));  // rd = r' | markers
+        }
+        Uh => {
+            // unsigned halving: r_h = ((r>>u1) & ~S) | carry (ADD) / borrow (SUB)
+            if !is_sub {
+                out.logic_reg(false, 2, false, false, 0, 15, 16, 18);  // w18 = a^b
+                out.logic_reg(false, 0, false, false, 0, 18, 19, 19);  // & core
+                out.logic_reg(false, 0, false, false, 0, 15, 16, 15);  // a&b
+                out.logic_reg(false, 1, false, false, 0, 15, 19, 15);  // maj
+                out.logic_bitmask(false, 0, s_mask, 15, 15)?;          // carry markers
+            } else {
+                out.logic_reg(false, 1, true, false, 0, 31, 15, 19);  // w19 = ~a
+                out.logic_bitmask(false, 0, h_mask, 19, 18)?;          // w18 = ~a & H
+                out.logic_bitmask(false, 0, h_mask, 16, 15)?;          // w15 = b & H
+                out.addsub_reg(false, 0, false, 0, 0, 15, 18, 15);    // t
+                out.logic_reg(false, 2, false, false, 0, 16, 19, 18); // b ^ ~a
+                out.logic_reg(false, 0, false, false, 0, 18, 15, 18); // & t
+                out.logic_reg(false, 0, false, false, 0, 16, 19, 19);  // b & ~a
+                out.logic_reg(false, 1, false, false, 0, 19, 18, 15);  // borrow markers
+                out.logic_bitmask(false, 0, s_mask, 15, 15)?;         // clean
+            }
+            out.lsr_imm(false, 17, 17, 1);
+            out.logic_bitmask(false, 0, h_mask, 17, 17)?;             // clear sign positions
+            out.logic_reg(false, 1, false, false, 0, 17, 15, x(rd));  // rd = r' | markers
         }
     }
+    Ok(())
 }
+
+/// mov w16, #const32 (via movz/movk).
+fn load_const(out: &mut A64, dst: XR, v: u32) {
+    load_imm32(out, dst, v);
+}
+
+/// Spread lane markers (bits at S positions) to full lane masks in w(dst).
+/// tmp must differ from src and dst (16-bit path only).
+fn spread_markers(out: &mut A64, src: XR, dst: XR, tmp: XR, lane16: bool) -> Result<(), TranslateErr> {
+    if lane16 {
+        out.lsr_imm(false, src, dst, 15);          // markers at bits 0,16
+        out.movz(false, 0, 0xFFFF, tmp);
+        out.madd(false, false, tmp, 31, dst, dst);  // dst = (markers>>15) * 0xFFFF
+    } else {
+        out.lsr_imm(false, src, dst, 7);           // markers at byte bottoms
+        out.logic_reg(false, 1, false, true, 1, dst, dst, dst);  // dst |= dst << 1
+        out.logic_reg(false, 1, false, true, 2, dst, dst, dst);  // dst |= dst << 2
+        out.logic_reg(false, 1, false, true, 4, dst, dst, dst);  // dst |= dst << 4
+    }
+    Ok(())
+}
+
+/// Set Q (w20) if any marker in w(src) is nonzero. t0/t1 temps.
+fn emit_qflag(out: &mut A64, src: XR, t0: XR, t1: XR, lane16: bool) -> Result<(), TranslateErr> {
+    if lane16 {
+        // markers at bits 15 and 31: fold both into bit0
+        out.lsr_imm(false, src, t0, 15);                        // t0[0] = m15, t0[16] = m31
+        out.logic_reg_shift(false, 1, false, 1, 16, t0, t0, t0); // t0 |= t0 lsr #16
+        out.logic_bitmask(false, 0, 0x1, t0, t0)?;             // t0 = any marker (bit0)
+    } else {
+        out.movz(false, 0, 0x4081, t0);
+        out.movk(false, 1, 0x0020, t0);
+        out.madd(false, false, t0, 31, src, t0);               // t0 = src * 0x00204081
+        out.lsr_imm(false, t0, t0, 28);                        // nibble
+    }
+    out.addsub_imm(false, 1, true, 0, false, t0, 31);          // cmp t0, #0
+    cset(out, Cond::Ne, t1);
+    out.logic_reg(false, 1, false, false, 0, 20, t1, 20);      // Q |= sat
+    Ok(())
+}
+
+/// Write GE bits (from markers in w(src)) into w21. Temps: w17, w19.
+fn write_ge(out: &mut A64, src: XR, lane16: bool) -> Result<(), TranslateErr> {
+    if lane16 {
+        out.lsr_imm(false, src, 17, 15);            // s0 at bit0, s1 at bit16
+        out.logic_bitmask(false, 0, 0x1, 17, 17)?;  // s0
+        out.ubfx(false, src, 19, 31, 1);            // s1
+        out.bfi(false, 19, 17, 1, 1);               // {s1,s0}
+    } else {
+        out.movz(false, 0, 0x4081, 17);
+        out.movk(false, 1, 0x0020, 17);              // 0x00204081
+        out.madd(false, false, 17, 31, src, 17);    // w17 = src * const
+        out.lsr_imm(false, 17, 17, 28);             // nibble = GE[3:0]
+    }
+    out.logic_reg(false, 1, false, false, 0, 31, 17, 21); // mov w21, w17
+    Ok(())
+}
+
+
+

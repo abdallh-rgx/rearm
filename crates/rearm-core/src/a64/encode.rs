@@ -143,13 +143,14 @@ impl A64 {
         self.bfm(sf, 0b01, (bits + 1 - lsb) & bits, width - 1, rn, rd); // BFM
     }
     pub fn bfxil(&mut self, sf: bool, rn: XR, rd: XR, lsb: u8, width: u8) {
-        self.bfm(sf, 0b00, lsb, width - 1, rn, rd);
+        self.bfm(sf, 0b01, lsb, lsb + width - 1, rn, rd);
     }
     pub fn sbfx(&mut self, sf: bool, rn: XR, rd: XR, lsb: u8, width: u8) {
-        self.bfm(sf, 0b00, lsb, width - 1, rn, rd); // SBFM
+        // LLVM-verified: sbfx w0,w1,#4,#8 = SBFM #4, #11 (imms = lsb+width-1)
+        self.bfm(sf, 0b00, lsb, lsb + width - 1, rn, rd);
     }
     pub fn ubfx(&mut self, sf: bool, rn: XR, rd: XR, lsb: u8, width: u8) {
-        self.bfm(sf, 0b10, lsb, width - 1, rn, rd);
+        self.bfm(sf, 0b10, lsb, lsb + width - 1, rn, rd);
     }
     pub fn sxt(&mut self, sf: bool, from_bits: u8, rn: XR, rd: XR) {
         self.bfm(sf, 0b00, 0, from_bits - 1, rn, rd); // SBFM (sxtb w0,w1 = 13001c20)
@@ -184,16 +185,24 @@ impl A64 {
         self.e(((sf as u32) << 31) | ((op as u32) << 30) | ((s as u32) << 29)
             | (0x1A << 24) | ((rm as u32) << 16) | (rn as u32) << 5 | rd as u32);
     }
-    /// Logic register: opc 0=AND 1=ORR 2=EOR 3=ANDS; N inverts Rm
+    /// Logic register: opc 0=AND 1=ORR 2=EOR 3=ANDS; N inverts Rm.
+    /// Legacy bool overload: shift=true means "LSL #amount" (shift_type 0).
     pub fn logic_reg(&mut self, sf: bool, opc: u8, n: bool, shift: bool, amount: u8, rn: XR, rm: XR, rd: XR) {
+        let amt = if shift { amount } else { 0 };
+        self.logic_reg_shift(sf, opc, n, 0, amt, rn, rm, rd);
+    }
+    pub fn logic_reg_shift(&mut self, sf: bool, opc: u8, n: bool, shift_type: u32, amount: u8, rn: XR, rm: XR, rd: XR) {
         self.e(((sf as u32) << 31) | ((opc as u32) << 29)
-            | (0x0A << 24) | ((shift as u32) << 22) | ((n as u32) << 21)
+            | (0x0A << 24) | (shift_type << 22) | ((n as u32) << 21)
             | ((rm as u32) << 16) | ((amount as u32) << 10) | (rn as u32) << 5 | rd as u32);
     }
     /// CSEL family: op 0=CSEL 1=CSINC 2=CSINV 3=CSNEG
+    /// Encoding (LLVM-verified): sf 0? 11010 100 Rm cond op2 Rn Rd;
+    /// bit30 = op>>1 (inv/neg group), op2(bits11:10) = op&1 (inc/neg).
     pub fn csel(&mut self, sf: bool, op: u8, rn: XR, rm: XR, cond: Cond, rd: XR) {
-        self.e(((sf as u32) << 31) | ((op as u32) << 30) | (0x1A << 24)
-            | ((rm as u32) << 16) | ((cond.bits() as u32) << 12) | (rn as u32) << 5 | rd as u32);
+        self.e(((sf as u32) << 31) | (((op >> 1) as u32) << 30) | (0x1A << 24)
+            | (4u32 << 21) | ((rm as u32) << 16) | ((cond.bits() as u32) << 12)
+            | (((op & 1) as u32) << 10) | (rn as u32) << 5 | rd as u32);
     }
     /// CCMP/CCMN register: op 0=CCMN 1=CCMP
     pub fn ccmp(&mut self, sf: bool, op: u8, rm: XR, nzcv: u8, cond: Cond, rn: XR) {
@@ -203,13 +212,14 @@ impl A64 {
     }
     /// Data-proc 1-source: opcode rbit=0 rev16=1 rev32=2 rev=3 clz=4 cls=5
     pub fn dp1(&mut self, sf: bool, opcode: u8, rn: XR, rd: XR) {
-        self.e(((sf as u32) << 31) | (1 << 30) | (0x1A << 24)
+        // LLVM-verified: rbit w0,w1 = 0x5ac00020 (bits 23:22 = 11)
+        self.e(((sf as u32) << 31) | (1 << 30) | (0x1A << 24) | (3 << 22)
             | ((opcode as u32) << 10) | (rn as u32) << 5 | rd as u32);
     }
     pub fn rbit(&mut self, sf: bool, rn: XR, rd: XR) { self.dp1(sf, 0, rn, rd); }
     pub fn rev16(&mut self, sf: bool, rn: XR, rd: XR) { self.dp1(sf, 1, rn, rd); }
-    pub fn rev32(&mut self, sf: bool, rn: XR, rd: XR) { self.dp1(sf, 2, rn, rd); }
-    pub fn rev(&mut self, sf: bool, rn: XR, rd: XR) { self.dp1(sf, 3, rn, rd); }
+    pub fn rev32(&mut self, sf: bool, rn: XR, rd: XR) { self.dp1(sf, 3, rn, rd); }
+    pub fn rev(&mut self, sf: bool, rn: XR, rd: XR) { self.dp1(sf, 2, rn, rd); }
     pub fn clz(&mut self, sf: bool, rn: XR, rd: XR) { self.dp1(sf, 4, rn, rd); }
     pub fn cls(&mut self, sf: bool, rn: XR, rd: XR) { self.dp1(sf, 5, rn, rd); }
     /// Data-proc 2-source: opcode udiv=2 sdiv=3 lslv=8 lsrv=9 asrv=10 rorv=11
@@ -223,20 +233,24 @@ impl A64 {
     pub fn lsrv(&mut self, sf: bool, rn: XR, rm: XR, rd: XR) { self.dp2(sf, 9, rn, rm, rd); }
     pub fn asrv(&mut self, sf: bool, rn: XR, rm: XR, rd: XR) { self.dp2(sf, 10, rn, rm, rd); }
     pub fn rorv(&mut self, sf: bool, rn: XR, rm: XR, rd: XR) { self.dp2(sf, 11, rn, rm, rd); }
-    /// MADD/MSUB
+    /// MADD/MSUB (LLVM-verified: madd w0,w1,w2,w3 = 0x1b020c20; o0 = bit15!)
     pub fn madd(&mut self, sf: bool, o0: bool, rm: XR, ra: XR, rn: XR, rd: XR) {
-        self.e(((sf as u32) << 31) | (0x1B << 24) | ((o0 as u32) << 21)
-            | ((rm as u32) << 16) | ((ra as u32) << 10) | (rn as u32) << 5 | rd as u32);
+        self.e(((sf as u32) << 31) | (0x1B << 24)
+            | ((rm as u32) << 16) | ((o0 as u32) << 15) | ((ra as u32) << 10)
+            | (rn as u32) << 5 | rd as u32);
     }
-    /// SMADDL/SMSUBL/UMADDL/UMSUBL (32→64)
+    /// SMADDL/SMSUBL/UMADDL/UMSUBL (LLVM-verified: smaddl = 0x9b220c20:
+    /// bit21=1 marks long forms, u = bit23, o0 = bit15)
     pub fn maddl(&mut self, u: bool, o0: bool, rm: XR, ra: XR, rn: XR, rd: XR) {
-        self.e((1u32 << 31) | ((u as u32) << 30) | (0x1B << 24) | ((o0 as u32) << 21)
-            | ((rm as u32) << 16) | ((ra as u32) << 10) | (rn as u32) << 5 | rd as u32);
+        self.e((1u32 << 31) | ((u as u32) << 23) | (0x1B << 24) | (1u32 << 21)
+            | ((rm as u32) << 16) | ((o0 as u32) << 15) | ((ra as u32) << 10)
+            | (rn as u32) << 5 | rd as u32);
     }
-    /// SMULH/UMULH
+    /// SMULH/UMULH (LLVM-verified: smulh x0,x1,x2 = 0x9b427c20:
+    /// bit22=1, u = bit23, Ra = xzr)
     pub fn mulh(&mut self, u: bool, rm: XR, rn: XR, rd: XR) {
-        self.e((1u32 << 31) | ((u as u32) << 30) | (0x1B << 24) | (0b1100000 << 10)
-            | ((rm as u32) << 16) | (rn as u32) << 5 | rd as u32);
+        self.e((1u32 << 31) | ((u as u32) << 23) | (0x1B << 24) | (1u32 << 22)
+            | ((rm as u32) << 16) | (31u32 << 10) | (rn as u32) << 5 | rd as u32);
     }
 
     // ==================== loads/stores ====================
@@ -283,6 +297,18 @@ impl A64 {
     pub fn isb(&mut self) { self.e(0xD503_3FDF); }
     pub fn svc(&mut self, imm16: u16) { self.e(0xD400_0001 | ((imm16 as u32) << 5)); }
     pub fn brk(&mut self, imm16: u16) { self.e(0xD420_0000 | ((imm16 as u32) << 5)); }
+    /// PRFM (immediate): prfop 0=PLDL1KEEP 8=PLIL1KEEP; imm12 scaled by 8.
+    /// LLVM-verified: prfm pldl1keep,[x1] = 0xf9800020; plil1keep,[x1,#8] = 0xf9800428.
+    pub fn prfm(&mut self, prfop: u8, imm12: u16, rn: XR) {
+        self.e(0xF980_0000 | ((imm12 as u32) << 10) | (rn as u32) << 5 | prfop as u32);
+    }
+    /// CRC32/CRC32C: sz 0=B 1=H 2=W 3=X. LLVM-verified field layout:
+    /// crc32b w0,w1,w2 = 0x1ac24020 (sz at bits 11:10, C at bit 30, sf for X).
+    pub fn crc32(&mut self, c: bool, sz: u8, rn: XR, rm: XR, rd: XR) {
+        self.e((((sz == 3) as u32) << 31) | ((c as u32) << 30) | (0x1A << 24)
+            | (2 << 21) | ((rm as u32) << 16) | ((sz as u32) << 10)
+            | (rn as u32) << 5 | rd as u32);
+    }
 }
 
 const fn wide(sf: bool, opc: u8, hw: u8, imm16: u16, rd: XR) -> u32 {
@@ -316,8 +342,11 @@ pub fn encode_bitmask(v: u64, sf: bool) -> Option<(bool, u8, u8)> {
         if full.rotate_left(ror) != v { continue; }
         // N: set iff esize == 64 (and then ones < 64 since v != all-ones)
         let n = esize == 64;
-        // imms = ones - 1 (6-bit); the decoder derives len from N:NOT(imms)
-        let imms: u8 = (ones - 1) as u8;
+        // imms: bits ABOVE len must be 1 (so N:NOT(imms) has its highest set
+        // bit at len); the low len bits hold (ones - 1).
+        // e.g. 0x00ff00ff (esize 16, 8 ones) → imms = 0b10_0111 = 39.
+        let high = 0x3Fu32 & !((1u32 << (esize_log + 1)) - 1);
+        let imms: u8 = (high | (ones - 1)) as u8;
         let immr = (ror % esize) as u8;
         return Some((n, immr, imms));
     }
