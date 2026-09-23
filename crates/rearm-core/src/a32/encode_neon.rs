@@ -43,6 +43,29 @@ pub fn encode_neon(ins: &Ins) -> Option<u32> {
             let vm = (m & 0xF) as u32; let m5 = ((m >> 4) & 1) as u32;
             Some(0xF3B00000u32 | (2 << 16) | (d4 << 22) | (vd << 12) | ((*q as u32) << 6) | (m5 << 5) | vm)
         }
+        Ins::VldStMulti { load, kind, dt, d, rn, rm, align, wback, count } => {
+            let d4 = ((d >> 4) & 1) as u32; let vd = (d & 0xF) as u32;
+            let size = match dt.bits() { 8 => 0u32, 16 => 1, 32 => 2, _ => 3 };
+            let rtype: u32 = match (kind, *count) {
+                (NeonVldKind::Vld1, 1) => 0b0111,
+                (NeonVldKind::Vld1, 2) => 0b1010,
+                (NeonVldKind::Vld1, 3) => 0b0110,
+                (NeonVldKind::Vld1, 4) => 0b0010,
+                (NeonVldKind::Vld2, 2) => 0b1000,
+                (NeonVldKind::Vld2, 4) => 0b0011,
+                (NeonVldKind::Vld3, 3) => 0b0100,
+                (NeonVldKind::Vld4, 4) => 0b0000,
+                _ => return None,
+            };
+            let rm_field: u32 = match (rm, wback) {
+                (None, false) => 0xF,
+                (None, true) => 0xD,
+                (Some(r), _) => *r as u32,
+            };
+            Some(0xF4000000u32 | (d4 << 22) | ((*load as u32) << 21)
+                | ((*rn as u32) << 16) | (vd << 12) | (rtype << 8)
+                | (size << 6) | ((*align as u32) << 4) | rm_field)
+        }
         _ => None,
     }
 }

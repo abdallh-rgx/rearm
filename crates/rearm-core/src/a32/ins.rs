@@ -342,7 +342,7 @@ pub enum Ins {
         d: VIdx, n: VIdx, m: VIdx,
         imm: u8, index: u8,
     },
-    VldStMulti { load: bool, kind: NeonVldKind, dt: Dt, d: VIdx, rn: R, rm: Option<R>, align: u8, wback: bool },
+    VldStMulti { load: bool, kind: NeonVldKind, dt: Dt, d: VIdx, rn: R, rm: Option<R>, align: u8, wback: bool, count: u8 },
     VldStSingle { load: bool, kind: NeonVldKind, dt: Dt, d: VIdx, index: u8, rn: R, rm: Option<R>, align: u8, wback: bool, replicate: bool },
 
     /// Decoded but not semantically lifted yet (exotics: coprocessor etc).

@@ -325,7 +325,45 @@ fn decode_shift_imm(
 }
 
 pub fn decode_neon_ldst(word: u32) -> Result<Ins, DecodeErr> {
-    // F4/F5 prefix space — structure loads/stores. Table work for the next phase.
-    let _ = word;
-    Ok(Ins::Unsupported { group: "neon-ldst" })
+    // F4 prefix: 1111 0100 ... (multiple structures); 1111 0101 ... (single-element)
+    // Layout (multiple): bits 21=L, 22=D, 20=0 (multi), 19:16=Rn, 15:12=Vd,
+    //   11:8=type, 7:6=size, 5:4=align, 3:0=Rm (0xF=no-wb, 0xD=wb)
+    let load = bit(word, 21);
+    let d4 = bit(word, 22);
+    let vd = (((d4 as u32) << 4) | bits(word, 15, 12)) as VIdx;
+    let rn = bits(word, 19, 16) as u8;
+    let rtype = bits(word, 11, 8);
+    let size = bits(word, 7, 6);
+    let align = bits(word, 5, 4) as u8;
+    let rm_field = bits(word, 3, 0);
+
+    if !bit(word, 23) {
+        // ======== multiple structures ========
+        let (kind, count) = match rtype {
+            0b0111 => (NeonVldKind::Vld1, 1),
+            0b1010 => (NeonVldKind::Vld1, 2),
+            0b0110 => (NeonVldKind::Vld1, 3),
+            0b0010 => (NeonVldKind::Vld1, 4),
+            0b1000 => (NeonVldKind::Vld2, 2),
+            0b0011 => (NeonVldKind::Vld2, 4),
+            0b0100 => (NeonVldKind::Vld3, 3),
+            0b0000 => (NeonVldKind::Vld4, 4),
+            _ => return Ok(Ins::Unsupported { group: "neon-ldst" }),
+        };
+        let dt = match size {
+            0 => Dt::I8,
+            1 => Dt::I16,
+            2 => Dt::I32,
+            _ => Dt::I64,
+        };
+        let (rm, wback) = if rm_field == 0xF { (None, false) }
+            else if rm_field == 0xD { (None, true) }
+            else { (Some(rm_field as u8), true) };
+        // encode count via the kind (Vld1 with count 2/3/4 is still Vld1 family;
+        // the encoder reconstructs from kind + count in the type field)
+        return Ok(Ins::VldStMulti { load, kind, dt, d: vd, rn, rm, align, wback, count: count as u8 });
+    }
+    // single-element-to-lane forms: bit 23 = 1
+    // 1111 0101 1D00 ... (from ARM ARM): size/type in bits 11:10, index in 19:16
+    Ok(Ins::Unsupported { group: "neon-ldst-single" })
 }

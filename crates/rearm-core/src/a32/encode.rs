@@ -117,7 +117,7 @@ pub fn encode_a32(ins: &Ins) -> Result<u32, EncodeErr> {
             0xF000_0000 | (0b101 << 25) | (h << 24) | ((to_u24(*off)) & 0x00FF_FFFF)
         }
         Ins::Svc { imm } => (Cond::Al.bits() as u32) << 28 | (0b1111 << 24) | (*imm & 0x00FF_FFFF),
-        Ins::Neon { .. } | Ins::Vswp { .. } | Ins::VdupScalar { .. } | Ins::VdupCore { .. } => {
+        Ins::Neon { .. } | Ins::Vswp { .. } | Ins::VdupScalar { .. } | Ins::VdupCore { .. } | Ins::VldStMulti { .. } => {
             if let Some(w) = crate::a32::encode_neon::encode_neon(ins) { return Ok(w); }
             return Err(EncodeErr("neon encode"));
         }
