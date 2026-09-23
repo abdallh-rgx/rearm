@@ -291,6 +291,133 @@ impl A64 {
     pub fn yield_(&mut self) { self.e(0xD503_203F); }
     pub fn wfe(&mut self) { self.e(0xD503_205F); }
     pub fn wfi(&mut self) { self.e(0xD503_207F); }
+
+    // ==================== scalar FP (data-proc 1 source) ====================
+    // Encoding: 0001 1110 type(2) opcode(5) 10000 Rn Rd
+    pub fn fp1(&mut self, dbl: bool, opcode: u8, rn: XR, rd: XR) {
+        let ty = if dbl { 1u32 } else { 0 };
+        self.e(0x1E204000 | (ty << 22) | ((opcode as u32) << 15)
+            | ((rn as u32) << 5) | rd as u32);
+    }
+    /// FMOV (register): fp1 opcode 00001
+    pub fn fmov_reg(&mut self, dbl: bool, rn: XR, rd: XR) { self.fp1(dbl, 0x01, rn, rd); }
+    /// FABS: fp1 opcode 00010
+    pub fn fabs(&mut self, dbl: bool, rn: XR, rd: XR) { self.fp1(dbl, 0x02, rn, rd); }
+    /// FNEG: fp1 opcode 00011
+    pub fn fneg(&mut self, dbl: bool, rn: XR, rd: XR) { self.fp1(dbl, 0x03, rn, rd); }
+    /// FSQRT: fp1 opcode 10111
+    pub fn fsqrt(&mut self, dbl: bool, rn: XR, rd: XR) { self.fp1(dbl, 0x17, rn, rd); }
+
+    // ==================== scalar FP (data-proc 2 source) ====================
+    // Encoding: 0001 1110 type(2) 1 Rm opcode(4) 10 Rn Rd
+    pub fn fp2(&mut self, dbl: bool, opcode: u8, rm: XR, rn: XR, rd: XR) {
+        let ty = if dbl { 1u32 } else { 0 };
+        self.e(0x1E200800 | (ty << 22) | ((rm as u32) << 16)
+            | ((opcode as u32) << 12) | ((rn as u32) << 5) | rd as u32);
+    }
+    /// FMUL: fp2 opcode 0000 (no U)
+    pub fn fmul(&mut self, dbl: bool, rm: XR, rn: XR, rd: XR) { self.fp2(dbl, 0x0, rm, rn, rd); }
+    /// FDIV: fp2 opcode 0001
+    pub fn fdiv(&mut self, dbl: bool, rm: XR, rn: XR, rd: XR) { self.fp2(dbl, 0x1, rm, rn, rd); }
+    /// FADD: fp2 opcode 0010
+    pub fn fadd(&mut self, dbl: bool, rm: XR, rn: XR, rd: XR) { self.fp2(dbl, 0x2, rm, rn, rd); }
+    /// FSUB: fp2 opcode 0011
+    pub fn fsub(&mut self, dbl: bool, rm: XR, rn: XR, rd: XR) { self.fp2(dbl, 0x3, rm, rn, rd); }
+    /// FCMP/FCMPE: fp2 opcode 0100/0101 with Rd=0
+    pub fn fcmp(&mut self, dbl: bool, e: bool, rm: XR, rn: XR) {
+        self.fp2(dbl, if e { 0x5 } else { 0x4 }, rm, rn, 0);
+    }
+    /// FCMP with zero: 0001 1110 type 10 0000 10000 01000 00000 (FCMP Xn, #0.0)
+    pub fn fcmpz(&mut self, dbl: bool, e: bool, rn: XR) {
+        let ty = if dbl { 1u32 } else { 0 };
+        let opcode = if e { 0x11u32 } else { 0x10 };
+        self.e(0x1E202000 | (ty << 22) | (opcode << 12) | ((rn as u32) << 5) | 0x08);
+    }
+
+    /// FMADD: 0001 1110 type 0 Rm 0 Ra Rn Rd (opcode 0)
+    pub fn fmadd(&mut self, dbl: bool, rm: XR, ra: XR, rn: XR, rd: XR) {
+        let ty = if dbl { 1u32 } else { 0 };
+        self.e(0x1F000000 | (ty << 22) | ((rm as u32) << 16) | ((ra as u32) << 10)
+            | ((rn as u32) << 5) | rd as u32);
+    }
+    /// FMSUB: same but with bit 21 (o1)
+    pub fn fmsub(&mut self, dbl: bool, rm: XR, ra: XR, rn: XR, rd: XR) {
+        let ty = if dbl { 1u32 } else { 0 };
+        self.e(0x1F200000 | (ty << 22) | ((rm as u32) << 16) | ((ra as u32) << 10)
+            | ((rn as u32) << 5) | rd as u32);
+    }
+    /// FNMADD: same but with bit 15 (o2)
+    pub fn fnmadd(&mut self, dbl: bool, rm: XR, ra: XR, rn: XR, rd: XR) {
+        let ty = if dbl { 1u32 } else { 0 };
+        self.e(0x1F000000 | (1 << 15) | (ty << 22) | ((rm as u32) << 16) | ((ra as u32) << 10)
+            | ((rn as u32) << 5) | rd as u32);
+    }
+    /// FNMSUB: bits 21+15
+    pub fn fnmsub(&mut self, dbl: bool, rm: XR, ra: XR, rn: XR, rd: XR) {
+        let ty = if dbl { 1u32 } else { 0 };
+        self.e(0x1F200000 | (1 << 15) | (ty << 22) | ((rm as u32) << 16) | ((ra as u32) << 10)
+            | ((rn as u32) << 5) | rd as u32);
+    }
+
+    // ==================== scalar FP ↔ integer conversions ====================
+    // FCVT: 0001 1110 type 1 opcode 10000 Rn Rd
+    /// SCVTF (integer to float): 0001 1110 type 0 0010 1 10 sf Rn Rd
+    pub fn scvtf(&mut self, dbl: bool, sf: bool, rn: XR, rd: XR) {
+        let ty = if dbl { 1u32 } else { 0 };
+        let sf = sf as u32;
+        self.e(0x1E220000 | (ty << 22) | (sf << 21) | ((rn as u32) << 5) | rd as u32);
+    }
+    /// FCVTZS (float to integer, round toward zero): 0001 1110 type 11 0010 Rn Rd
+    pub fn fcvtzs(&mut self, dbl: bool, sf: bool, rn: XR, rd: XR) {
+        let ty = if dbl { 1u32 } else { 0 };
+        let sf = sf as u32;
+        self.e(0x1E380000 | (ty << 22) | (sf << 21) | ((rn as u32) << 5) | rd as u32);
+    }
+
+    // ==================== FMOV (immediate ↔ GPR) ====================
+    /// FMOV Wd, Sn (GPR ← 32-bit float reg): 0001 1110 type 0 10 111 10 000000 Nn Rd
+    pub fn fmov_to_gpr32(&mut self, vn: XR, rd: XR) {
+        self.e(0x1E260000 | ((vn as u32) << 5) | rd as u32);
+    }
+    /// FMOV Sn, Wd: 0001 1110 type 0 10 110 10 000000 Nn Rd
+    pub fn fmov_from_gpr32(&mut self, rn: XR, rd: XR) {
+        self.e(0x1E240000 | ((rn as u32) << 5) | rd as u32);
+    }
+    /// FMOV Xd, Dn: 0001 1110 type 0 11 111 10 000000 Nn Rd
+    pub fn fmov_to_gpr64(&mut self, vn: XR, rd: XR) {
+        self.e(0x1E660000 | ((vn as u32) << 5) | rd as u32);
+    }
+    /// FMOV Dn, Xd: 0001 1110 type 0 11 110 10 000000 Nn Rd
+    pub fn fmov_from_gpr64(&mut self, rn: XR, rd: XR) {
+        self.e(0x1E640000 | ((rn as u32) << 5) | rd as u32);
+    }
+
+    // ==================== scalar FP load/store ====================
+    /// LDR/STR Dn, [Xn, #imm12*8]: 11 111 0 01 00 imm12 Rn Rt
+    pub fn ldr_d(&mut self, imm12: u16, rn: XR, rt: XR) {
+        self.e(0xFD400000 | ((imm12 as u32) << 10) | ((rn as u32) << 5) | rt as u32);
+    }
+    pub fn str_d(&mut self, imm12: u16, rn: XR, rt: XR) {
+        self.e(0xFD000000 | ((imm12 as u32) << 10) | ((rn as u32) << 5) | rt as u32);
+    }
+    /// LDR/STR Sn, [Xn, #imm12*4]: 11 111 0 01 00 imm12 Rn Rt (smaller offset scale)
+    pub fn ldr_s(&mut self, imm12: u16, rn: XR, rt: XR) {
+        self.e(0xBD400000 | ((imm12 as u32) << 10) | ((rn as u32) << 5) | rt as u32);
+    }
+    pub fn str_s(&mut self, imm12: u16, rn: XR, rt: XR) {
+        self.e(0xBD000000 | ((imm12 as u32) << 10) | ((rn as u32) << 5) | rt as u32);
+    }
+
+    // ==================== FMOV (immediate) ====================
+    /// FMOV Sn, #imm8: 0001 1110 00 01 0001 00000 imm8 Rd
+    pub fn fmov_f32_imm(&mut self, imm8: u8, rd: XR) {
+        self.e(0x1E201000 | ((imm8 as u32) << 13) | ((rd as u32) << 0));
+    }
+    /// FMOV Dn, #imm8: 0001 1110 01 01 0001 00000 imm8 Rd
+    pub fn fmov_f64_imm(&mut self, imm8: u8, rd: XR) {
+        self.e(0x1E601000 | ((imm8 as u32) << 13) | ((rd as u32) << 0));
+    }
+
     pub fn sev(&mut self) { self.e(0xD503_209F); }
     pub fn dsb(&mut self, opt: u8) { self.e(0xD503_309F | ((opt as u32 & 0xF) << 8)); }
     pub fn dmb(&mut self, opt: u8) { self.e(0xD503_30BF | ((opt as u32 & 0xF) << 8)); }

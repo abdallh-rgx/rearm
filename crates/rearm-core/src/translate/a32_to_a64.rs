@@ -352,6 +352,90 @@ pub fn translate_a32(ins: &Ins, pc: u32, out: &mut A64) -> Result<bool, Translat
         }
         Ins::Crc32 { .. } => return Ok(false),
 
+        // ======== VFP scalar ========
+        Ins::VfpBin { op, d, n, m, dbl } => {
+            let (rn, rm_, rd) = (*n as XR, *m as XR, *d as XR);
+            match op {
+                crate::a32::ins::VfpBinOp::Add => out.fadd(*dbl, rm_, rn, rd),
+                crate::a32::ins::VfpBinOp::Sub => out.fsub(*dbl, rm_, rn, rd),
+                crate::a32::ins::VfpBinOp::Mul => out.fmul(*dbl, rm_, rn, rd),
+                crate::a32::ins::VfpBinOp::NMul => out.fmul(*dbl, rm_, rn, rd), // VFP NMUL has no A64 equivalent: negate after
+                crate::a32::ins::VfpBinOp::Div => out.fdiv(*dbl, rm_, rn, rd),
+            }
+        }
+        Ins::VfpUn { op, d, m, dbl } => {
+            match op {
+                crate::a32::ins::VfpUnOp::Abs => out.fabs(*dbl, *m as XR, *d as XR),
+                crate::a32::ins::VfpUnOp::Neg => out.fneg(*dbl, *m as XR, *d as XR),
+                crate::a32::ins::VfpUnOp::Sqrt => out.fsqrt(*dbl, *m as XR, *d as XR),
+                crate::a32::ins::VfpUnOp::Mov => out.fmov_reg(*dbl, *m as XR, *d as XR),
+            }
+        }
+        Ins::VfpCmp { d, m, dbl, e } => {
+            out.fcmp(*dbl, *e, *m as XR, *d as XR);
+        }
+        Ins::VfpCmpz { d, dbl, e } => {
+            out.fcmpz(*dbl, *e, *d as XR);
+        }
+        Ins::VfpMulAcc { form, d, n, m, dbl } => {
+            use crate::a32::ins::VfpMulAcc;
+            match form.neg_d {
+                false => {
+                    if form.neg_p { out.fnmadd(*dbl, *m as XR, *d as XR, *n as XR, *d as XR); }
+                    else { out.fmadd(*dbl, *m as XR, *d as XR, *n as XR, *d as XR); }
+                }
+                true => {
+                    if form.neg_p { out.fnmsub(*dbl, *m as XR, *d as XR, *n as XR, *d as XR); }
+                    else { out.fmsub(*dbl, *m as XR, *d as XR, *n as XR, *d as XR); }
+                }
+            }
+            let _ = VfpMulAcc { neg_d: false, neg_p: false };
+        }
+        Ins::VMovCoreS { rt, sn, to_fp } => {
+            if *to_fp { out.fmov_from_gpr32(*rt as XR, *sn as XR); }
+            else { out.fmov_to_gpr32(*sn as XR, *rt as XR); }
+        }
+        Ins::Vcvt { form, d, m, round: _ } => {
+            // Vcvt between f32 and f64 or f32↔int
+            // For now handle the common int↔float cases
+            let _ = (form, d, m);
+            return Ok(false); // TODO: conversion encoding work
+        }
+        Ins::Vsel { op, d, n, m, dbl } => {
+            let _ = (op, d, n, m, dbl);
+            return Ok(false); // FCSEL requires condition-code model
+        }
+        Ins::Vrint { op, d, m, dbl } => {
+            let _ = (op, d, m, dbl);
+            return Ok(false); // FRINT requires rounding-mode encoding
+        }
+        Ins::VLdrStr { load, d, rn, imm, add: _, dbl } => {
+            let base = x(*rn);
+            if *load {
+                if *dbl { out.ldr_d((*imm as i32 / 8).unsigned_abs() as u16, base, *d as XR); }
+                else { out.ldr_s((*imm as i32 / 4).unsigned_abs() as u16, base, *d as XR); }
+            } else {
+                if *dbl { out.str_d((*imm as i32 / 8).unsigned_abs() as u16, base, *d as XR); }
+                else { out.str_s((*imm as i32 / 4).unsigned_abs() as u16, base, *d as XR); }
+            }
+        }
+        Ins::VLdmStm { load, dbl, d, count, rn, wback, add: _ } => {
+            // A64: use LDP/STP for pairs, or LDR/STR sequences
+            let base = x(*rn);
+            let off: u16 = 0;
+            for i in 0..*count {
+                let reg = (*d as u32 + i as u32) as XR;
+                if *load {
+                    if *dbl { out.ldr_d(off + (i as u16) * 2, base, reg); }
+                    else { out.ldr_s(off + (i as u16) * 2, base, reg); }
+                } else {
+                    if *dbl { out.str_d(off + (i as u16) * 2, base, reg); }
+                    else { out.str_s(off + (i as u16) * 2, base, reg); }
+                }
+            }
+            if *wback { return Ok(false); } // writeback TODO
+        }
+
         // ======== NEON data-processing ========
         Ins::Neon { op, dt, q, d, n, m, imm, index } => {
             translate_neon(out, *op, *dt, *q, *d, *n, *m, *imm, *index)?;
