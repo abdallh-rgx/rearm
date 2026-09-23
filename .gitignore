@@ -1,1 +1,7 @@
 /target
+test-data/rustlib/ex/
+test-data/*.html
+test-data/*.js
+test-data/downloads/
+test-data/turnstile-loop.log
+test-data/loop.pid
