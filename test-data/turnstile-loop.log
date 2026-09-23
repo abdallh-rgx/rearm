@@ -2853,3 +2853,43 @@ about:blank
 === attempt Wed Sep 23 19:33:21 UTC 2026
 about:blank
 ✗ No element found: getByRole('button', { name: 'Download' }). Verify the selector, role, or name is correct and the element exists in the DOM.
+  attempt done, retrying
+=== attempt Wed Sep 23 19:34:19 UTC 2026
+about:blank
+✗ No element found: getByRole('button', { name: 'Download' }). Verify the selector, role, or name is correct and the element exists in the DOM.
+  attempt done, retrying
+=== attempt Wed Sep 23 19:35:17 UTC 2026
+about:blank
+✗ No element found: getByRole('button', { name: 'Download' }). Verify the selector, role, or name is correct and the element exists in the DOM.
+  attempt done, retrying
+=== attempt Wed Sep 23 19:36:16 UTC 2026
+about:blank
+✗ No element found: getByRole('button', { name: 'Download' }). Verify the selector, role, or name is correct and the element exists in the DOM.
+  attempt done, retrying
+=== attempt Wed Sep 23 19:37:14 UTC 2026
+about:blank
+✗ No element found: getByRole('button', { name: 'Download' }). Verify the selector, role, or name is correct and the element exists in the DOM.
+  attempt done, retrying
+=== attempt Wed Sep 23 19:38:12 UTC 2026
+about:blank
+✗ No element found: getByRole('button', { name: 'Download' }). Verify the selector, role, or name is correct and the element exists in the DOM.
+  attempt done, retrying
+=== attempt Wed Sep 23 19:39:10 UTC 2026
+about:blank
+✗ No element found: getByRole('button', { name: 'Download' }). Verify the selector, role, or name is correct and the element exists in the DOM.
+  attempt done, retrying
+=== attempt Wed Sep 23 19:40:09 UTC 2026
+about:blank
+✗ No element found: getByRole('button', { name: 'Download' }). Verify the selector, role, or name is correct and the element exists in the DOM.
+  attempt done, retrying
+=== attempt Wed Sep 23 19:41:07 UTC 2026
+about:blank
+✗ No element found: getByRole('button', { name: 'Download' }). Verify the selector, role, or name is correct and the element exists in the DOM.
+  attempt done, retrying
+=== attempt Wed Sep 23 19:42:05 UTC 2026
+about:blank
+✗ No element found: getByRole('button', { name: 'Download' }). Verify the selector, role, or name is correct and the element exists in the DOM.
+  attempt done, retrying
+=== attempt Wed Sep 23 19:43:03 UTC 2026
+about:blank
+✗ No element found: getByRole('button', { name: 'Download' }). Verify the selector, role, or name is correct and the element exists in the DOM.
