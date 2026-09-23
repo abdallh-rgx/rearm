@@ -170,7 +170,7 @@ fn build_smt(ins: &Ins, pc: u32, a64: &A64) -> Result<String, String> {
 
     let mut s = String::new();
     s.push_str("(set-logic QF_BV)\n");
-    s.push_str("(set-option :timeout 30000)\n");
+    s.push_str("(set-option :timeout 300000)\n");
     for i in 0..15u8 { s.push_str(&format!("(declare-const x{} (_ BitVec 64))\n", i)); }
     for i in 15..20u8 { s.push_str(&format!("(declare-const s{} (_ BitVec 64))\n", i)); }
     s.push_str("(declare-const QF (_ BitVec 32))\n(declare-const GF (_ BitVec 32))\n");
