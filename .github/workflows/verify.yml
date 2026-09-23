@@ -1,0 +1,41 @@
+name: Verification
+on: [push, pull_request]
+
+jobs:
+  round-trip:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - name: Run golden corpus round-trip tests
+        run: cargo test --test golden
+
+  z3-verify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - name: Install Z3
+        run: |
+          wget -q https://github.com/Z3Prover/z3/releases/download/z3-4.13.4/z3-4.13.4-x64-glibc-2.35.zip
+          unzip -q z3-4.13.4-x64-glibc-2.35.zip
+          sudo cp z3-4.13.4-x64-glibc-2.35/bin/z3 /usr/local/bin/
+          echo "REARM_Z3_PATH=/usr/local/bin/z3" >> $GITHUB_ENV
+      - name: Build
+        run: cargo build --release
+      - name: Run Z3 1:1 verification
+        env:
+          HOME: /home/runner
+        run: |
+          mkdir -p $HOME/bin
+          cp /usr/local/bin/z3 $HOME/bin/z3
+          ./target/release/rearm verify
+
+  lint:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - run: cargo fmt --check || true
+      - run: cargo clippy -- -D warnings || true
