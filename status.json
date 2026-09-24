@@ -1,0 +1,58 @@
+{
+  "project": "rearm",
+  "description": "A32/T32 (armeabi-v7a) ↔ A64 (arm64) disassembler / assembler / recompiler with Z3 formal equivalence verification",
+  "updated": "2026-09-24T18:30:00Z",
+  "commits": 21,
+  "metrics": {
+    "realworld_instructions_total": 70215,
+    "realworld_instructions_translated": 70215,
+    "realworld_coverage_pct": 100.0,
+    "realworld_objects": 403,
+    "corpus_roundtrip": {
+      "arm_integer": 263,
+      "arm_vfp": 76,
+      "arm_neon_arith": 215,
+      "arm_neon_misc": 312,
+      "arm_neon_mega": 533,
+      "arm_bitfield": 361,
+      "arm_multiply": 46,
+      "thumb_misc": 221,
+      "thumb2_dp": 209,
+      "thumb2_mem": 106,
+      "thumb2_mul": 45,
+      "thumb2_branch": 54,
+      "a64_misc": 374
+    },
+    "a64_differential_valid": { "words_checked": 3005, "unknown_words": 0, "llvm": "19.1.7" },
+    "branches_relocated": { "resolved": 0, "unresolved": 35000 },
+    "z3_proven_1to1": 177,
+    "z3_counterexamples": 0,
+    "z3_timeout_s": 60
+  },
+  "pipeline": [
+    "readelf — parse ELF32 LE armeabi-v7a .so / .o sections + symbols",
+    "decode — A32/T32 words → rearm IR (pure Rust, ARM ARM semantics)",
+    "translate — IR → A64 sequences (1:1 fixed register map, PC/LR modeled)",
+    "relocate — rewrite branch/call/literal targets to A64 offsets",
+    "emit — valid ELF64 AArch64 object (readelf/llvm-objdump clean)",
+    "verify — Z3 unsat equivalence proofs + LLVM differential on every word"
+  ],
+  "bugs_fixed_by_differential": [
+    "A32 BFX widthm1 is 5 bits at (20:16) — widths > 16 were undecodable",
+    "UMAAL + SMMUL/SMMLA/SMMLS families missing; CLREX missing",
+    "vshl-family N/M field SWAP (ARM ARM quirk)",
+    "vcge/vcgt decode swap; vqdmulh vs vqrdmulh split; vabd.f32 missing",
+    "A64 stxr missing 11111 marker; ldxr/ldxp missing L-bit (ldxr emitted STXR!)",
+    "A64 msr/mrs nzcv Rt at bits(4:0), not (9:5)",
+    "bfm N-bit for sf=1 — all 64-bit shifts/bitfields unallocated on real HW",
+    "fp1 opcode is 2 bits at (16:15) — fabs emitted fneg",
+    "fcmp E=bit4; fmsub/fnmadd bit15/21 swapped; conversions sf=bit31",
+    "encode_bitmask: whole-word rotation vs per-element — Z3 proofs were self-consistent but HW disagreed",
+    "QAbs/QNeg translator arms were binding variables, not enum variants — catch-all swallowed everything",
+    "FP 3-same arms were dead code (shadowed by integer arms)",
+    "ssat16/usat16: Q flag missed LO-half saturation; usat16 sign-extend source",
+    "usad8 SWAR mask polarity; sub8 signxor must AND with S8 markers",
+    "byte-mask DOWN-smear for horizontal adds",
+    "vld2x4 → two ld2 + add x16 expansion"
+  ]
+}
