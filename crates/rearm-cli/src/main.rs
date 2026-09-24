@@ -9,6 +9,8 @@
 
 use std::io::Read;
 
+mod so;
+
 fn main() {
     let args: Vec<String> = std::env::args().collect();
     if args.len() < 2 {
@@ -21,11 +23,13 @@ fn main() {
         "recompile" => cmd_recompile(&args[2..]),
         "verify" => cmd_verify(&args[2..]),
         "verify-t32" => cmd_verify_t32(&args[2..]),
+        "so" => so::cmd_so(&args[2..]),
+        "verify-so" => so::cmd_verify_so(&args[2..]),
         "coverage" => cmd_coverage(&args[2..]),
         "bench" => cmd_bench(&args[2..]),
         _ => {
             eprintln!("unknown command: {}", cmd);
-            eprintln!("usage: rearm <disasm|recompile|verify|verify-t32|coverage|bench> [args]");
+            eprintln!("usage: rearm <disasm|recompile|verify|verify-t32|so|verify-so|coverage|bench> [args]");
             std::process::exit(2);
         }
     };
