@@ -108,3 +108,4 @@ wget https://github.com/Z3Prover/z3/releases/download/z3-4.13.4/z3-4.13.4-x64-gl
 ## License
 
 MIT
+restored 2026-09-24T16:59Z
