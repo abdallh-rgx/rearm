@@ -39,7 +39,7 @@ fb613002 smmls r0, r1, r2, r3
 fb613012 smmlsr r0, r1, r2, r3
 fb71f002 usad8 r0, r1, r2
 fb713002 usada8 r0, r1, r2, r3
-fb91f0f2 <unknown>
-fbb1f0f2 <unknown>
-fb95f3f7 <unknown>
-fbb2f6f9 <unknown>
+fb91f0f2 sdiv r0, r1, r2
+fbb1f0f2 udiv r0, r1, r2
+fb95f3f7 sdiv r3, r5, r7
+fbb2f6f9 udiv r6, r2, r9

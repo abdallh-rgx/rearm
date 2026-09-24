@@ -9,6 +9,8 @@ pub enum DpOp {
     And, Eor, Sub, Rsb, Add, Adc, Sbc, Rsc,
     Tst, Teq, Cmp, Cmn,
     Orr, Mov, Bic, Mvn,
+    /// T32-only: ORN (OR with NOT operand). A32 never produces this.
+    Orn,
 }
 
 impl DpOp {
@@ -19,6 +21,7 @@ impl DpOp {
             Add => "add", Adc => "adc", Sbc => "sbc", Rsc => "rsc",
             Tst => "tst", Teq => "teq", Cmp => "cmp", Cmn => "cmn",
             Orr => "orr", Mov => "mov", Bic => "bic", Mvn => "mvn",
+            Orn => "orn",
         }
     }
     pub const fn is_test(self) -> bool {
@@ -214,6 +217,11 @@ pub enum Ins {
     // ======== data processing ========
     DpImm { op: DpOp, s: bool, rn: R, rd: R, imm12: u16 },
     DpReg { op: DpOp, s: bool, rn: R, rd: R, rm: R, shift: Shift, amount: ShiftAmount },
+    /// T32 data-processing (immediate): imm12 = i:imm3:imm8 raw; the value is
+    /// ThumbExpandImm(imm12) — applied at lift time (A32 `DpImm` keeps the
+    /// A32 rot:imm8 convention; the two never mix).
+    /// `plain` marks the ADDW/SUBW/ADR plain-imm12 form (op5 10000/10101).
+    DpImmT32 { op: DpOp, s: bool, rn: R, rd: R, imm12: u16, plain: bool },
     Movw { rd: R, imm16: u16 },
     Movt { rd: R, imm16: u16 },
 
@@ -302,6 +310,9 @@ pub enum Ins {
     // ======== status / system ========
     Mrs { rd: R, spsr: bool },
     Msr { spsr: bool, mask: u8, rn: R, imm: Option<u32> },
+    /// T16 IT block: firstcond + mask. The block affects flag-setting of the
+    /// 1-4 following instructions (handled at lift time).
+    It { first_cond: Cond, mask: u8 },
     Hints { kind: Hint },
     Barriers { kind: Barrier, opt: u8 },
     Bkpt { imm: u16 },
@@ -359,7 +370,7 @@ impl Ins {
     pub fn mnemonic(&self) -> &'static str {
         use Ins::*;
         match self {
-            DpImm { op, .. } | DpReg { op, .. } => op.name(),
+            DpImm { op, .. } | DpReg { op, .. } | DpImmT32 { op, .. } => op.name(),
             Movw { .. } => "movw",
             Movt { .. } => "movt",
             Mul { .. } => "mul", Mla { .. } => "mla", Mls { .. } => "mls",
@@ -394,7 +405,7 @@ impl Ins {
             B { .. } => "b", Bl { .. } => "bl", Blx { .. } => "blx",
             Bx { .. } => "bx", BlxReg { .. } => "blx", Bxj { .. } => "bxj",
             Cbz { .. } => "cbz", Tbb { .. } => "tbb",
-            Mrs { .. } => "mrs", Msr { .. } => "msr",
+            Mrs { .. } => "mrs", Msr { .. } => "msr", It { .. } => "it",
             Hints { .. } => "hint", Barriers { .. } => "barrier",
             Bkpt { .. } => "bkpt", Clrex => "clrex", Svc { .. } => "svc", Udf { .. } => "udf",
             Setend { .. } => "setend", Cps { .. } => "cps",

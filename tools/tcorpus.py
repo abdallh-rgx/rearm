@@ -28,7 +28,7 @@ def main():
         if r.returncode != 0:
             sys.stderr.write(r.stderr[:4000])
             sys.exit(1)
-        d = subprocess.run([OBJDUMP, "-d", "--triple=thumbv7-none-eabi", f"-mattr={ATTRS}", obj],
+        d = subprocess.run([OBJDUMP, "-d", "--triple=thumbv7-none-eabi", f"--mattr={ATTRS}", obj],
                            capture_output=True, text=True)
         out = []
         started = False

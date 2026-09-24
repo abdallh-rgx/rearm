@@ -21,7 +21,7 @@ str.w r0, [r1], #24
 str.w r0, [r1], #-24
 ldrb.w r0, [r1, #255]
 ldrb r0, [r1, #-255]
-strb.w r0, [r1, #31]
+strb.w r8, [r1, #0x1f]
 strb r0, [r1, #-31]
 ldrh.w r0, [r1, #63]
 ldrh r0, [r1, #-63]

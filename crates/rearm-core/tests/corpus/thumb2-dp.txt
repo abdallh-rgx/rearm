@@ -32,7 +32,7 @@ ea4f60f1 ror.w r0, r1, #0x1b
 ea6f4041 mvn.w r0, r1, lsl #17
 ea7f00d1 mvns.w r0, r1, lsr #3
 ea4f0031 rrx r0, r1
-ea100f01 tst.w r0, r1
+ea100f08 tst.w r0, r8
 ea102f01 tst.w r0, r1, lsl #8
 ea902f51 teq.w r0, r1, lsr #9
 ebb01fe1 cmp.w r0, r1, asr #7
@@ -185,12 +185,12 @@ fa82f081 qadd r0, r1, r2
 fa82f0a1 qsub r0, r1, r2
 fa82f091 qdadd r0, r1, r2
 fa82f0b1 qdsub r0, r1, r2
-fac1f082 <unknown>
-fac1f092 <unknown>
-fac1f0a2 <unknown>
-fad1f082 <unknown>
-fad1f092 <unknown>
-fad1f0a2 <unknown>
+fac1f082 crc32b r0, r1, r2
+fac1f092 crc32h r0, r1, r2
+fac1f0a2 crc32w r0, r1, r2
+fad1f082 crc32cb r0, r1, r2
+fad1f092 crc32ch r0, r1, r2
+fad1f0a2 crc32cw r0, r1, r2
 f34100d0 sbfx r0, r1, #0x3, #0x11
 f3c12007 ubfx r0, r1, #0x8, #0x8
 f36f104e bfc r0, #5, #10

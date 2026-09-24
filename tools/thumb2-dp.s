@@ -38,7 +38,7 @@ mvn.w r0, r1, lsl #17
 mvns.w r0, r1, lsr #3
 rrx r0, r1
 // TST/TEQ/CMP/CMN reg
-tst.w r0, r1
+tst.w r0, r8
 tst.w r0, r1, lsl #8
 teq.w r0, r1, lsr #9
 cmp.w r0, r1, asr #7

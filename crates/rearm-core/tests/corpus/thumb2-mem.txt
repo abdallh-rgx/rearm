@@ -18,7 +18,7 @@ f8410b18 str r0, [r1], #24
 f8410918 str r0, [r1], #-24
 f89100ff ldrb.w r0, [r1, #0xff]
 f8110cff ldrb r0, [r1, #-255]
-f881001f strb.w r0, [r1, #0x1f]
+f881801f strb.w r8, [r1, #0x1f]
 f8010c1f strb r0, [r1, #-31]
 f8b1003f ldrh.w r0, [r1, #0x3f]
 f8310c3f ldrh r0, [r1, #-63]
