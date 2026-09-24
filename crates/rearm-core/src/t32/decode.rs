@@ -84,9 +84,11 @@ fn decode_t16(hw: u16) -> Result<Ins, DecodeErr> {
                     let sub = bt(w, 9);
                     let op = if sub { DpOp::Sub } else { DpOp::Add };
                     if bt(w, 10) {
-                        Ok(Ins::DpImm { op, s: true, rn: rd, rd, imm12: bb(w, 8, 6) as u16 })
+                        // ADD/SUB imm3: rn at [5:3], imm3 at [8:6]
+                        Ok(Ins::DpImm { op, s: true, rn, rd, imm12: bb(w, 8, 6) as u16 })
                     } else {
-                        Ok(dp0(op, true, rd, rd, rn))
+                        // ADD/SUB reg: rn at [5:3], rm at [8:6]
+                        Ok(dp0(op, true, rn, rd, rm))
                     }
                 }
             }
@@ -120,24 +122,24 @@ fn decode_t16(hw: u16) -> Result<Ins, DecodeErr> {
                 });
             }
             match bb(w, 11, 10) {
-                0 => { // 010000: data processing (opcode 9:6, rm 5:3, rd 2:0)
+                0 => { // 010000: data processing (opcode 9:6, rm at 5:3, rd 2:0)
                     match bb(w, 9, 6) {
-                        0b0000 => Ok(dp0(DpOp::And, true, rd, rd, rm)),
-                        0b0001 => Ok(dp0(DpOp::Eor, true, rd, rd, rm)),
-                        0b0010 => Ok(dpr(DpOp::Mov, true, 0, rd, rm, Shift::Lsl, rd)),
-                        0b0011 => Ok(dpr(DpOp::Mov, true, 0, rd, rm, Shift::Lsr, rd)),
-                        0b0100 => Ok(dpr(DpOp::Mov, true, 0, rd, rm, Shift::Asr, rd)),
-                        0b0101 => Ok(dp0(DpOp::Adc, true, rd, rd, rm)),
-                        0b0110 => Ok(dp0(DpOp::Sbc, true, rd, rd, rm)),
-                        0b0111 => Ok(dpr(DpOp::Mov, true, 0, rd, rm, Shift::Ror, rd)),
-                        0b1000 => Ok(dp0(DpOp::Tst, true, rd, 15, rm)),
-                        0b1001 => Ok(Ins::DpImm { op: DpOp::Rsb, s: true, rn: rd, rd, imm12: 0 }), // RSBS #0
-                        0b1010 => Ok(dp0(DpOp::Cmp, true, rd, 15, rm)),
-                        0b1011 => Ok(dp0(DpOp::Cmn, true, rd, 15, rm)),
-                        0b1100 => Ok(dp0(DpOp::Orr, true, rd, rd, rm)),
-                        0b1101 => Ok(Ins::Mul { rd, rn: rd, rm, s: true }),
-                        0b1110 => Ok(dp0(DpOp::Bic, true, rd, rd, rm)),
-                        _ => Ok(dp0(DpOp::Mvn, true, 0, rd, rm)),
+                        0b0000 => Ok(dp0(DpOp::And, true, rd, rd, rn)),
+                        0b0001 => Ok(dp0(DpOp::Eor, true, rd, rd, rn)),
+                        0b0010 => Ok(dpr(DpOp::Mov, true, 0, rd, rn, Shift::Lsl, rd)),
+                        0b0011 => Ok(dpr(DpOp::Mov, true, 0, rd, rn, Shift::Lsr, rd)),
+                        0b0100 => Ok(dpr(DpOp::Mov, true, 0, rd, rn, Shift::Asr, rd)),
+                        0b0101 => Ok(dp0(DpOp::Adc, true, rd, rd, rn)),
+                        0b0110 => Ok(dp0(DpOp::Sbc, true, rd, rd, rn)),
+                        0b0111 => Ok(dpr(DpOp::Mov, true, 0, rd, rn, Shift::Ror, rd)),
+                        0b1000 => Ok(dp0(DpOp::Tst, true, rd, 15, rn)),
+                        0b1001 => Ok(Ins::DpImm { op: DpOp::Rsb, s: true, rn, rd, imm12: 0 }), // RSBS #0
+                        0b1010 => Ok(dp0(DpOp::Cmp, true, rd, 15, rn)),
+                        0b1011 => Ok(dp0(DpOp::Cmn, true, rd, 15, rn)),
+                        0b1100 => Ok(dp0(DpOp::Orr, true, rd, rd, rn)),
+                        0b1101 => Ok(Ins::Mul { rd, rn: rd, rm: rn, s: true }),
+                        0b1110 => Ok(dp0(DpOp::Bic, true, rd, rd, rn)),
+                        _ => Ok(dp0(DpOp::Mvn, true, 0, rd, rn)),
                     }
                 }
                 1 => { // 010001: special data + BX
@@ -147,8 +149,8 @@ fn decode_t16(hw: u16) -> Result<Ins, DecodeErr> {
                         0 => Ok(dp0(DpOp::Add, false, dn, dn, rmh)),
                         1 => Ok(dp0(DpOp::Cmp, false, dn, 15, rmh)),
                         2 => Ok(dp0(DpOp::Mov, false, 0, dn, rmh)),
-                        3 if !bt(w, 7) && !bt(w, 6) => Ok(Ins::Bx { rm: rmh }),
-                        3 if bt(w, 7) && !bt(w, 6) => Ok(Ins::BlxReg { rm: rmh }),
+                        3 if !bt(w, 7) => Ok(Ins::Bx { rm: rmh }),
+                        3 if bt(w, 7) => Ok(Ins::BlxReg { rm: rmh }),
                         _ => Err(DecodeErr(w)),
                     }
                 }
@@ -231,8 +233,8 @@ fn decode_t16_misc(w: u32) -> Result<Ins, DecodeErr> {
             if bt(w, 0) { aif |= 1; } // F
             Ok(Ins::Cps { enable, aif, change_mode: false, mode: 0 })
         }
-        // 1011 001x / 1011 101x: CBZ (bit11=0) / CBNZ (bit11=1)
-        _ if bb(w, 11, 9) == 0b001 => {
+        // 1011 x001xxxxx: CBZ (bit11=0) / CBNZ (bit11=1)
+        _ if bb(w, 10, 8) == 0b001 => {
             let i = bb(w, 9, 9) as i32;
             let imm5 = bb(w, 7, 3) as i32;
             let rn = bb(w, 2, 0) as u8;
@@ -376,11 +378,11 @@ fn decode_e8(w: u32) -> Result<Ins, DecodeErr> {
             Ok(Ins::ExclStore { size: Size::W32, rs: bb(hw2, 11, 8) as u8, rt, rn, imm: bb(hw2, 7, 0) as i32 * 4 })
         }
         (true, true, false, true) => {
-            // 1110 1000 1101 Rn: TBB/TBH (Rt-slot=F, hw2[11:4]=0) or LDREXB/H/D.
+            // 1110 1000 1101 Rn: TBB/TBH (Rt-slot=F, hw2[11:4]=0), LDREXB/H
+            // ([11:8]=F, [7:4]∈{4,5}), LDREXD ([7:4]=7), else LDRD.
             if rt == 15 && bb(hw2, 11, 4) == 0 {
                 return Ok(Ins::Tbb { rn, rm: bb(hw2, 3, 0) as u8, half: bt(hw2, 4) });
             }
-            // LDREX B/H: hw2[11:8]=F, size bits [7:4] ∈ {4,5}; LDREXD: Rt2 at [11:8], [7:4]=7.
             if bb(hw2, 7, 4) == 4 && bb(hw2, 11, 8) == 0xF {
                 Ok(Ins::ExclLoad { size: Size::B8, rt, rn, imm: 0 })
             } else if bb(hw2, 7, 4) == 5 && bb(hw2, 11, 8) == 0xF {
@@ -388,17 +390,26 @@ fn decode_e8(w: u32) -> Result<Ins, DecodeErr> {
             } else if bb(hw2, 7, 4) == 7 && bb(hw2, 3, 0) == 0xF {
                 Ok(Ins::ExclLoadD { rt, rt2: bb(hw2, 11, 8) as u8, rn })
             } else {
-                Err(DecodeErr(w))
+                let rt_l = bb(hw2, 11, 8) as u8;
+                let rt2 = rt;
+                let imm8 = bb(hw2, 7, 0) as i32 * 4;
+                Ok(Ins::LdrdStrd { store: false, rt: rt_l, rt2, rn, imm: imm8, index: true, add: true, wback: false })
             }
         }
         (true, true, false, false) => {
-            // 1110 1000 1100 Rn: STREXB/H/D: Rt(15:12), F(11:8) or Rt2, size [7:4], Rs(3:0)
+            // 1110 1000 1100 Rn: STREXB/H ([11:8]=F), STREXD ([7:4]=7), else STRD.
             let rs = bb(hw2, 3, 0) as u8;
-            match bb(hw2, 7, 4) {
-                4 if bb(hw2, 11, 8) == 0xF => Ok(Ins::ExclStore { size: Size::B8, rs, rt, rn, imm: 0 }),
-                5 if bb(hw2, 11, 8) == 0xF => Ok(Ins::ExclStore { size: Size::H16, rs, rt, rn, imm: 0 }),
-                7 => Ok(Ins::ExclStoreD { rs, rt, rt2: bb(hw2, 11, 8) as u8, rn }),
-                _ => Err(DecodeErr(w)),
+            if bb(hw2, 7, 4) == 4 && bb(hw2, 11, 8) == 0xF {
+                Ok(Ins::ExclStore { size: Size::B8, rs, rt, rn, imm: 0 })
+            } else if bb(hw2, 7, 4) == 5 && bb(hw2, 11, 8) == 0xF {
+                Ok(Ins::ExclStore { size: Size::H16, rs, rt, rn, imm: 0 })
+            } else if bb(hw2, 7, 4) == 7 {
+                Ok(Ins::ExclStoreD { rs, rt, rt2: bb(hw2, 11, 8) as u8, rn })
+            } else {
+                let rt_l = bb(hw2, 11, 8) as u8;
+                let rt2 = rt;
+                let imm8 = bb(hw2, 7, 0) as i32 * 4;
+                Ok(Ins::LdrdStrd { store: true, rt: rt_l, rt2, rn, imm: imm8, index: true, add: true, wback: false })
             }
         }
         // LDRD/STRD (imm8 ×4): P=1 offset/pre-index, P=0 post; Rt at [11:8], Rt2 at [15:12]

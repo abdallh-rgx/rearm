@@ -19,7 +19,7 @@ impl core::fmt::Display for EncodeErr {
 }
 
 #[inline]
-fn bit(v: u32, n: u32) -> u32 { ((v >> n) & 1) << n }
+fn bit(v: u32, n: u32) -> u32 { (v >> n) & 1 }
 #[inline]
 fn bits(v: u32, hi: u32, lo: u32) -> u32 { (v & (((1u32 << (hi - lo + 1)) - 1) << lo)) }
 
@@ -51,10 +51,10 @@ fn encode_t16(ins: &Ins) -> Option<u16> {
                 let sub = matches!(op, DpOp::Sub) as u32;
                 0x1800 | (sub << 9) | ((*rm as u32) << 6) | ((*rn as u32) << 3) | *rd as u32
             }
-        // ADD/SUB imm3 (rn == rd < 8, imm ≤ 7)
-        DpImm { op, s: true, rn, rd, imm12 } if rn == rd && *rd < 8 && matches!(op, DpOp::Add | DpOp::Sub) && *imm12 <= 7 => {
+        // ADD/SUB imm3 3-field (rn ≠ rd, both < 8, imm ≤ 7)
+        DpImm { op, s: true, rn, rd, imm12 } if rn != rd && *rn < 8 && *rd < 8 && matches!(op, DpOp::Add | DpOp::Sub) && *imm12 <= 7 => {
             let sub = matches!(op, DpOp::Sub) as u32;
-            0x1C00 | (sub << 9) | ((*imm12 as u32) << 6) | ((*rd as u32) << 3) | *rd as u32
+            0x1C00 | (sub << 9) | ((*imm12 as u32) << 6) | ((*rn as u32) << 3) | *rd as u32
         }
         // MOV/CMP/ADD/SUB imm8 (r < 8, imm ≤ 255, rn==rd for add/sub)
         DpImm { op: DpOp::Mov, s: true, rn: 0, rd, imm12 } if *rd < 8 && *imm12 <= 0xFF => {
@@ -67,13 +67,25 @@ fn encode_t16(ins: &Ins) -> Option<u16> {
             let base = if matches!(op, DpOp::Add) { 0x3000 } else { 0x3800 };
             base | ((*rd as u32) << 8) | *imm12 as u32
         }
+        // DP (010000): tests (Rd=15) — operand reg < 8
+        DpReg { op, s: true, rn, rd: 15, rm, shift: Shift::Lsl, amount: ShiftAmount::Imm(0) }
+            if *rn < 8 && *rm < 8 => {
+                let code = match op {
+                    DpOp::Tst => 0x8u32, DpOp::Cmp => 0xA, _ => 0xB, // Cmn
+                };
+                0x4000 | (code << 6) | ((*rm as u32) << 3) | *rn as u32
+            }
+        // MVNS (rn == 0)
+        DpReg { op: DpOp::Mvn, s: true, rn: 0, rd, rm, shift: Shift::Lsl, amount: ShiftAmount::Imm(0) }
+            if *rd < 8 && *rm < 8 => {
+                0x43C0 | ((*rm as u32) << 3) | *rd as u32
+            }
         // DP (010000): rn == rd < 8 for the 2-operand group
         DpReg { op, s: true, rn, rd, rm, shift: Shift::Lsl, amount: ShiftAmount::Imm(0) }
             if *rn == *rd && *rd < 8 && *rm < 8 => {
                 let code = match op {
                     DpOp::And => 0x0u32, DpOp::Eor => 0x1, DpOp::Adc => 0x5, DpOp::Sbc => 0x6,
-                    DpOp::Tst => 0x8, DpOp::Cmp => 0xA, DpOp::Cmn => 0xB, DpOp::Orr => 0xC,
-                    DpOp::Bic => 0xE,
+                    DpOp::Orr => 0xC, DpOp::Bic => 0xE,
                     _ => return None,
                 };
                 0x4000 | (code << 6) | ((*rm as u32) << 3) | *rd as u32
@@ -202,8 +214,7 @@ fn encode_t16(ins: &Ins) -> Option<u16> {
         Revsh { rd, rm } if *rd < 8 && *rm < 8 => 0xBAC0 | ((*rm as u32) << 3) | *rd as u32,
         // CPS (enable/disable AIF)
         Cps { enable, aif, change_mode: false, mode: _ } if *aif != 0 => {
-            0xB660 | ((!*enable as u32) << 7)
-                | ((aif & 4 != 0) as u32) << 6 | ((aif & 2 != 0) as u32) << 5 | ((aif & 1 != 0) as u32) << 4
+            0xB660 | ((!*enable as u32) << 4) | (aif & 7) as u32
         }
         // BKPT
         Bkpt { imm } if *imm <= 0xFF => 0xBE00 | *imm as u32,
@@ -220,6 +231,9 @@ fn encode_t16(ins: &Ins) -> Option<u16> {
         It { first_cond, mask } if *mask != 0 => {
             0xBF00 | ((first_cond.bits() as u32) << 4) | *mask as u32
         }
+        // BX / BLX reg
+        Bx { rm } => 0x4700 | ((*rm as u32) << 3),
+        BlxReg { rm } => 0x4780 | ((*rm as u32) << 3),
         // SVC
         Svc { imm } if *imm <= 0xFF => 0xDF00 | *imm,
         _ => return None,
@@ -412,8 +426,6 @@ fn encode_t32_word(ins: &Ins) -> Result<u32, EncodeErr> {
         B { cond: Cond::Al, off } => enc_branch_t4(*off)?,
         Bl { off } => enc_bl(*off, 1)?,
         Blx { off } => enc_bl(*off, 0)?,
-        Bx { rm } => 0x4700 | ((*rm as u32) << 3),
-        BlxReg { rm } => 0x4700 | 0x80 | ((*rm as u32) << 3),
 
         // ======== load/store ========
         Ldst { store, size, signed, user, rt, rn, rm, shift, imm, index, add, wback } => {
@@ -430,7 +442,7 @@ fn encode_t32_word(ins: &Ins) -> Result<u32, EncodeErr> {
         LdmStm { load, rn, mode, wback, user: _, list } => {
             let (p, u) = mode.pu();
             let (p, u) = (p as u32, u as u32);
-            0xE880_0000 | (p << 24) | (u << 23) | ((*wback as u32) << 21) | ((*load as u32) << 20)
+            0xE800_0000 | (p << 24) | (u << 23) | ((*wback as u32) << 21) | ((*load as u32) << 20)
                 | ((*rn as u32) << 16) | list.bitmap() as u32
         }
         ExclLoad { size: Size::W32, rt, rn, imm } => {
@@ -514,6 +526,13 @@ fn encode_t32_word(ins: &Ins) -> Result<u32, EncodeErr> {
                 | (((*shift as u32) >> 2) << 12) | ((*rd as u32) << 8) | (((*shift as u32) & 3) << 6)
                 | (typ << 4) | *rm as u32
         }
+
+        // ======== preload ========
+        Pld { w, rn, rm, shift, imm } => {
+            let sz = if *w { 0b01u32 } else { 0b00 };
+            enc_pl_f8(0, sz, *rn, *rm, *shift, *imm)?
+        }
+        Pli { rn, rm, shift, imm } => enc_pl_f8(1, 0b00, *rn, *rm, *shift, *imm)?,
 
         // IT has no 32-bit form (16-bit only)
         It { .. } => return Err(enc_err("IT is 16-bit only")),
@@ -671,4 +690,28 @@ fn enc_f8_ldst(store: bool, size: Size, signed: bool, user: bool, rt: u8, rn: u8
         return Ok(base | ((rt as u32) << 12) | 0x0C00 | (imm.unsigned_abs() as u32 & 0xFF));
     }
     Err(enc_err("ldst form"))
+}
+
+/// Preload f8 form: S bit + size, Rt-slot = 1111 marker.
+fn enc_pl_f8(s: u32, sz: u32, rn: u8, rm: Option<u8>, shift: Shift, imm: i32) -> Result<u32, EncodeErr> {
+    let base = 0xF800_0000u32 | (s << 24) | (sz << 21) | (1 << 20) | ((rn as u32) << 16);
+    let rtf = 0xF000u32; // Rt-slot = PC marker
+    if let Some(rm_v) = rm {
+        if !wback7(shift, imm) {
+            return Ok(base | rtf | ((imm as u32 & 3) << 4) | rm_v as u32);
+        }
+        return Err(enc_err("pld reg"));
+    }
+    if imm >= 0 && imm <= 0xFFF {
+        return Ok(base | 0x0080_0000 | rtf | imm as u32);
+    }
+    if imm < 0 && imm >= -255 {
+        return Ok(base | rtf | 0x0C00 | imm.unsigned_abs() as u32);
+    }
+    Err(enc_err("pld offset"))
+}
+
+fn wback7(shift: Shift, imm: i32) -> bool {
+    let _ = (shift, imm);
+    false
 }
