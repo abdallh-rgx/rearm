@@ -908,7 +908,7 @@ pub(crate) fn translate_dp(op: DpOp, s: bool, rn: R, rd: R, o: Operand, carry_co
                             out.log_imm(false, 1, bn, immr, imms, base, x(rd)); // orr rd, base, #~v
                         } else {
                             load_imm32(out, 16, v as u32);
-                            out.logic_reg(false, 3, true, false, 0, base, 16, x(rd)); // orn rd, base, w16
+                            out.logic_reg(false, 1, true, false, 0, base, 16, x(rd)); // orn rd, base, w16
                         }
                     } else {
                         load_imm32(out, 16, v as u32);
@@ -958,14 +958,16 @@ pub(crate) fn translate_dp(op: DpOp, s: bool, rn: R, rd: R, o: Operand, carry_co
                             out.bfi(true, 18, 17, 28, 2);
                             out.e(MSR_X17);
                         } else if amount != 0 && amount < 32 {
+                            // extract the shifter-carry BEFORE the shift —
+                            // the shift may write rd == rm and destroy src
+                            out.ubfx(false, src, 18, bit, 1); // w18 = carry-out
                             emit_shift(out, src, x(rd), shift, amount as u8);
                             out.e(MRS_X16);
                             out.logic_reg(false, 3, false, false, 0, x(rd), x(rd), 31); // ands wzr
                             out.e(MRS_X17);
-                            out.ubfx(false, src, 18, bit, 1);
-                            out.bfi(true, 18, 17, 29, 1);
+                            out.bfi(true, 18, 17, 29, 1); // C := carry
                             out.ubfx(true, 16, 19, 28, 1);
-                            out.bfi(true, 19, 17, 28, 1);
+                            out.bfi(true, 19, 17, 28, 1); // V := old
                             out.e(MSR_X17);
                         } else {
                             return Err(TranslateErr("movs-shift unsupported".to_string()));

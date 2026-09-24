@@ -649,23 +649,23 @@ fn decode_f3(w: u32) -> Result<Ins, DecodeErr> {
 
     match op {
         0b0000 => { // SSAT (sh = LSL)
-            Ok(Ins::Ssat { rd, imm: bb(hw2, 5, 0) as u8 + 1, rn, sh: imm5 as u8, asr: false })
+            Ok(Ins::Ssat { rd, imm: bb(hw2, 4, 0) as u8 + 1, rn, sh: imm5 as u8, asr: false })
         }
         0b0010 => { // SSAT (sh = ASR) or SSAT16 (imm5 == 0)
             if imm5 == 0 {
-                Ok(Ins::Ssat16 { rd, imm: bb(hw2, 5, 0) as u8 + 1, rn })
+                Ok(Ins::Ssat16 { rd, imm: bb(hw2, 3, 0) as u8 + 1, rn })
             } else {
-                Ok(Ins::Ssat { rd, imm: bb(hw2, 5, 0) as u8 + 1, rn, sh: imm5 as u8, asr: true })
+                Ok(Ins::Ssat { rd, imm: bb(hw2, 4, 0) as u8 + 1, rn, sh: imm5 as u8, asr: true })
             }
         }
         0b1000 => { // USAT (sh = LSL)
-            Ok(Ins::Usat { rd, imm: bb(hw2, 5, 0) as u8, rn, sh: imm5 as u8, asr: false })
+            Ok(Ins::Usat { rd, imm: bb(hw2, 4, 0) as u8, rn, sh: imm5 as u8, asr: false })
         }
         0b1010 => { // USAT (sh = ASR) or USAT16 (imm5 == 0)
             if imm5 == 0 {
-                Ok(Ins::Usat16 { rd, imm: bb(hw2, 5, 0) as u8, rn })
+                Ok(Ins::Usat16 { rd, imm: bb(hw2, 3, 0) as u8, rn })
             } else {
-                Ok(Ins::Usat { rd, imm: bb(hw2, 5, 0) as u8, rn, sh: imm5 as u8, asr: true })
+                Ok(Ins::Usat { rd, imm: bb(hw2, 4, 0) as u8, rn, sh: imm5 as u8, asr: true })
             }
         }
         0b0100 => { // SBFX: lsb = imm3:imm2, width = widthm1+1
@@ -677,6 +677,7 @@ fn decode_f3(w: u32) -> Result<Ins, DecodeErr> {
         0b0110 => { // BFI (Rn=15 → BFC): lsb = imm3:imm2, msb at [5:0]
             let lsb = imm5 as u8;
             let msb = bb(hw2, 5, 0) as u8;
+            if msb < lsb { return Err(DecodeErr(w)); } // UNPREDICTABLE
             if rn == 15 {
                 Ok(Ins::Bfc { rd, lsb, width: msb - lsb + 1 })
             } else {

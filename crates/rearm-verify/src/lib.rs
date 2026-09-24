@@ -797,6 +797,7 @@ fn a32_effect(ins: &Ins, pc: u32, st: &mut St) -> Result<(), String> {
             Ok(())
         }
         Ins::Ssat { rd, imm, rn, sh, asr } => {
+            if *imm == 0 || *imm > 32 { return Err("ssat width".into()); }
             let shv = imm32(*sh as u32);
             let x = if *asr { format!("(bvashr {} {})", g(st, *rn, pc), shv) }
                     else { format!("(bvshl {} {})", g(st, *rn, pc), shv) };
@@ -810,6 +811,7 @@ fn a32_effect(ins: &Ins, pc: u32, st: &mut St) -> Result<(), String> {
             Ok(())
         }
         Ins::Usat { rd, imm, rn, sh, asr } => {
+            if *imm > 31 { return Err("usat width".into()); }
             let shv = imm32(*sh as u32);
             let x = if *asr { format!("(bvashr {} {})", g(st, *rn, pc), shv) }
                     else { format!("(bvshl {} {})", g(st, *rn, pc), shv) };
