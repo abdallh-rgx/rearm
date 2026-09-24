@@ -3,7 +3,7 @@
 //! instruction, 8 hex digits = 32-bit (hw1 then hw2, memory order).
 
 use rearm_core::t32::decode::decode_t32;
-use rearm_core::t32::encode::encode_t32;
+use rearm_core::t32::encode::encode_t32_len;
 use rearm_core::a32::ins::Ins;
 
 fn load_corpus(name: &str) -> Vec<(u32, String)> {
@@ -44,7 +44,7 @@ fn run_corpus(name: &str) {
                     unsupported += 1;
                     continue;
                 }
-                match encode_t32(&tins.ins) {
+                match encode_t32_len(&tins.ins, tins.len) {
                     Ok((eh1, eh2, len)) => {
                         if eh1 != hw1 || eh2 != hw2 || len != tins.len {
                             failures.push(format!(

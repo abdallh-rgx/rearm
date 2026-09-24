@@ -85,7 +85,7 @@ fn decode_t16(hw: u16) -> Result<Ins, DecodeErr> {
                     let op = if sub { DpOp::Sub } else { DpOp::Add };
                     if bt(w, 10) {
                         // ADD/SUB imm3: rn at [5:3], imm3 at [8:6]
-                        Ok(Ins::DpImm { op, s: true, rn, rd, imm12: bb(w, 8, 6) as u16 })
+                        Ok(Ins::DpImmT32 { op, s: true, rn, rd, imm12: bb(w, 8, 6) as u16, plain: true })
                     } else {
                         // ADD/SUB reg: rn at [5:3], rm at [8:6]
                         Ok(dp0(op, true, rn, rd, rm))
@@ -96,10 +96,10 @@ fn decode_t16(hw: u16) -> Result<Ins, DecodeErr> {
         // ===== 0010-0011: MOV/CMP/ADD/SUB imm8 =====
         0x2 | 0x3 => {
             match bb(w, 12, 11) {
-                0 => Ok(Ins::DpImm { op: DpOp::Mov, s: true, rn: 0, rd: rfn, imm12: imm8 as u16 }),
-                1 => Ok(Ins::DpImm { op: DpOp::Cmp, s: true, rn: rfn, rd: 15, imm12: imm8 as u16 }),
-                2 => Ok(Ins::DpImm { op: DpOp::Add, s: true, rn: rfn, rd: rfn, imm12: imm8 as u16 }),
-                _ => Ok(Ins::DpImm { op: DpOp::Sub, s: true, rn: rfn, rd: rfn, imm12: imm8 as u16 }),
+                0 => Ok(Ins::DpImmT32 { op: DpOp::Mov, s: true, rn: 0, rd: rfn, imm12: imm8 as u16, plain: true }),
+                1 => Ok(Ins::DpImmT32 { op: DpOp::Cmp, s: true, rn: rfn, rd: 15, imm12: imm8 as u16, plain: true }),
+                2 => Ok(Ins::DpImmT32 { op: DpOp::Add, s: true, rn: rfn, rd: rfn, imm12: imm8 as u16, plain: true }),
+                _ => Ok(Ins::DpImmT32 { op: DpOp::Sub, s: true, rn: rfn, rd: rfn, imm12: imm8 as u16, plain: true }),
             }
         }
         // ===== 0100-0101: DP / special / literal / reg-offset ldst =====
@@ -181,7 +181,7 @@ fn decode_t16(hw: u16) -> Result<Ins, DecodeErr> {
         // ===== 1010: ADR (bit11=0) / ADD Rd, SP, #imm8×4 (bit11=1) =====
         0xA => {
             let base = if bt(w, 11) { 13u8 } else { 15u8 };
-            Ok(Ins::DpImm { op: DpOp::Add, s: false, rn: base, rd: rfn, imm12: (imm8 * 4) as u16 })
+            Ok(Ins::DpImmT32 { op: DpOp::Add, s: false, rn: base, rd: rfn, imm12: (imm8 * 4) as u16, plain: true })
         }
         // ===== 1011: misc16 =====
         0xB => decode_t16_misc(w),
@@ -226,7 +226,7 @@ fn decode_t16_misc(w: u32) -> Result<Ins, DecodeErr> {
         0 => {
             let imm7 = bb(w, 6, 0) * 4;
             let op = if bt(w, 7) { DpOp::Sub } else { DpOp::Add };
-            Ok(Ins::DpImm { op, s: false, rn: 13, rd: 13, imm12: imm7 as u16 })
+            Ok(Ins::DpImmT32 { op, s: false, rn: 13, rd: 13, imm12: imm7 as u16, plain: true })
         }
         // 1011 0110: CPS — before PUSH (bits[11:10]=01 pattern overlaps)
         _ if bb(w, 11, 8) == 0b0110 => {

@@ -342,6 +342,7 @@ fn dp_effect(op: DpOp, s: bool, rn: String, rd: u8, val: String, carry: Option<S
         DpOp::And => format!("(bvand {} {})", rn, val),
         DpOp::Eor => format!("(bvxor {} {})", rn, val),
         DpOp::Orr => format!("(bvor {} {})", rn, val),
+        DpOp::Orn => format!("(bvor {} (bvnot {}))", rn, val),
         DpOp::Bic => format!("(bvand {} (bvnot {}))", rn, val),
         DpOp::Mov => val.clone(),
         DpOp::Mvn => format!("(bvnot {})", val),

@@ -22,9 +22,22 @@ impl core::fmt::Display for EncodeErr {
 fn bit(v: u32, n: u32) -> u32 { (v >> n) & 1 }
 
 /// Encode one instruction. Returns (hw1, hw2, len-in-bytes).
+/// Encode an `Ins` back to T32, preferring 16-bit forms where both exist.
 pub fn encode_t32(ins: &Ins) -> Result<(u16, u16, u16), EncodeErr> {
     // ---- try the 16-bit forms first (LLVM-compatible preference) ----
     if let Some(hw) = encode_t16(ins) {
+        return Ok((hw, 0, 2));
+    }
+    let (hw1, hw2) = encode_t32_32(ins)?;
+    Ok((hw1, hw2, 4))
+}
+
+/// Length-aware encoding: guarantees byte-exact re-encoding for the form the
+/// decoder produced (`len` = 2 or 4). Disambiguates the T16/32-bit forms that
+/// decode to the same `Ins` (e.g. ADR T1 vs ADR.W T3).
+pub fn encode_t32_len(ins: &Ins, len: u16) -> Result<(u16, u16, u16), EncodeErr> {
+    if len == 2 {
+        let hw = encode_t16(ins).ok_or(EncodeErr("no 16-bit form"))?;
         return Ok((hw, 0, 2));
     }
     let (hw1, hw2) = encode_t32_32(ins)?;
@@ -50,18 +63,18 @@ fn encode_t16(ins: &Ins) -> Option<u16> {
                 0x1800 | (sub << 9) | ((*rm as u32) << 6) | ((*rn as u32) << 3) | *rd as u32
             }
         // ADD/SUB imm3 3-field (rn ≠ rd, both < 8, imm ≤ 7)
-        DpImm { op, s: true, rn, rd, imm12 } if rn != rd && *rn < 8 && *rd < 8 && matches!(op, DpOp::Add | DpOp::Sub) && *imm12 <= 7 => {
+        DpImmT32 { op, s: true, rn, rd, imm12, plain: true } if rn != rd && *rn < 8 && *rd < 8 && matches!(op, DpOp::Add | DpOp::Sub) && *imm12 <= 7 => {
             let sub = matches!(op, DpOp::Sub) as u32;
             0x1C00 | (sub << 9) | ((*imm12 as u32) << 6) | ((*rn as u32) << 3) | *rd as u32
         }
         // MOV/CMP/ADD/SUB imm8 (r < 8, imm ≤ 255, rn==rd for add/sub)
-        DpImm { op: DpOp::Mov, s: true, rn: 0, rd, imm12 } if *rd < 8 && *imm12 <= 0xFF => {
+        DpImmT32 { op: DpOp::Mov, s: true, rn: 0, rd, imm12, plain: true } if *rd < 8 && *imm12 <= 0xFF => {
             0x2000 | ((*rd as u32) << 8) | *imm12 as u32
         }
-        DpImm { op: DpOp::Cmp, s: true, rn, rd: 15, imm12 } if *rn < 8 && *imm12 <= 0xFF => {
+        DpImmT32 { op: DpOp::Cmp, s: true, rn, rd: 15, imm12, plain: true } if *rn < 8 && *imm12 <= 0xFF => {
             0x2800 | ((*rn as u32) << 8) | *imm12 as u32
         }
-        DpImm { op, s: true, rn, rd, imm12 } if rn == rd && *rd < 8 && matches!(op, DpOp::Add | DpOp::Sub) && *imm12 <= 0xFF => {
+        DpImmT32 { op, s: true, rn, rd, imm12, plain: true } if rn == rd && *rd < 8 && matches!(op, DpOp::Add | DpOp::Sub) && *imm12 <= 0xFF => {
             let base = if matches!(op, DpOp::Add) { 0x3000 } else { 0x3800 };
             base | ((*rd as u32) << 8) | *imm12 as u32
         }
@@ -152,12 +165,12 @@ fn encode_t16(ins: &Ins) -> Option<u16> {
                 0x9000 | ((*store ^ true) as u32) << 11 | ((*rt as u32) << 8) | (imm >> 2) as u32
             }
         // ADR (rn = 15, imm 0..1020, 4-aligned) / ADD Rd, SP, #imm8×4
-        DpImm { op: DpOp::Add, s: false, rn, rd, imm12 } if *rd < 8 && *imm12 <= 1020 && imm12 % 4 == 0 && matches!(rn, 13 | 15) => {
+        DpImmT32 { op: DpOp::Add, s: false, rn, rd, imm12, plain: true } if *rd < 8 && *imm12 <= 1020 && imm12 % 4 == 0 && matches!(rn, 13 | 15) => {
             let sp = (*rn == 13) as u32;
             0xA000 | (sp << 11) | ((*rd as u32) << 8) | (imm12 >> 2) as u32
         }
         // ADD/SUB SP, SP, #imm7×4
-        DpImm { op, s: false, rn: 13, rd: 13, imm12 } if matches!(op, DpOp::Add | DpOp::Sub) && *imm12 <= 508 && imm12 % 4 == 0 => {
+        DpImmT32 { op, s: false, rn: 13, rd: 13, imm12, plain: true } if matches!(op, DpOp::Add | DpOp::Sub) && *imm12 <= 508 && imm12 % 4 == 0 => {
             let sub = matches!(op, DpOp::Sub) as u32;
             0xB000 | (sub << 7) | (imm12 >> 2) as u32
         }

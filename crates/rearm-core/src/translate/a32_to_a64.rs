@@ -787,12 +787,12 @@ fn emit_memaddr_scaled(out: &mut A64, rn: R, rm: Option<R>, imm: i32, add: bool,
 
 // ==================== data-processing core ====================
 
-enum Operand {
+pub(crate) enum Operand {
     Imm(u64),
     RegShift(R, Shift, u64),
 }
 
-fn translate_dp(op: DpOp, s: bool, rn: R, rd: R, o: Operand, carry_const: Option<u32>, pc: u32, out: &mut A64) -> Result<(), TranslateErr> {
+pub(crate) fn translate_dp(op: DpOp, s: bool, rn: R, rd: R, o: Operand, carry_const: Option<u32>, pc: u32, out: &mut A64) -> Result<(), TranslateErr> {
     // ===== test family: flags-only (A32: Rd not written) =====
     if op.is_test() {
         return match o {
@@ -896,11 +896,21 @@ fn translate_dp(op: DpOp, s: bool, rn: R, rd: R, o: Operand, carry_const: Option
                     }
                     if s { emit_logic_flags(out, 0, x(rd), carry_const)?; }
                 }
-                DpOp::Orr | DpOp::Eor => {
+                DpOp::Orr | DpOp::Eor | DpOp::Orn => {
                     let base = if rn == 15 { load_pc(out, 17, pc); 17 } else { x(rn) };
-                    let opc = if op == DpOp::Orr { 1u8 } else { 2 };
-                    load_imm32(out, 16, v as u32);
-                    out.logic_reg(false, opc, false, false, 0, base, 16, x(rd));
+                    let opc = match op { DpOp::Orr => 1u8, DpOp::Eor => 2, _ => 3 };
+                    let n = op == DpOp::Orn;
+                    if n {
+                        if let Some((bn, immr, imms)) = crate::a64::encode::encode_bitmask(v, false) {
+                            out.log_imm(false, 3, bn, immr, imms, base, x(rd)); // orn rd, base, #v
+                        } else {
+                            load_imm32(out, 16, v as u32);
+                            out.logic_reg(false, 3, true, false, 0, base, 16, x(rd));
+                        }
+                    } else {
+                        load_imm32(out, 16, v as u32);
+                        out.logic_reg(false, opc, false, false, 0, base, 16, x(rd));
+                    }
                     if s { emit_logic_flags(out, 0, x(rd), carry_const)?; }
                 }
                 DpOp::Add | DpOp::Sub | DpOp::Rsb => {
@@ -997,9 +1007,9 @@ fn translate_dp(op: DpOp, s: bool, rn: R, rd: R, o: Operand, carry_const: Option
                         return Err(TranslateErr("mvns shift".to_string()));
                     }
                 }
-                DpOp::And | DpOp::Bic | DpOp::Orr | DpOp::Eor => {
-                    let opc = match op { DpOp::And | DpOp::Bic => 0u8, DpOp::Orr => 1, _ => 2 };
-                    let n = matches!(op, DpOp::Bic);
+                DpOp::And | DpOp::Bic | DpOp::Orr | DpOp::Eor | DpOp::Orn => {
+                    let opc = match op { DpOp::And | DpOp::Bic => 0u8, DpOp::Orr => 1, DpOp::Eor => 2, _ => 3 };
+                    let n = matches!(op, DpOp::Bic | DpOp::Orn);
                     let src: XR = if rm == 15 { load_pc(out, 17, pc); 17 } else { x(rm) };
                     let base: XR = if rn == 15 { load_pc(out, 19, pc); 19 } else { x(rn) };
                     if !s {
