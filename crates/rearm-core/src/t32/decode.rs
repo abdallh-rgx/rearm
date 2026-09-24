@@ -382,9 +382,9 @@ fn decode_e8(w: u32) -> Result<Ins, DecodeErr> {
             }
             // LDREX B/H: hw2[11:8]=F, size bits [7:4] ∈ {4,5}; LDREXD: Rt2 at [11:8], [7:4]=7.
             if bb(hw2, 7, 4) == 4 && bb(hw2, 11, 8) == 0xF {
-                Ok(Ins::ExclLoad { size: Size::B8, rt, rn })
+                Ok(Ins::ExclLoad { size: Size::B8, rt, rn, imm: 0 })
             } else if bb(hw2, 7, 4) == 5 && bb(hw2, 11, 8) == 0xF {
-                Ok(Ins::ExclLoad { size: Size::H16, rt, rn })
+                Ok(Ins::ExclLoad { size: Size::H16, rt, rn, imm: 0 })
             } else if bb(hw2, 7, 4) == 7 && bb(hw2, 3, 0) == 0xF {
                 Ok(Ins::ExclLoadD { rt, rt2: bb(hw2, 11, 8) as u8, rn })
             } else {
@@ -395,8 +395,8 @@ fn decode_e8(w: u32) -> Result<Ins, DecodeErr> {
             // 1110 1000 1100 Rn: STREXB/H/D: Rt(15:12), F(11:8) or Rt2, size [7:4], Rs(3:0)
             let rs = bb(hw2, 3, 0) as u8;
             match bb(hw2, 7, 4) {
-                4 if bb(hw2, 11, 8) == 0xF => Ok(Ins::ExclStore { size: Size::B8, rs, rt, rn }),
-                5 if bb(hw2, 11, 8) == 0xF => Ok(Ins::ExclStore { size: Size::H16, rs, rt, rn }),
+                4 if bb(hw2, 11, 8) == 0xF => Ok(Ins::ExclStore { size: Size::B8, rs, rt, rn, imm: 0 }),
+                5 if bb(hw2, 11, 8) == 0xF => Ok(Ins::ExclStore { size: Size::H16, rs, rt, rn, imm: 0 }),
                 7 => Ok(Ins::ExclStoreD { rs, rt, rt2: bb(hw2, 11, 8) as u8, rn }),
                 _ => Err(DecodeErr(w)),
             }
@@ -668,7 +668,7 @@ fn decode_f3(w: u32) -> Result<Ins, DecodeErr> {
                 Ok(Ins::Bfi { rd, rn, lsb, width: msb - lsb + 1 })
             }
         }
-        _ => decode_f3_misc(w),
+        _ => Err(DecodeErr(w)),
     }
 }
 

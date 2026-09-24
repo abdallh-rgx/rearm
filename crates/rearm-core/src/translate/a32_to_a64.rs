@@ -1227,9 +1227,9 @@ fn regshift_finish(out: &mut A64, op: DpOp, s: bool, rn: R, rd: R, val: XR, car:
         DpOp::Cmp | DpOp::Cmn => {
             out.addsub_reg(false, if op == DpOp::Cmp { 1 } else { 0 }, true, 0, 0, x(rn), val, 31);
         }
-        DpOp::And | DpOp::Bic | DpOp::Orr | DpOp::Eor | DpOp::Mov | DpOp::Mvn => {
-            let opc = match op { DpOp::And | DpOp::Bic => 0u8, DpOp::Orr | DpOp::Mov => 1, _ => 2 };
-            let n = matches!(op, DpOp::Bic | DpOp::Mvn);
+        DpOp::And | DpOp::Bic | DpOp::Orr | DpOp::Orn | DpOp::Eor | DpOp::Mov | DpOp::Mvn => {
+            let opc = match op { DpOp::And | DpOp::Bic => 0u8, DpOp::Orr | DpOp::Mov | DpOp::Orn => 1, _ => 2 };
+            let n = matches!(op, DpOp::Bic | DpOp::Mvn | DpOp::Orn);
             let (a, b) = if matches!(op, DpOp::Mov | DpOp::Mvn) { (31u8, val) } else { (x(rn), val) };
             if !s {
                 out.logic_reg(false, opc, n, false, 0, a, b, x(rd));

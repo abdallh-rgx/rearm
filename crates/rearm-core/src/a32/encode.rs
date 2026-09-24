@@ -7,6 +7,9 @@ use crate::a32::ins::*;
 pub fn encode_a32(ins: &Ins) -> Result<u32, EncodeErr> {
     Ok(match ins {
         Ins::DpImm { op, s, rn, rd, imm12 } => {
+            if matches!(op, DpOp::Orn) {
+                return Ok(false as u32); // ORN has no A32 encoding (T32-only)
+            }
             let o = dp_opc(*op);
             if (0b1000..=0b1011).contains(&o) && !*s {
                 return Err(EncodeErr("TST/TEQ/CMP/CMN require S=1"));
@@ -20,6 +23,9 @@ pub fn encode_a32(ins: &Ins) -> Result<u32, EncodeErr> {
                 | *imm12 as u32
         }
         Ins::DpReg { op, s, rn, rd, rm, shift, amount } => {
+            if matches!(op, DpOp::Orn) {
+                return Ok(false as u32); // ORN has no A32 encoding (T32-only)
+            }
             let o = dp_opc(*op);
             if (0b1000..=0b1011).contains(&o) && !*s {
                 return Err(EncodeErr("TST/TEQ/CMP/CMN require S=1"));
@@ -459,6 +465,7 @@ const fn dp_opc(op: DpOp) -> u32 {
         DpOp::Add => 0b0100, DpOp::Adc => 0b0101, DpOp::Sbc => 0b0110, DpOp::Rsc => 0b0111,
         DpOp::Tst => 0b1000, DpOp::Teq => 0b1001, DpOp::Cmp => 0b1010, DpOp::Cmn => 0b1011,
         DpOp::Orr => 0b1100, DpOp::Mov => 0b1101, DpOp::Bic => 0b1110, DpOp::Mvn => 0b1111,
+        DpOp::Orn => 0b1100, // unreachable from A32 decode; guarded at call sites
     }
 }
 
