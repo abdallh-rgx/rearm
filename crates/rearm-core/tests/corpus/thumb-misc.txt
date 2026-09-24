@@ -35,12 +35,9 @@ eb0110d2 add.w r0, r1, r2, lsr #7
 eb012062 add.w r0, r1, r2, asr #9
 eb0120f2 add.w r0, r1, r2, ror #11
 eb010032 add.w r0, r1, r2, rrx
-eb110002 adds.w r0, r1, r2
 eb1170c2 adds.w r0, r1, r2, lsl #31
 eb010002 add.w r0, r1, r2
-eb110002 adds.w r0, r1, r2
 eba10002 sub.w r0, r1, r2
-ebb10002 subs.w r0, r1, r2
 f1b10010 subs.w r0, r1, #0x10
 eb610002 sbc.w r0, r1, r2
 f1c100ff rsb.w r0, r1, #0xff
@@ -88,13 +85,9 @@ f8410012 str.w r0, [r1, r2, lsl #1]
 80c8 strh r0, [r1, #0x6]
 e9d12302 ldrd r2, r3, [r1, #8]
 e9c12302 strd r2, r3, [r1, #8]
-e8900006 ldm.w r0, {r1, r2}
 e890028e ldm.w r0, {r1, r2, r3, r7, r9}
-e8900006 ldm.w r0, {r1, r2}
 e9100006 ldmdb r0, {r1, r2}
 c806 ldm r0!, {r1, r2}
-e8800006 stm.w r0, {r1, r2}
-e8800006 stm.w r0, {r1, r2}
 e9200006 stmdb r0!, {r1, r2}
 b530 push {r4, r5, lr}
 bd30 pop {r4, r5, pc}
@@ -165,7 +158,6 @@ e8c10f42 strexb r2, r0, [r1]
 e8d10f5f ldrexh r0, [r1]
 e8c10f52 strexh r2, r0, [r1]
 bf00 nop
-f3af8000 nop.w
 bf10 yield
 bf20 wfe
 bf40 sev

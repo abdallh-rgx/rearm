@@ -191,10 +191,14 @@ fn decode_t16(hw: u16) -> Result<Ins, DecodeErr> {
             let is_load = bt(w, 11);
             Ok(Ins::LdmStm { load: is_load, rn: rn_l, mode: LdmMode::Ia, wback: false, user: false, list: RegList::from_bitmap(imm8 as u16) })
         }
-        // ===== 1101: B<cond> (imm8 ×2, ±256) =====
+        // ===== 1101: B<cond> (imm8 ×2, ±256) / SVC (cond=NV) =====
         0xD => {
             let cond = Cond::from_bits(bb(w, 11, 8) as u8);
-            Ok(Ins::B { cond, off: sign_ext(imm8, 8) << 1 })
+            if cond == Cond::Nv {
+                Ok(Ins::Svc { imm: imm8 })
+            } else {
+                Ok(Ins::B { cond, off: sign_ext(imm8, 8) << 1 })
+            }
         }
         // ===== 1110: B (imm11 ×2, ±2048) =====
         0xE => {
@@ -304,11 +308,9 @@ fn decode_t32_32(hw1: u16, hw2: u16) -> Result<Ins, DecodeErr> {
     // VFP coprocessor space (T32 ee/ed/ec/fe): the words ARE valid A32
     // encodings with cond=1110/1111 — route directly to the A32 decoder.
     let h1 = hw1 >> 8;
-    if (0xEE..=0xEF).contains(&h1) || (0xEC..=0xED).contains(&h1) || h1 == 0xFE {
+    if h1 == 0xEE || (0xEC..=0xED).contains(&h1) || h1 == 0xFE {
         if let Ok(ins) = crate::a32::decode::decode_a32(w) {
-            if !matches!(ins, Ins::Unsupported { .. }) {
-                return Ok(ins);
-            }
+            return Ok(ins); // Unsupported propagates (skipped by round-trip)
         }
         return Err(DecodeErr(w));
     }
@@ -317,9 +319,7 @@ fn decode_t32_32(hw1: u16, hw2: u16) -> Result<Ins, DecodeErr> {
     if (0xEF00..0xF000).contains(&hw1) || hw1 >= 0xFF00 {
         let a32w = (w & 0x00FF_FFFF) | 0xF200_0000 | ((w & 0x1000_0000) >> 4);
         if let Ok(ins) = crate::a32::decode::decode_a32(a32w) {
-            if !matches!(ins, Ins::Unsupported { .. }) {
-                return Ok(ins);
-            }
+            return Ok(ins); // Unsupported propagates
         }
         return Err(DecodeErr(w));
     }
@@ -331,12 +331,22 @@ fn decode_t32_32(hw1: u16, hw2: u16) -> Result<Ins, DecodeErr> {
             _ => Err(DecodeErr(w)),
         },
         0b11110 => decode_f0(w),                    // f0-f7: DP imm / branches / f3 misc
-        0b11111 => match bb(w, 26, 24) {
-            0b000 | 0b001 => decode_f8(w),          // f8/f9: single ldst
-            0b010 => decode_fa(w),                  // fa: two-source
-            0b011 => decode_fb(w),                  // fb: multiply
-            _ => Err(DecodeErr(w)),
-        },
+        0b11111 => {
+            // f9 with bit20 = 0: NEON ld/st multiple — transform to A32.
+            if h1 == 0xF9 && !bt(w, 20) {
+                let a32w = (w & 0xF0FF_FFFF) | 0x0400_0000;
+                if let Ok(ins) = crate::a32::decode::decode_a32(a32w) {
+                    return Ok(ins); // Unsupported propagates
+                }
+                return Err(DecodeErr(w));
+            }
+            match bb(w, 26, 24) {
+                0b000 | 0b001 => decode_f8(w),          // f8/f9: single ldst
+                0b010 => decode_fa(w),                  // fa: two-source
+                0b011 => decode_fb(w),                  // fb: multiply
+                _ => Err(DecodeErr(w)),
+            }
+        }
         _ => Err(DecodeErr(w)),
     }
 }
@@ -484,22 +494,22 @@ fn decode_f0(w: u32) -> Result<Ins, DecodeErr> {
         let op5 = bb(hw1, 9, 5);
         let s = bt(hw1, 4);
         return match op5 {
-            0b00000 if s && rd == 15 => Ok(Imm::tst(rn, imm12 as u16)),
-            0b00000 => Ok(Imm::and(s, rn, rd, imm12 as u16)),
-            0b00001 => Ok(Imm::bic(s, rn, rd, imm12 as u16)),
-            0b00010 if rn == 15 => Ok(Imm::mov(s, rd, imm12 as u16)),
-            0b00010 => Ok(Imm::orr(s, rn, rd, imm12 as u16)),
-            0b00011 if rn == 15 => Ok(Imm::mvn(s, rd, imm12 as u16)),
-            0b00011 => Ok(Imm::orn(s, rn, rd, imm12 as u16)),
-            0b00100 if s && rd == 15 => Ok(Imm::teq(rn, imm12 as u16)),
-            0b00100 => Ok(Imm::eor(s, rn, rd, imm12 as u16)),
-            0b01000 if s && rd == 15 => Ok(Imm::cmn(rn, imm12 as u16)),
-            0b01000 => Ok(Imm::add(s, rn, rd, imm12 as u16)),
-            0b01101 if s && rd == 15 => Ok(Imm::cmp(rn, imm12 as u16)),
-            0b01101 => Ok(Imm::sub(s, rn, rd, imm12 as u16)),
-            0b01110 => Ok(Imm::rsb(s, rn, rd, imm12 as u16)),
-            0b10000 => Ok(Imm::plain(DpOp::Add, rn, rd, imm12 as u16)),   // ADDW / ADR
-            0b10101 => Ok(Imm::plain(DpOp::Sub, rn, rd, imm12 as u16)),   // SUBW
+            0b00000 if s && rd == 15 => Ok(imm_forms::tst(rn, imm12 as u16)),
+            0b00000 => Ok(imm_forms::and(s, rn, rd, imm12 as u16)),
+            0b00001 => Ok(imm_forms::bic(s, rn, rd, imm12 as u16)),
+            0b00010 if rn == 15 => Ok(imm_forms::mov(s, rd, imm12 as u16)),
+            0b00010 => Ok(imm_forms::orr(s, rn, rd, imm12 as u16)),
+            0b00011 if rn == 15 => Ok(imm_forms::mvn(s, rd, imm12 as u16)),
+            0b00011 => Ok(imm_forms::orn(s, rn, rd, imm12 as u16)),
+            0b00100 if s && rd == 15 => Ok(imm_forms::teq(rn, imm12 as u16)),
+            0b00100 => Ok(imm_forms::eor(s, rn, rd, imm12 as u16)),
+            0b01000 if s && rd == 15 => Ok(imm_forms::cmn(rn, imm12 as u16)),
+            0b01000 => Ok(imm_forms::add(s, rn, rd, imm12 as u16)),
+            0b01101 if s && rd == 15 => Ok(imm_forms::cmp(rn, imm12 as u16)),
+            0b01101 => Ok(imm_forms::sub(s, rn, rd, imm12 as u16)),
+            0b01110 => Ok(imm_forms::rsb(s, rn, rd, imm12 as u16)),
+            0b10000 => Ok(imm_forms::plain(DpOp::Add, rn, rd, imm12 as u16)),   // ADDW / ADR
+            0b10101 => Ok(imm_forms::plain(DpOp::Sub, rn, rd, imm12 as u16)),   // SUBW
             0b10010 => Ok(Ins::Movw { rd, imm16: movw_imm(w) as u16 }),   // MOVW
             0b10110 => Ok(Ins::Movt { rd, imm16: movw_imm(w) as u16 }),   // MOVT
             _ => decode_f3_sat(w),
@@ -598,7 +608,7 @@ fn movw_imm(w: u32) -> u32 {
     ((w >> 16 & 0xF) << 12) | (((w >> 26) & 1) << 11) | (((w >> 12) & 0x7) << 8) | (w & 0xFF)
 }
 
-mod Imm {
+mod imm_forms {
     use super::*;
 
     fn d(op: DpOp, s: bool, rn: u8, rd: u8, imm12: u16) -> Ins {

@@ -51,7 +51,7 @@ strh.w r0, [r1, r2, lsl #1]
 ldrsb.w r0, [r1, r2]
 ldrsh.w r0, [r1, r2, lsl #1]
 // SP/PC relative
-ldr.w r0, [sp, #1020]
+ldr.w r8, [sp, #1020]
 ldr.w r0, [pc, #4095]
 ldr r0, [pc, #-4095]
 // ===== LDRD/STRD (E9xx) =====

@@ -20,8 +20,6 @@ impl core::fmt::Display for EncodeErr {
 
 #[inline]
 fn bit(v: u32, n: u32) -> u32 { (v >> n) & 1 }
-#[inline]
-fn bits(v: u32, hi: u32, lo: u32) -> u32 { (v & (((1u32 << (hi - lo + 1)) - 1) << lo)) }
 
 /// Encode one instruction. Returns (hw1, hw2, len-in-bytes).
 pub fn encode_t32(ins: &Ins) -> Result<(u16, u16, u16), EncodeErr> {
@@ -181,7 +179,7 @@ fn encode_t16(ins: &Ins) -> Option<u16> {
             let m = list.bitmap();
             let pc = m & (1 << 15) != 0;
             let low = m & 0xFF;
-            let high = m & !(0x80FF | if pc { 0 } else { 0 });
+            let _ = pc;
             if (m >> 8) & !(if pc { 0x80 } else { 0 }) != 0 { return None; }
             0xBC00 | ((pc as u32) << 8) | low as u32
         }
@@ -525,6 +523,28 @@ fn encode_t32_word(ins: &Ins) -> Result<u32, EncodeErr> {
             0xEA00_0000 | (opcode << 21) | ((*rn as u32) << 16)
                 | (((*shift as u32) >> 2) << 12) | ((*rd as u32) << 8) | (((*shift as u32) & 3) << 6)
                 | (typ << 4) | *rm as u32
+        }
+
+        // ======== VFP (ee/ec/ed/fe = A32 identity) ========
+        VfpBin { .. } | VfpUn { .. } | VfpCmp { .. } | VfpCmpz { .. } | crate::a32::ins::Ins::VfpMulAcc { .. }
+        | VMovCoreS { .. } | VMovCoreD { .. } | VMovLane { .. } | VMrs { .. } | Vmsr { .. }
+        | VLdrStr { .. } | VLdmStm { .. } | Vcvt { .. } | VcvtImm { .. }
+        | Vsel { .. } | Vmaxnm { .. } | Vrint { .. } => {
+            crate::a32::encode::encode_a32(ins).map_err(|_| enc_err("vfp"))?
+        }
+        // ======== NEON (ef/ff transform) ========
+        VmovImm { kind, .. } if matches!(kind, NeonImmKind::F32 | NeonImmKind::F64) => {
+            // scalar VMOV.F32/F64 imm lives in the ee VFP space (identity)
+            crate::a32::encode::encode_a32(ins).map_err(|_| enc_err("vfp"))?
+        }
+        VdupCore { .. } | VdupScalar { .. } | Vswp { .. } | Neon { .. } | VmovImm { .. } => {
+            let a32 = crate::a32::encode::encode_a32(ins).map_err(|_| enc_err("neon"))?;
+            (a32 & 0x00FF_FFFF) | 0xEF00_0000 | ((a32 & 0x0100_0000) << 4)
+        }
+        // NEON ld/st multiple (f9): t32 = (a32 & 0x00FFFF7F) | 0xF9000000
+        VldStMulti { .. } => {
+            let a32 = crate::a32::encode::encode_a32(ins).map_err(|_| enc_err("neon ldst"))?;
+            (a32 & 0xF0FF_FFFF) | 0x0900_0000
         }
 
         // ======== preload ========
