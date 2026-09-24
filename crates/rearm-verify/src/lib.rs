@@ -149,6 +149,27 @@ fn cond_smt(cond: u8, st: &St) -> String {
 pub fn debug_smt(ins: &Ins, a64: &A64) -> Result<String, String> { build_smt(ins, 0, a64) }
 pub fn debug_smt_at(ins: &Ins, pc: u32, a64: &A64) -> Result<String, String> { build_smt(ins, pc, a64) }
 
+/// Step-by-step symbolic trace: for each A64 word, dump the resulting state
+/// expressions of x15..x19 + flags (truncated). Returns the SMT prelude
+/// (declarations) plus per-step dumps. Caller can wrap/evaluate.
+pub fn trace_exec(a64: &A64) -> (String, Vec<String>) {
+    let mut st = St::symbolic();
+    let mut decls = String::new();
+    decls.push_str("(set-logic QF_BV)\n");
+    for i in 0..15u8 { decls.push_str(&format!("(declare-const x{} (_ BitVec 64))\n", i)); }
+    for i in 15..20u8 { decls.push_str(&format!("(declare-const s{} (_ BitVec 64))\n", i)); }
+    decls.push_str("(declare-const QF (_ BitVec 32))\n(declare-const GF (_ BitVec 32))\n");
+    decls.push_str("(declare-const N (_ BitVec 1)) (declare-const Z (_ BitVec 1)) (declare-const C (_ BitVec 1)) (declare-const V (_ BitVec 1))\n");
+    let mut steps = vec![];
+    for (i, &word) in a64.words().iter().enumerate() {
+        let _ = exec_one(word, &mut st);
+        steps.push(format!(
+            "step {:02} word {:08x}\n  x15={:.400}\n  x16={:.400}\n  x17={:.400}\n  x18={:.400}\n  x19={:.400}\n  n={:.200} z={:.200} c={:.200} v={:.200}",
+            i, word, st.x[15], st.x[16], st.x[17], st.x[18], st.x[19], st.n, st.z, st.c, st.v));
+    }
+    (decls, steps)
+}
+
 fn build_smt(ins: &Ins, pc: u32, a64: &A64) -> Result<String, String> {
     let mut a32 = St::symbolic();
     a32_effect(ins, pc, &mut a32)?;
@@ -622,6 +643,31 @@ fn a32_effect(ins: &Ins, pc: u32, st: &mut St) -> Result<(), String> {
             setw(st, *rdlo as usize, ext(&sum, 31, 0));
             Ok(())
         }
+        Ins::Umaal { rdlo, rdhi, rn, rm } => {
+            // ARM ARM: sum = R[n]*R[m] (unsigned 64-bit) + R[dHi] + R[dLo]
+            // (the two accumulator halves are added as SEPARATE zero-extended
+            // 32-bit values — unlike UMLAL which accumulates the 64-bit pair)
+            let prod = format!("(bvmul ((_ zero_extend 32) {}) ((_ zero_extend 32) {}))", g(st, *rn, pc), g(st, *rm, pc));
+            let sum = format!("(bvadd (bvadd {} ((_ zero_extend 32) {})) ((_ zero_extend 32) {}))",
+                prod, w(st, *rdhi as usize), w(st, *rdlo as usize));
+            setx(st, *rdhi as usize, zext32(&ext(&sum, 63, 32)));
+            setw(st, *rdlo as usize, ext(&sum, 31, 0));
+            Ok(())
+        }
+        Ins::Smmul { rd, rn, rm, ra, sub, round } => {
+            // SMMUL/SMMULR: Rd = (Rn*Rm)[63:32] (signed), optional +0x80000000
+            // SMMLA/SMMLAR/SMMLS/SMMLS R: Rd = Ra ± (Rn*Rm)[63:32]
+            let mut full = format!("(bvmul ((_ sign_extend 32) {}) ((_ sign_extend 32) {}))", g(st, *rn, pc), g(st, *rm, pc));
+            if *round { full = format!("(bvadd {} #x0000000080000000)", full); }
+            let hi = ext(&full, 63, 32);
+            let v = match ra {
+                None => hi,
+                Some(ra) if *sub => format!("(bvsub {} {})", g(st, *ra, pc), hi),
+                Some(ra) => format!("(bvadd {} {})", g(st, *ra, pc), hi),
+            };
+            setw(st, *rd as usize, v);
+            Ok(())
+        }
         Ins::Smulxy { rd, rn, rm, x: hx, y: hy } => {
             let n = half16(&g(st, *rn, pc), hx.bit());
             let m = half16(&g(st, *rm, pc), hy.bit());
@@ -980,6 +1026,14 @@ fn exec_one(word: u32, st: &mut St) -> Result<(), String> {
     }
     if word == 0xD51B4211 {
         let xv = st.x[17].clone();
+        st.n = ext(&xv, 31, 31);
+        st.z = ext(&xv, 30, 30);
+        st.c = ext(&xv, 29, 29);
+        st.v = ext(&xv, 28, 28);
+        return Ok(());
+    }
+    if word == 0xD51B4210 {
+        let xv = st.x[16].clone();
         st.n = ext(&xv, 31, 31);
         st.z = ext(&xv, 30, 30);
         st.c = ext(&xv, 29, 29);

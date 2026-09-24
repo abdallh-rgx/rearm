@@ -26,6 +26,7 @@ impl From<EncErr> for TranslateErr {
 const MRS_X16: u32 = 0xD53B4210;
 const MRS_X17: u32 = 0xD53B4211;
 const MSR_X17: u32 = 0xD51B4211;
+const MSR_X16: u32 = 0xD51B4210;
 
 #[inline]
 fn x(r: R) -> XR { r as XR }
@@ -62,7 +63,12 @@ pub fn translate_a32(ins: &Ins, pc: u32, out: &mut A64) -> Result<bool, Translat
                     translate_dp(*op, *s, *rn, *rd, Operand::RegShift(*rm, *shift, *a as u64), None, pc, out)?
                 }
                 ShiftAmount::Reg(rs) => {
-                    translate_regshift(*op, *s, *rn, *rd, *rm, *shift, *rs, out)?
+                    if *rn == 15 || *rm == 15 {
+                        // PC-relative register-shifted base/operand would need a
+                        // 6th scratch register; not covered.
+                        return Ok(false);
+                    }
+                    translate_regshift(*op, *s, *rn, *rd, *rm, *shift, *rs, pc, out)?
                 }
             }
         }
@@ -370,7 +376,7 @@ pub fn translate_a32(ins: &Ins, pc: u32, out: &mut A64) -> Result<bool, Translat
             out.lsr_imm(true, 16, 16, 32);              // x16 = product >> 32
             match (ra, sub) {
                 (Some(ra), false) => out.addsub_reg(false, 0, false, 0, 0, x(*ra), 16, x(*rd)),
-                (Some(ra), true) => out.addsub_reg(false, 0, false, 1, 0, x(*ra), 16, x(*rd)),
+                (Some(ra), true) => out.addsub_reg(false, 1, false, 0, 0, x(*ra), 16, x(*rd)),
                 (None, _) => out.logic_reg(false, 1, false, false, 0, 31, 16, x(*rd)),
             }
         }
@@ -1134,9 +1140,20 @@ fn emit_logic_flags(out: &mut A64, val: XR, dst: XR, carry_const: Option<u32>) -
 //   ASR: n==0 → x; 1..32 → x>>a n; >32 → sign; carry = x[min(n,32)-1] (x[31] for n≥32)
 //   ROR: n==0 → x; else → ror(x, n mod 32); carry = x[n'−1 mod 32] (n'≠0), x[31] if n'==0
 
-fn translate_regshift(op: DpOp, s: bool, rn: R, rd: R, rm: R, shift: Shift, rs: R, out: &mut A64) -> Result<(), TranslateErr> {
-    // w19 = amount = w(rs) & 0xFF (kept; survives the mrs x16/x17 dance)
-    out.logic_bitmask(false, 0, 0xFF, x(rs), 19)?;
+fn translate_regshift(op: DpOp, s: bool, rn: R, rd: R, rm: R, shift: Shift, rs: R, pc: u32, out: &mut A64) -> Result<(), TranslateErr> {
+    // The value/carry computation below clobbers NZCV (subs/csel). Save the
+    // ORIGINAL A32 flags FIRST: ADC/SBC/RSC consume the incoming C, the
+    // flags-setting forms need old C (when Rs[7:0]==0) and old V, and every
+    // non-S form must leave NZCV completely untouched (MSR-restored at end).
+    // x16 must survive until regshift_finish — the ASR path uses w17 scratch.
+    out.e(MRS_X16);
+    // w19 = amount = w(rs) & 0xFF (kept; survives the mrs/msr dance)
+    if rs == 15 {
+        load_pc(out, 17, pc); // Rs = PC: amount = (pc+8)[7:0]
+        out.logic_bitmask(false, 0, 0xFF, 17, 19)?;
+    } else {
+        out.logic_bitmask(false, 0, 0xFF, x(rs), 19)?;
+    }
     // value → w18; carry bit → w15 (bit 0)
     match shift {
         Shift::Lsl => {
@@ -1164,14 +1181,14 @@ fn translate_regshift(op: DpOp, s: bool, rn: R, rd: R, rm: R, shift: Shift, rs: 
         Shift::Asr => {
             out.logic_bitmask(false, 0, 0x1F, 19, 17)?;          // w17 = n & 31
             out.dp2(false, 10, x(rm), 17, 18);                   // asrv w18, rm, w17
-            out.asr_imm(false, x(rm), 16, 31);                    // w16 = signfill
+            out.asr_imm(false, x(rm), 17, 31);                    // w17 = signfill (x16 = saved flags!)
             out.addsub_imm(false, 1, true, 32, false, 19, 31);
-            out.csel(false, 0, 16, 18, Cond::Cs, 18);            // value = hs ? signfill : asrv
+            out.csel(false, 0, 17, 18, Cond::Cs, 18);            // value = hs ? signfill : asrv
             out.addsub_imm(false, 1, false, 1, false, 19, 15);   // w15 = n-1
             out.logic_bitmask(false, 0, 0x1F, 15, 15)?;          // & 31
             out.addsub_imm(false, 1, true, 33, false, 19, 31);   // hs = n >= 33
-            out.movz(false, 0, 31, 16);
-            out.csel(false, 0, 16, 15, Cond::Cs, 15);            // idx = n>=33 ? 31 : (n-1)&31
+            out.movz(false, 0, 31, 17);
+            out.csel(false, 0, 17, 15, Cond::Cs, 15);            // idx = n>=33 ? 31 : (n-1)&31
             out.dp2(false, 9, x(rm), 15, 15);                    // lsrv → carry
         }
         Shift::Ror => {
@@ -1187,6 +1204,7 @@ fn translate_regshift(op: DpOp, s: bool, rn: R, rd: R, rm: R, shift: Shift, rs: 
 
 #[allow(clippy::too_many_arguments)]
 fn regshift_finish(out: &mut A64, op: DpOp, s: bool, rn: R, rd: R, val: XR, car: XR, amount: XR) -> Result<(), TranslateErr> {
+    // x16 = ORIGINAL A32 flags (captured at translate_regshift start).
     match op {
         DpOp::Add | DpOp::Sub | DpOp::Rsb => {
             if op == DpOp::Rsb {
@@ -1194,6 +1212,7 @@ fn regshift_finish(out: &mut A64, op: DpOp, s: bool, rn: R, rd: R, val: XR, car:
             } else {
                 out.addsub_reg(false, if op == DpOp::Sub { 1 } else { 0 }, s, 0, 0, x(rn), val, x(rd));
             }
+            if !s { out.e(MSR_X16); } // A32 leaves NZCV untouched — restore
         }
         DpOp::Cmp | DpOp::Cmn => {
             out.addsub_reg(false, if op == DpOp::Cmp { 1 } else { 0 }, true, 0, 0, x(rn), val, 31);
@@ -1204,27 +1223,43 @@ fn regshift_finish(out: &mut A64, op: DpOp, s: bool, rn: R, rd: R, val: XR, car:
             let (a, b) = if matches!(op, DpOp::Mov | DpOp::Mvn) { (31u8, val) } else { (x(rn), val) };
             if !s {
                 out.logic_reg(false, opc, n, false, 0, a, b, x(rd));
+                out.e(MSR_X16); // flags untouched by A32 — restore
             } else {
-                // N,Z from result; C = (n==0) ? oldC : carry; V preserved
-                out.e(MRS_X16);
+                // N,Z from result; C = (n==0) ? oldC : carry; V preserved — all from the SAVED x16
                 out.logic_reg(false, opc, n, false, 0, a, b, x(rd));
-                out.logic_reg(false, 3, false, false, 0, x(rd), x(rd), 31); // ands wzr
+                out.logic_reg(false, 3, false, false, 0, x(rd), x(rd), 31); // ands wzr → N,Z
                 out.e(MRS_X17);
-                out.lsr_imm(true, 16, 18, 29);
-                out.logic_bitmask(false, 0, 0x1, 18, 18)?;       // w18 = oldC
-                out.addsub_imm(false, 1, true, 0, false, amount, 31); // cmp amount, #0
-                out.csel(false, 0, 18, car, Cond::Eq, 18);       // eq → oldC else carry
+                out.lsr_imm(true, 16, 18, 29);                      // x18 = saved flags >> 29
+                out.logic_bitmask(false, 0, 0x1, 18, 18)?;         // w18 = oldC
+                out.addsub_imm(false, 1, true, 0, false, amount, 31); // eq = (amount == 0)
+                out.csel(false, 0, 18, car, Cond::Eq, 18);         // eq → oldC else carry
                 out.bfi(true, 18, 17, 29, 1);
-                out.ubfx(true, 16, 19, 28, 1);
+                out.ubfx(true, 16, 19, 28, 1);                     // old V (from SAVED x16)
                 out.bfi(true, 19, 17, 28, 1);
                 out.e(MSR_X17);
             }
         }
         DpOp::Adc | DpOp::Sbc | DpOp::Rsc => {
+            out.e(MSR_X16); // restore the ORIGINAL C (carry-in) before the adc
             translate_adc_sbc(op, s, x(rn), val, rd, out)?;
         }
         DpOp::Tst | DpOp::Teq => {
-            emit_test_inner(out, x(rn), val, op == DpOp::Teq, car);
+            // N,Z from result; C = (n==0) ? oldC : carry; V preserved (from SAVED x16)
+            if op == DpOp::Teq {
+                out.logic_reg(false, 2, false, false, 0, x(rn), val, 17); // eor w17, rn, val
+                out.logic_reg(false, 3, false, false, 0, 17, 17, 31);      // ands wzr, w17, w17
+            } else {
+                out.logic_reg(false, 3, false, false, 0, x(rn), val, 31); // ands wzr, rn, val
+            }
+            out.e(MRS_X17);
+            out.lsr_imm(true, 16, 18, 29);
+            out.logic_bitmask(false, 0, 0x1, 18, 18)?;
+            out.addsub_imm(false, 1, true, 0, false, amount, 31);
+            out.csel(false, 0, 18, car, Cond::Eq, 18);
+            out.bfi(true, 18, 17, 29, 1);
+            out.ubfx(true, 16, 19, 28, 1);
+            out.bfi(true, 19, 17, 28, 1);
+            out.e(MSR_X17);
         }
     }
     Ok(())
