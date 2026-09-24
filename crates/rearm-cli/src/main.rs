@@ -20,10 +20,12 @@ fn main() {
         "disasm" => cmd_disasm(&args[2..]),
         "recompile" => cmd_recompile(&args[2..]),
         "verify" => cmd_verify(&args[2..]),
+        "verify-t32" => cmd_verify_t32(&args[2..]),
         "coverage" => cmd_coverage(&args[2..]),
         "bench" => cmd_bench(&args[2..]),
         _ => {
             eprintln!("unknown command: {}", cmd);
+            eprintln!("usage: rearm <disasm|recompile|verify|verify-t32|coverage|bench> [args]");
             std::process::exit(2);
         }
     };
@@ -239,6 +241,51 @@ fn cmd_verify(args: &[String]) -> Result<(), String> {
         proven, failed, errors);
     for d in details.iter().filter(|d| d.starts_with("COUNTER")).take(20) { println!("  {}", d); }
     for d in details.iter().filter(|d| !d.starts_with("COUNTER")).take(10) { println!("  {}", d); }
+    if failed > 0 { std::process::exit(1); }
+    Ok(())
+}
+
+/// Z3-verify T32 translations over a T32 corpus (hex + text lines).
+fn cmd_verify_t32(args: &[String]) -> Result<(), String> {
+    use rearm_core::t32::decode::decode_t32;
+    use rearm_core::translate::t32_to_a64::ItTracker;
+    use rearm_verify::verify_one_at_t32;
+    let corpus_path = if args.is_empty() {
+        format!("{}/../rearm-core/tests/corpus/thumb2-dp.txt", env!("CARGO_MANIFEST_DIR"))
+    } else {
+        args[0].clone()
+    };
+    let data = std::fs::read_to_string(&corpus_path)
+        .map_err(|e| format!("corpus {}: {}", corpus_path, e))?;
+    let mut proven = 0usize;
+    let mut failed = 0usize;
+    let mut errors = 0usize;
+    let mut it: Option<ItTracker> = None;
+    let mut details: Vec<String> = vec![];
+    for (i, line) in data.lines().enumerate() {
+        let line = line.trim();
+        if line.is_empty() { continue; }
+        let (hex, text) = match line.split_once(' ') { Some(x) => x, None => continue };
+        let word = u32::from_str_radix(hex, 16).unwrap_or(0);
+        let (hw1, hw2) = if word > 0xFFFF { ((word >> 16) as u16, (word & 0xFFFF) as u16) } else { (word as u16, 0) };
+        let tins = match decode_t32(hw1, hw2) { Ok(t) => t, Err(_) => continue };
+        if matches!(tins.ins, rearm_core::a32::ins::Ins::Unsupported { .. }) { continue; }
+        if let rearm_core::a32::ins::Ins::It { first_cond, mask } = &tins.ins {
+            it = Some(ItTracker::new(*first_cond, *mask));
+            continue;
+        }
+        let _ = match &mut it { Some(tr) => tr.next(), None => None };
+        // alternating 2-mod-4 alignment exercises Align(PC,4)
+        let at = 0x1000u32.wrapping_add((i as u32) * 6);
+        match verify_one_at_t32(&tins.ins, at) {
+            Ok(true) => proven += 1,
+            Ok(false) => { failed += 1; details.push(format!("COUNTEREXAMPLE: {} ({})", text, hex)); }
+            Err(e) => { errors += 1; details.push(format!("skip {}: {}", text, e)); }
+        }
+    }
+    println!("T32 Z3 verification ({}): {} PROVEN 1:1, {} counterexamples, {} skipped",
+        corpus_path.rsplit('/').next().unwrap_or("?"), proven, failed, errors);
+    for d in details.iter().filter(|d| d.starts_with("COUNTER")).take(20) { println!("  {}", d); }
     if failed > 0 { std::process::exit(1); }
     Ok(())
 }

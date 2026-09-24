@@ -18,6 +18,7 @@ use rearm_core::common::{R, Shift, ShiftAmount};
 use rearm_core::a32::ins::{DpOp, ExtOp, ParKind, ParShape};
 use rearm_core::a64::encode::A64;
 use rearm_core::translate::a32_to_a64::translate_a32;
+use rearm_core::translate::t32_to_a64::{translate_t32, thumb_expand_imm};
 
 pub fn z3_path() -> String {
     std::env::var("REARM_Z3").unwrap_or_else(|_| {
@@ -31,7 +32,19 @@ pub fn verify_one_at(ins: &Ins, pc: u32) -> Result<bool, String> {
     let mut a64 = A64::new();
     let ok = translate_a32(ins, pc, &mut a64).map_err(|e| format!("translate: {}", e.0))?;
     if !ok { return Err("unsupported for translation".into()); }
-    let smt = build_smt(ins, pc, &a64)?;
+    let smt = build_smt(ins, pc, &a64, false)?;
+    run_z3(&smt)
+}
+
+/// T32 (Thumb-2) 1:1 verification at source address `addr`: the reference uses
+/// T32 PC semantics (generic reads addr+4, ADR/literal Align(addr+4,4)) and
+/// ThumbExpandImm immediates; the body is translated unguarded (IT-block
+/// guard correctness is architectural: b.cond does not write flags).
+pub fn verify_one_at_t32(ins: &Ins, addr: u32) -> Result<bool, String> {
+    let mut a64 = A64::new();
+    let ok = translate_t32(ins, addr, &mut a64, None).map_err(|e| format!("translate: {}", e.0))?;
+    if !ok { return Err("unsupported for translation".into()); }
+    let smt = build_smt(ins, addr, &a64, true)?;
     run_z3(&smt)
 }
 
@@ -55,6 +68,8 @@ struct St {
     /// 22 64-bit SMT exprs: 0..14 mapped regs, 15..19 scratch, 20 = Q, 21 = GE.
     x: Vec<String>,
     n: String, z: String, c: String, v: String,
+    /// T32 mode: PC reads as addr+4 (A32: addr+8).
+    t32: bool,
 }
 
 impl St {
@@ -63,7 +78,7 @@ impl St {
         for i in 15..20 { x.push(format!("s{}", i)); }
         x.push("((_ zero_extend 32) QF)".into());
         x.push("((_ zero_extend 32) GF)".into());
-        St { x, n: "N".into(), z: "Z".into(), c: "C".into(), v: "V".into() }
+        St { x, n: "N".into(), z: "Z".into(), c: "C".into(), v: "V".into(), t32: false }
     }
 }
 
@@ -146,8 +161,9 @@ fn cond_smt(cond: u8, st: &St) -> String {
 
 // ============================ SMT construction ============================
 
-pub fn debug_smt(ins: &Ins, a64: &A64) -> Result<String, String> { build_smt(ins, 0, a64) }
-pub fn debug_smt_at(ins: &Ins, pc: u32, a64: &A64) -> Result<String, String> { build_smt(ins, pc, a64) }
+pub fn debug_smt(ins: &Ins, a64: &A64) -> Result<String, String> { build_smt(ins, 0, a64, false) }
+pub fn debug_smt_at(ins: &Ins, pc: u32, a64: &A64) -> Result<String, String> { build_smt(ins, pc, a64, false) }
+pub fn debug_smt_at_t32(ins: &Ins, addr: u32, a64: &A64) -> Result<String, String> { build_smt(ins, addr, a64, true) }
 
 /// Step-by-step symbolic trace: for each A64 word, dump the resulting state
 /// expressions of x15..x19 + flags (truncated). Returns the SMT prelude
@@ -170,8 +186,9 @@ pub fn trace_exec(a64: &A64) -> (String, Vec<String>) {
     (decls, steps)
 }
 
-fn build_smt(ins: &Ins, pc: u32, a64: &A64) -> Result<String, String> {
+fn build_smt(ins: &Ins, pc: u32, a64: &A64, t32: bool) -> Result<String, String> {
     let mut a32 = St::symbolic();
+    a32.t32 = t32;
     a32_effect(ins, pc, &mut a32)?;
 
     let mut after = St::symbolic();
@@ -220,9 +237,12 @@ fn a32_flag_scope(ins: &Ins) -> &'static str {
 
 // ============================ A32 reference ============================
 
-/// A32 register read; PC reads as (pc + 8).
+/// A32/T32 register read; PC reads as (pc + 8) in A32, (pc + 4) in T32.
 fn g(st: &St, r: u8, pc: u32) -> String {
-    if r == 15 { imm32(pc.wrapping_add(8)) } else { w(st, r as usize) }
+    if r == 15 {
+        let off = if st.t32 { 4u32 } else { 8u32 };
+        imm32(pc.wrapping_add(off))
+    } else { w(st, r as usize) }
 }
 
 fn half16(e: &str, top: bool) -> String {
@@ -572,6 +592,21 @@ fn rbit_ref(e: &str) -> String {
 
 fn a32_effect(ins: &Ins, pc: u32, st: &mut St) -> Result<(), String> {
     match ins {
+        Ins::DpImmT32 { op, s, rn, rd, imm12, plain } => {
+            if *plain {
+                // raw 12-bit value; ADR (rn=15, Add) uses Align(PC,4)
+                let base = if *rn == 15 {
+                    if *op == DpOp::Add { imm32(pc.wrapping_add(4) & !3u32) }
+                    else { imm32(pc.wrapping_add(4)) }
+                } else { g(st, *rn, pc) };
+                dp_effect(*op, *s, base, *rd, imm32(*imm12 as u32), None, st)
+            } else {
+                let (v, carry) = thumb_expand_imm(*imm12);
+                let carry = carry.map(|b| if b == 1 { "#b1".to_string() } else { "#b0".to_string() });
+                dp_effect(*op, *s, g(st, *rn, pc), *rd, imm32(v), carry, st)
+            }
+        }
+        Ins::It { .. } => Ok(()),
         Ins::DpImm { op, s, rn, rd, imm12 } => {
             let rot = ((imm12 >> 8) & 0xF) as u32;
             let imm8 = (imm12 & 0xFF) as u32;

@@ -868,8 +868,8 @@ pub(crate) fn translate_dp(op: DpOp, s: bool, rn: R, rd: R, o: Operand, carry_co
                 DpOp::Mvn => {
                     if !s {
                         if let Some((n, immr, imms)) = crate::a64::encode::encode_bitmask(!v & 0xFFFF_FFFF, false) {
-                            out.log_imm(false, 1, n, immr, imms, 31, 16);
-                            out.logic_reg(false, 1, true, false, 0, 31, 16, x(rd)); // orn
+                            // rd = ORR(wzr, #~v) = ~v — the operand complement
+                            out.log_imm(false, 1, n, immr, imms, 31, x(rd));
                         } else if v <= 0xFFFF {
                             out.movn(false, 0, v as u16, x(rd));
                         } else {
@@ -901,11 +901,14 @@ pub(crate) fn translate_dp(op: DpOp, s: bool, rn: R, rd: R, o: Operand, carry_co
                     let opc = match op { DpOp::Orr => 1u8, DpOp::Eor => 2, _ => 3 };
                     let n = op == DpOp::Orn;
                     if n {
-                        if let Some((bn, immr, imms)) = crate::a64::encode::encode_bitmask(v, false) {
-                            out.log_imm(false, 3, bn, immr, imms, base, x(rd)); // orn rd, base, #v
+                        // A64 has no ORN-immediate: ORR rd, base, #~v
+                        // (bitmask immediates are closed under complement).
+                        let notv = !v & 0xFFFF_FFFF;
+                        if let Some((bn, immr, imms)) = crate::a64::encode::encode_bitmask(notv, false) {
+                            out.log_imm(false, 1, bn, immr, imms, base, x(rd)); // orr rd, base, #~v
                         } else {
                             load_imm32(out, 16, v as u32);
-                            out.logic_reg(false, 3, true, false, 0, base, 16, x(rd));
+                            out.logic_reg(false, 3, true, false, 0, base, 16, x(rd)); // orn rd, base, w16
                         }
                     } else {
                         load_imm32(out, 16, v as u32);
@@ -988,7 +991,8 @@ pub(crate) fn translate_dp(op: DpOp, s: bool, rn: R, rd: R, o: Operand, carry_co
                         }
                     } else if amount == 0 && shift == Shift::Lsl {
                         out.e(MRS_X16);
-                        out.logic_reg(false, 1, true, false, 0, 31, src, x(rd)); // orns
+                        out.logic_reg(false, 1, true, false, 0, 31, src, x(rd)); // orn (no flags in A64)
+                        out.logic_reg(false, 3, false, false, 0, x(rd), x(rd), 31); // ands wzr → N,Z from result
                         out.e(MRS_X17);
                         out.lsr_imm(true, 16, 18, 28);
                         out.bfi(true, 18, 17, 28, 2);
@@ -996,7 +1000,8 @@ pub(crate) fn translate_dp(op: DpOp, s: bool, rn: R, rd: R, o: Operand, carry_co
                     } else if amount != 0 && amount < 32 {
                         emit_shift(out, src, 15, shift, amount as u8);
                         out.e(MRS_X16);
-                        out.logic_reg(false, 1, true, false, 0, 31, 15, x(rd)); // orns
+                        out.logic_reg(false, 1, true, false, 0, 31, 15, x(rd)); // orn (no flags)
+                        out.logic_reg(false, 3, false, false, 0, x(rd), x(rd), 31); // ands wzr → N,Z
                         out.e(MRS_X17);
                         out.ubfx(false, src, 18, bit, 1);
                         out.bfi(true, 18, 17, 29, 1);
@@ -1008,7 +1013,9 @@ pub(crate) fn translate_dp(op: DpOp, s: bool, rn: R, rd: R, o: Operand, carry_co
                     }
                 }
                 DpOp::And | DpOp::Bic | DpOp::Orr | DpOp::Eor | DpOp::Orn => {
-                    let opc = match op { DpOp::And | DpOp::Bic => 0u8, DpOp::Orr => 1, DpOp::Eor => 2, _ => 3 };
+                    // A64 logical opc: 0=AND 1=ORR 2=EOR 3=ANDS; N inverts the
+                    // second operand (BIC/ORN/EON/BICS).
+                    let opc = match op { DpOp::And | DpOp::Bic => 0u8, DpOp::Orr | DpOp::Orn => 1, DpOp::Eor => 2, _ => 3 };
                     let n = matches!(op, DpOp::Bic | DpOp::Orn);
                     let src: XR = if rm == 15 { load_pc(out, 17, pc); 17 } else { x(rm) };
                     let base: XR = if rn == 15 { load_pc(out, 19, pc); 19 } else { x(rn) };
