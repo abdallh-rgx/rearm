@@ -252,13 +252,13 @@ fn decode_t16_misc(w: u32) -> Result<Ins, DecodeErr> {
                 _ => Ok(Ins::Extend { op: ExtOp::Uxtb, rd: rd_l, rn: 0, rm, rot: 0 }),
             }
         }
-        // 1011 0110: CPS
+        // 1011 0110: CPS — imod = bit4 (0=enable), A/I/F = bits 2/1/0
         _ if bb(w, 11, 8) == 0b0110 => {
-            let enable = !bt(w, 7);
+            let enable = !bt(w, 4);
             let mut aif = 0u8;
-            if bt(w, 6) { aif |= 4; } // A
-            if bt(w, 5) { aif |= 2; } // I
-            if bt(w, 4) { aif |= 1; } // F
+            if bt(w, 2) { aif |= 4; } // A
+            if bt(w, 1) { aif |= 2; } // I
+            if bt(w, 0) { aif |= 1; } // F
             Ok(Ins::Cps { enable, aif, change_mode: false, mode: 0 })
         }
         // 1011 1010: REV/REV16/REVSH (op at bits 7:6)
@@ -495,75 +495,74 @@ fn decode_f0(w: u32) -> Result<Ins, DecodeErr> {
         };
     }
 
-    // hw2 bit15 = 1: branches + f3 misc control + UDF + MSR.
-    let hw2_top = hw2 >> 12;
+    // hw2 bit15 = 1: branches (bit14 = 0, cond ∉ AL/NV), f3 misc control
+    // (bit14 = 0, cond = AL/NV), BL/BLX (bit14 = 1, bit12 = 1/0).
     let cond_field = bb(hw1, 9, 6);
-    match hw2_top {
-        0b1010 => {
-            if cond_field == 0b1111 {
+    if !bt(hw2, 14) {
+        // bit14 = 0: Bcc/B.W or the f3 misc-control space.
+        if cond_field != 0b1110 && cond_field != 0b1111 {
+            // Branch: bit12 = 0 → T3 Bcc, bit12 = 1 → T4 B.W.
+            return if !bt(hw2, 12) {
+                // T3 Bcc: imm = SignExtend21(S : J2(hw2.11) : J1(hw2.13) : imm6 : imm11 : 0)
+                let s = bt(w, 26);
+                let imm6 = bb(hw1, 5, 0);
+                let j1 = bt(w, 13);
+                let j2 = bt(w, 11);
+                let imm11 = bb(hw2, 10, 0);
+                let v = (s as u32) << 20 | (j2 as u32) << 19 | (j1 as u32) << 18
+                    | imm6 << 12 | imm11 << 1;
+                Ok(Ins::B { cond: Cond::from_bits(cond_field as u8), off: sign_ext(v, 21) })
+            } else {
+                // T4 B.W: imm = SignExtend25(S : I1 : I2 : imm10 : imm11 : 0)
+                Ok(Ins::B { cond: Cond::Al, off: sign_ext(bl_imm(w), 25) })
+            };
+        }
+        // f3 misc-control: dispatch by hw1[7:4] (op) + Rn.
+        let op = bb(hw1, 7, 4);
+        return match (op, rn) {
+            (0b1000, _) | (0b1001, _) => {
+                // MSR: register form hw2[7:4]=0000, else immediate.
+                if bb(hw2, 7, 4) == 0 {
+                    Ok(Ins::Msr { spsr: bt(hw1, 4), mask: bb(hw2, 11, 8) as u8, rn: bb(hw2, 3, 0) as u8, imm: None })
+                } else {
+                    Ok(Ins::Msr { spsr: bt(hw1, 4), mask: bb(hw2, 11, 8) as u8, rn: 15, imm: Some(imm12) })
+                }
+            }
+            (0b1110, 15) | (0b1111, 15) => {
+                // MRS: Rd at hw2[11:8]; R = hw1.4 selects SPSR
+                Ok(Ins::Mrs { rd: bb(hw2, 11, 8) as u8, spsr: bt(hw1, 4) })
+            }
+            (0b1111, _) => {
                 // UDF.W: hw1 = f7fx, imm16 = hw1[3:0] : hw2[11:0]
-                return Ok(Ins::Udf { imm: ((bb(hw1, 3, 0) << 12) | bb(hw2, 11, 0)) as u16 });
+                Ok(Ins::Udf { imm: ((bb(hw1, 3, 0) << 12) | bb(hw2, 11, 0)) as u16 })
             }
-            if cond_field == 0b1110 {
-                return Err(DecodeErr(w)); // AL slot — no Bcc
+            (0b1010, 15) => {
+                // Hints.W: opcode = hw2[7:0]
+                Ok(match bb(hw2, 7, 0) {
+                    0 => Ins::Hints { kind: Hint::Nop },
+                    1 => Ins::Hints { kind: Hint::Yield },
+                    2 => Ins::Hints { kind: Hint::Wfe },
+                    3 => Ins::Hints { kind: Hint::Wfi },
+                    4 => Ins::Hints { kind: Hint::Sev },
+                    _ => Ins::Hints { kind: Hint::Nop },
+                })
             }
-            // T3 Bcc: imm = SignExtend21(S : J2(hw2.11) : J1(hw2.13) : imm6 : imm11 : 0)
-            let s = bt(w, 26);
-            let imm6 = bb(hw1, 5, 0);
-            let j1 = bt(w, 13);
-            let j2 = bt(w, 11);
-            let imm11 = bb(hw2, 10, 0);
-            let v = (s as u32) << 20 | (j2 as u32) << 19 | (j1 as u32) << 18
-                | imm6 << 12 | imm11 << 1;
-            Ok(Ins::B { cond: Cond::from_bits(cond_field as u8), off: sign_ext(v, 21) })
-        }
-        0b1011 => {
-            // T4 B.W: imm = SignExtend25(S : I1 : I2 : imm10 : imm11 : 0)
-            let v = bl_imm(w);
-            Ok(Ins::B { cond: Cond::Al, off: sign_ext(v, 25) })
-        }
-        0b1100 => Ok(Ins::Blx { off: sign_ext(bl_imm(w), 25) }), // T2 BLX (ARM target)
-        0b1101 | 0b1110 => Ok(Ins::Bl { off: sign_ext(bl_imm(w), 25) }), // T1 BL
-        0b1000 => {
-            // f3 misc-control group: dispatch by hw1[7:4] (op) + Rn.
-            let op = bb(hw1, 7, 4);
-            let rn_f = rn;
-            match (op, rn_f) {
-                (0b1000, _) | (0b1001, _) => {
-                    // MSR: register form hw2[7:4]=0000, else immediate.
-                    if bb(hw2, 7, 4) == 0 {
-                        Ok(Ins::Msr { spsr: bt(hw1, 4), mask: bb(hw2, 11, 8) as u8, rn: bb(hw2, 3, 0) as u8, imm: None })
-                    } else {
-                        Ok(Ins::Msr { spsr: bt(hw1, 4), mask: bb(hw2, 11, 8) as u8, rn: 15, imm: Some(imm12) })
-                    }
-                }
-                (0b1110, 15) | (0b1111, 15) => {
-                    // MRS: Rd at hw2[11:8]; R = hw1.4 selects SPSR
-                    Ok(Ins::Mrs { rd: bb(hw2, 11, 8) as u8, spsr: bt(hw1, 4) })
-                }
-                (0b1010, 15) => {
-                    // Hints.W: opcode = hw2[7:0]
-                    Ok(match bb(hw2, 7, 0) {
-                        0 => Ins::Hints { kind: Hint::Nop },
-                        1 => Ins::Hints { kind: Hint::Yield },
-                        2 => Ins::Hints { kind: Hint::Wfe },
-                        3 => Ins::Hints { kind: Hint::Wfi },
-                        4 => Ins::Hints { kind: Hint::Sev },
-                        _ => Ins::Hints { kind: Hint::Nop },
-                    })
-                }
-                (0b1011, 15) => {
-                    // Barriers: DSB(4x) DMB(5x) ISB(6x); option at hw2[3:0]
-                    Ok(match bb(hw2, 7, 4) {
-                        0b0100 => Ins::Barriers { kind: Barrier::Dsb, opt: bb(hw2, 3, 0) as u8 },
-                        0b0101 => Ins::Barriers { kind: Barrier::Dmb, opt: bb(hw2, 3, 0) as u8 },
-                        _ => Ins::Barriers { kind: Barrier::Isb, opt: bb(hw2, 3, 0) as u8 },
-                    })
-                }
-                _ => Err(DecodeErr(w)),
+            (0b1011, 15) => {
+                // Barriers: DSB(4x) DMB(5x) ISB(6x); option at hw2[3:0]
+                Ok(match bb(hw2, 7, 4) {
+                    0b0100 => Ins::Barriers { kind: Barrier::Dsb, opt: bb(hw2, 3, 0) as u8 },
+                    0b0101 => Ins::Barriers { kind: Barrier::Dmb, opt: bb(hw2, 3, 0) as u8 },
+                    _ => Ins::Barriers { kind: Barrier::Isb, opt: bb(hw2, 3, 0) as u8 },
+                })
             }
-        }
-        _ => Err(DecodeErr(w)),
+            _ => Err(DecodeErr(w)),
+        };
+    }
+    // bit14 = 1: BL (bit12 = 1) / BLX (bit12 = 0).
+    if bt(hw2, 12) {
+        Ok(Ins::Bl { off: sign_ext(bl_imm(w), 25) })
+    } else {
+        Ok(Ins::Blx { off: sign_ext(bl_imm(w), 25) })
     }
 }
 

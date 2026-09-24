@@ -9,8 +9,6 @@ use crate::common::*;
 use crate::a32::ins::*;
 use crate::a32::ins::Ins::*;
 
-use super::decode::DecodeErr;
-
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub struct EncodeErr(pub &'static str);
 
@@ -111,7 +109,7 @@ fn encode_t16(ins: &Ins) -> Option<u16> {
                 0x4600 | (bit(*rd as u32, 3) << 7) | ((*rm as u32) << 3) | (*rd as u32 & 7)
             }
         // LDR literal (rt < 8, 0 ≤ imm ≤ 1020, 4-aligned)
-        Ldst { store: false, size: Size::W32, signed: false, user: false, rt, rn: 15, rm: None, imm, index: true, add: true, wback: false }
+        Ldst { store: false, size: Size::W32, signed: false, user: false, rt, rn: 15, rm: None, shift: _, imm, index: true, add: true, wback: false }
             if *rt < 8 && *imm >= 0 && *imm <= 1020 && imm % 4 == 0 => {
                 0x4800 | ((*rt as u32) << 8) | (*imm as u32 >> 2) as u16 as u32
             }
@@ -126,20 +124,20 @@ fn encode_t16(ins: &Ins) -> Option<u16> {
                 0x5000 | (code << 9) | ((*rm as u32) << 6) | ((*rn as u32) << 3) | *rt as u32
             }
         // imm5 ldst (word ×4 / byte / half ×2)
-        Ldst { store, size: Size::W32, signed: false, user: false, rt, rn, rm: None, imm, index: true, add: true, wback: false }
+        Ldst { store, size: Size::W32, signed: false, user: false, rt, rn, rm: None, shift: _, imm, index: true, add: true, wback: false }
             if *rt < 8 && *rn < 8 && *imm >= 0 && *imm <= 124 && imm % 4 == 0 => {
                 0x6000 | ((*store ^ true) as u32) << 11 | ((imm >> 2) as u32) << 6 | ((*rn as u32) << 3) | *rt as u32
             }
-        Ldst { store, size: Size::B8, signed: false, user: false, rt, rn, rm: None, imm, index: true, add: true, wback: false }
+        Ldst { store, size: Size::B8, signed: false, user: false, rt, rn, rm: None, shift: _, imm, index: true, add: true, wback: false }
             if *rt < 8 && *rn < 8 && *imm >= 0 && *imm <= 31 => {
                 0x7000 | ((*store ^ true) as u32) << 11 | (*imm as u32) << 6 | ((*rn as u32) << 3) | *rt as u32
             }
-        Ldst { store, size: Size::H16, signed: false, user: false, rt, rn, rm: None, imm, index: true, add: true, wback: false }
+        Ldst { store, size: Size::H16, signed: false, user: false, rt, rn, rm: None, shift: _, imm, index: true, add: true, wback: false }
             if *rt < 8 && *rn < 8 && *imm >= 0 && *imm <= 62 && imm % 2 == 0 => {
                 0x8000 | ((*store ^ true) as u32) << 11 | ((imm >> 1) as u32) << 6 | ((*rn as u32) << 3) | *rt as u32
             }
         // SP-relative STR/LDR (rt < 8, imm 0..1020)
-        Ldst { store, size: Size::W32, signed: false, user: false, rt, rn: 13, rm: None, imm, index: true, add: true, wback: false }
+        Ldst { store, size: Size::W32, signed: false, user: false, rt, rn: 13, rm: None, shift: _, imm, index: true, add: true, wback: false }
             if *rt < 8 && *imm >= 0 && *imm <= 1020 && imm % 4 == 0 => {
                 0x9000 | ((*store ^ true) as u32) << 11 | ((*rt as u32) << 8) | (imm >> 2) as u32
             }
@@ -183,7 +181,7 @@ fn encode_t16(ins: &Ins) -> Option<u16> {
         // B T1 (cond): off ±256, even
         B { cond, off } if *cond != Cond::Al && *cond != Cond::Nv && off % 2 == 0 && (-256..=254).contains(off) => {
             let v = (*off as u32) & 0xFF;
-            0xD000 | ((*cond.bits() as u32) << 8) | v
+            0xD000 | ((cond.bits() as u32) << 8) | v
         }
         // B T2: off ±2046, even
         B { cond: Cond::Al, off } if off % 2 == 0 && (-2048..=2046).contains(off) => {
@@ -219,7 +217,7 @@ fn encode_t16(ins: &Ins) -> Option<u16> {
         },
         // IT
         It { first_cond, mask } if *mask != 0 => {
-            0xBF00 | ((*first_cond.bits() as u32) << 4) | *mask as u32
+            0xBF00 | ((first_cond.bits() as u32) << 4) | *mask as u32
         }
         // SVC
         Svc { imm } if *imm <= 0xFF => 0xDF00 | *imm,
@@ -297,8 +295,8 @@ fn encode_t32_word(ins: &Ins) -> Result<u32, EncodeErr> {
                     if a >= 32 { return Err(enc_err("shift amount")); }
                     0xEA00_0000u32
                         | (opcode << 21) | ((s_e as u32) << 20)
-                        | ((*rn_e as u32) << 16)
-                        | ((a >> 2) << 12) | ((*rd_e as u32) << 8) | ((a & 3) << 6)
+                        | ((rn_e as u32) << 16)
+                        | ((a >> 2) << 12) | ((rd_e as u32) << 8) | ((a & 3) << 6)
                         | ((shift.bits() as u32) << 4) | *rm as u32
                 }
                 ShiftAmount::Reg(_) => return Err(enc_err("reg-shift only via fa")),
@@ -351,7 +349,7 @@ fn encode_t32_word(ins: &Ins) -> Result<u32, EncodeErr> {
         Usat { rd, imm, rn, sh, asr } => {
             if *imm > 31 { return Err(enc_err("usat imm")); }
             let shb = *asr as u32;
-            f3(0b0011, 0b1000 | (shb << 1), *rn, *rd,
+            f3(0b0011, (0b1000 | (shb << 1)) as u8, *rn, *rd,
                (((*sh as u32) >> 2) << 12) | (*rd as u32) << 8 | (((*sh as u32) & 3) << 6) | *imm as u32)
         }
         Ssat16 { rd, imm, rn } => {
@@ -386,9 +384,10 @@ fn encode_t32_word(ins: &Ins) -> Result<u32, EncodeErr> {
         }
 
         // ======== status / system ========
-        Mrs { rd, spsr } => 0xF3EF_8000u32 & !0xF300_0000 & 0xFFFF_FFFF
-            | if *spsr { 0xF3FF_0000 } else { 0xF3EF_0000 }
-            | 0x8000 | ((*rd as u32) << 8),
+        Mrs { rd, spsr } => {
+            let hw1 = if *spsr { 0xF3FFu32 } else { 0xF3EF };
+            (hw1 << 16) | 0x8000 | ((*rd as u32) << 8)
+        }
         Msr { spsr, mask, rn, imm: None } => {
             let r = *spsr as u32;
             0xF380_0000 | (r << 20) | ((*rn as u32) << 0) | 0x8000 | ((*mask as u32) << 8)
@@ -443,7 +442,7 @@ fn encode_t32_word(ins: &Ins) -> Result<u32, EncodeErr> {
         }
         ExclLoad { .. } => return Err(enc_err("excl imm")),
         ExclLoadD { rt, rt2, rn } =>
-            0xE8D0_0000 | ((*rn as u32) << 16) | ((*rt2 as u32) << 12) | ((*rt as u32) << 8) | 0x7F,
+            0xE8D0_0000 | ((*rn as u32) << 16) | ((*rt as u32) << 12) | ((*rt2 as u32) << 8) | 0x7F,
         ExclStore { size: Size::W32, rs, rt, rn, imm } => {
             if *imm < 0 || *imm > 1020 || imm % 4 != 0 { return Err(enc_err("strex imm")); }
             0xE840_0000 | ((*rn as u32) << 16) | ((*rt as u32) << 12) | ((*rs as u32) << 8) | (imm / 4) as u32
@@ -454,7 +453,7 @@ fn encode_t32_word(ins: &Ins) -> Result<u32, EncodeErr> {
         }
         ExclStore { .. } => return Err(enc_err("excl imm")),
         ExclStoreD { rs, rt, rt2, rn } =>
-            0xE8C0_0000 | ((*rn as u32) << 16) | ((*rt2 as u32) << 12) | ((*rt as u32) << 8) | 0x70 | *rs as u32,
+            0xE8C0_0000 | ((*rn as u32) << 16) | ((*rt as u32) << 12) | ((*rt2 as u32) << 8) | 0x70 | *rs as u32,
         Tbb { rn, rm, half } =>
             0xE8D0_0000 | ((*rn as u32) << 16) | 0xF000 | ((*half as u32) << 4) | *rm as u32,
 
@@ -469,7 +468,7 @@ fn encode_t32_word(ins: &Ins) -> Result<u32, EncodeErr> {
                 ExtOp::Uxtb | ExtOp::Uxtab => (5, ExtOp::Uxtb, ExtOp::Uxtab),
             };
             if *rot % 8 != 0 || *rot > 24 { return Err(enc_err("extend rot")); }
-            let op2 = 8 + rot / 8;
+            let op2 = (8 + rot / 8) as u32;
             let (rn_e, _is_add) = if *op == plain_op {
                 (15u32, false)
             } else if *op == add_op {
@@ -479,20 +478,20 @@ fn encode_t32_word(ins: &Ins) -> Result<u32, EncodeErr> {
             };
             0xFA00_F000 | (op1 << 20) | (rn_e << 16) | ((*rd as u32) << 8) | (op2 << 4) | *rm as u32
         }
-        Rev { rd, rm } => fa2(0b1001, 0b1000, 0, *rd, *rm, 1),
-        Rev16 { rd, rm } => fa2(0b1001, 0b1001, 0, *rd, *rm, 1),
-        Rbit { rd, rm } => fa2(0b1001, 0b1010, 0, *rd, *rm, 1),
-        Revsh { rd, rm } => fa2(0b1001, 0b1011, 0, *rd, *rm, 1),
-        Sel { rd, rn, rm } => fa2(0b1010, 0b1000, *rn, *rd, *rm, 2),
-        Clz { rd, rm } => fa2(0b1011, 0b1000, *rm, *rd, *rm, 1),
-        Qadd { rd, rn, rm } => fa2(0b1000, 0b1000, *rm, *rd, *rn, 2),
-        Qsub { rd, rn, rm } => fa2(0b1000, 0b1010, *rm, *rd, *rn, 2),
-        Qdadd { rd, rn, rm } => fa2(0b1000, 0b1001, *rm, *rd, *rn, 2),
-        Qdsub { rd, rn, rm } => fa2(0b1000, 0b1011, *rm, *rd, *rn, 2),
+        Rev { rd, rm } => fa2(0b1001, 0b1000, *rm, *rd, *rm,),
+        Rev16 { rd, rm } => fa2(0b1001, 0b1001, *rm, *rd, *rm,),
+        Rbit { rd, rm } => fa2(0b1001, 0b1010, *rm, *rd, *rm,),
+        Revsh { rd, rm } => fa2(0b1001, 0b1011, *rm, *rd, *rm,),
+        Sel { rd, rn, rm } => fa2(0b1010, 0b1000, *rn, *rd, *rm,),
+        Clz { rd, rm } => fa2(0b1011, 0b1000, *rm, *rd, *rm,),
+        Qadd { rd, rn, rm } => fa2(0b1000, 0b1000, *rn, *rd, *rm,),
+        Qsub { rd, rn, rm } => fa2(0b1000, 0b1010, *rn, *rd, *rm,),
+        Qdadd { rd, rn, rm } => fa2(0b1000, 0b1001, *rn, *rd, *rm,),
+        Qdsub { rd, rn, rm } => fa2(0b1000, 0b1011, *rn, *rd, *rm,),
         Crc32 { poly32, sz, rd, rn, rm } => {
             let op1 = if *poly32 { 0b1101u32 } else { 0b1100 };
             let op2 = match sz { Size::B8 => 0b1000, Size::H16 => 0b1001, Size::W32 => 0b1010, _ => return Err(enc_err("crc32 sz")) };
-            fa2(op1, op2, *rn, *rd, *rm, 2)
+            fa2(op1, op2, *rn, *rd, *rm)
         }
         Parallel { kind, shape, rd, rn, rm } => {
             let op1 = match shape {
@@ -504,7 +503,7 @@ fn encode_t32_word(ins: &Ins) -> Result<u32, EncodeErr> {
                 ParKind::S => 0, ParKind::Q => 1, ParKind::Sh => 2,
                 ParKind::U => 4, ParKind::Uq => 5, ParKind::Uh => 6,
             };
-            fa2(op1, op2, *rn, *rd, *rm, 2)
+            fa2(op1, op2, *rn, *rd, *rm)
         }
         Pkh { rd, rn, rm, top, shift } => {
             if *shift > 31 { return Err(enc_err("pkh shift")); }
@@ -541,17 +540,15 @@ fn fb(op1: u32, rn: u8, ra: u8, rd: u8, op2: u32, rm: u8) -> u32 {
         | ((ra as u32) << 12) | ((rd as u32) << 8) | (op2 << 4) | rm as u32
 }
 
-/// fa 2-source helper: hw1 = 1111 1010 op1 Rn, hw2 = 0 Rd op2 Rm.
-/// `n_regs`: 1 = Rn is really Rm (unary ops), 2 = binary.
-fn fa2(op1: u32, op2: u32, rn: u8, rd: u8, rm: u8, n_regs: u32) -> u32 {
-    let _ = n_regs;
-    0xFA00_0000 | (op1 << 20) | ((rn as u32) << 16) | ((rd as u32) << 8) | (op2 << 4) | rm as u32
+/// fa 2-source helper: hw1 = 1111 1010 op1 Rn, hw2 = F Rd op2 Rm.
+fn fa2(op1: u32, op2: u32, rn: u8, rd: u8, rm: u8) -> u32 {
+    0xFA00_F000 | (op1 << 20) | ((rn as u32) << 16) | ((rd as u32) << 8) | (op2 << 4) | rm as u32
 }
 
-/// f3 space: hw1 = 1111 0011 [op nibble] Rn, hw2 given raw.
-fn f3(op_hi: u32, op_lo: u8, rn: u8, rd: u8, hw2: u32) -> u32 {
-    debug_assert_eq!(op_hi, 0b0011);
-    (0xF300_0000 | ((op_lo as u32) << 4) | rn as u32) << 16 | (hw2 & 0xFFFF) | 0
+/// f3 space: hw1 = 1111 0011 [op nibble at 7:4] Rn, hw2 raw.
+fn f3(_op_hi: u32, op_lo: u8, rn: u8, _rd: u8, hw2: u32) -> u32 {
+    let hw1 = 0xF300u32 | ((op_lo as u32) << 4) | rn as u32;
+    (hw1 << 16) | (hw2 & 0xFFFF)
 }
 
 // ---------- branches ----------
@@ -617,6 +614,14 @@ fn enc_f8_ldst(store: bool, size: Size, signed: bool, user: bool, rt: u8, rn: u8
     let l = !store as u32;
     let base = 0xF800_0000 | (s << 24) | (sz << 21) | (l << 20) | ((rn as u32) << 16);
 
+    // LDR literal: Rn=PC + word + unsigned → hw2[11:0] = |imm|, U = sign.
+    if rn == 15 && size == Size::W32 && !signed && rm.is_none() {
+        let (u_bit, mag) = if imm >= 0 { (1u32, imm as u32) } else { (0, imm.unsigned_abs() as u32) };
+        if mag <= 0xFFF && !wback && index {
+            return Ok(base | (u_bit << 23) | ((rt as u32) << 12) | mag);
+        }
+        return Err(enc_err("literal offset"));
+    }
     // Register-offset form: rm with LSL #0-3 (imm field = shift amount).
     if let Some(rm_v) = rm {
         if !user && !wback && index && add && shift == Shift::Lsl && (0..=3).contains(&imm) {
@@ -626,13 +631,9 @@ fn enc_f8_ldst(store: bool, size: Size, signed: bool, user: bool, rt: u8, rn: u8
         return Err(enc_err("ldst reg form"));
     }
 
-    // Literal (Rn=PC) and plain positive imm12 (U=1).
+    // Literal (Rn=PC) handled above; plain positive imm12 (U=1).
     if index && !wback && add && !user && imm >= 0 {
         let imm12 = imm as u32;
-        // LDR literal (Rn=15, word, unsigned): ±imm12 via U.
-        if rn == 15 && size == Size::W32 && !signed && imm12 <= 0xFFF {
-            return Ok(base | ((rt as u32) << 12) | imm12);
-        }
         if imm12 <= 0xFFF {
             return Ok(base | 0x0080_0000 | ((rt as u32) << 12) | imm12);
         }
