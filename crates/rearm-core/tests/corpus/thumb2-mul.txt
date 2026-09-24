@@ -1,0 +1,45 @@
+fb01f002 mul r0, r1, r2
+fb04f305 mul r3, r4, r5
+fb013002 mla r0, r1, r2, r3
+fb013012 mls r0, r1, r2, r3
+fb820103 smull r0, r1, r2, r3
+fba20103 umull r0, r1, r2, r3
+fbc20103 smlal r0, r1, r2, r3
+fbe20103 umlal r0, r1, r2, r3
+fbe20163 umaal r0, r1, r2, r3
+fb11f002 smulbb r0, r1, r2
+fb11f012 smulbt r0, r1, r2
+fb11f022 smultb r0, r1, r2
+fb11f032 smultt r0, r1, r2
+fb31f002 smulwb r0, r1, r2
+fb31f012 smulwt r0, r1, r2
+fb113002 smlabb r0, r1, r2, r3
+fb113012 smlabt r0, r1, r2, r3
+fb113022 smlatb r0, r1, r2, r3
+fb113032 smlatt r0, r1, r2, r3
+fb313002 smlawb r0, r1, r2, r3
+fb313012 smlawt r0, r1, r2, r3
+fb21f002 smuad r0, r1, r2
+fb21f012 smuadx r0, r1, r2
+fb41f002 smusd r0, r1, r2
+fb41f012 smusdx r0, r1, r2
+fb213002 smlad r0, r1, r2, r3
+fb213012 smladx r0, r1, r2, r3
+fb413002 smlsd r0, r1, r2, r3
+fb413012 smlsdx r0, r1, r2, r3
+fbc201c3 smlald r0, r1, r2, r3
+fbc201d3 smlaldx r0, r1, r2, r3
+fbd201c3 smlsld r0, r1, r2, r3
+fbd201d3 smlsldx r0, r1, r2, r3
+fb51f002 smmul r0, r1, r2
+fb51f012 smmulr r0, r1, r2
+fb513002 smmla r0, r1, r2, r3
+fb513012 smmlar r0, r1, r2, r3
+fb613002 smmls r0, r1, r2, r3
+fb613012 smmlsr r0, r1, r2, r3
+fb71f002 usad8 r0, r1, r2
+fb713002 usada8 r0, r1, r2, r3
+fb91f0f2 <unknown>
+fbb1f0f2 <unknown>
+fb95f3f7 <unknown>
+fbb2f6f9 <unknown>

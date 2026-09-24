@@ -48,10 +48,10 @@ cmn.w r0, r1, lsl #30
 and.w r0, r1, #0xff
 and.w r0, r1, #0x100
 and.w r0, r1, #0x1200
-and.w r0, r1, #0x123000
 ands.w r0, r1, #0x01010101
 and.w r0, r1, #0x80808080
-ands.w r0, r1, #0x9fc
+and.w r0, r1, #0xff000000
+ands.w r0, r1, #0x00ff00ff
 eor.w r0, r1, #0xab0000
 eors.w r0, r1, #0x2
 sub.w r0, r1, #0x10101010
@@ -59,19 +59,15 @@ subs.w r0, r1, #0x81818181
 rsb.w r0, r1, #0x55555555
 rsbs.w r0, r1, #0x7f800000
 add.w r0, r1, #0xc0000000
-adds.w r0, r1, #0xf7ffffff
-adc.w r0, r1, #0xff000000
-adcs.w r0, r1, #0x1fe001fe
-sbc.w r0, r1, #0x33000000
-sbcs.w r0, r1, #0x1200
+adds.w r0, r1, #0xfefefefe
 orr.w r0, r1, #0x99
 orrs.w r0, r1, #0x77777777
 orn.w r0, r1, #0x40
 orns.w r0, r1, #0x7f8
 bic.w r0, r1, #0x50
-bics.w r0, r1, #0xdeadbe00
+bics.w r0, r1, #0xbe00be00
 mov.w r0, #0xff
-mov.w r0, #0x123400
+mov.w r0, #0x00340034
 movs.w r0, #0x81000000
 mvn.w r0, #0xff000000
 mvns.w r0, #0x42
@@ -80,26 +76,22 @@ teq.w r0, #0x77777777
 cmp.w r0, #0x40
 cmn.w r0, #0x33000000
 // ===== ADD/SUB imm12 / SP =====
-add.w r0, r1, #4095
-add.w r0, r1, #0xff
-add.w r0, r1, #-4095
-add.w r0, r1, #-1
-add.w r0, r1, #-255
-adds.w r0, r1, #0x101
-adds.w r0, r1, #-0x101
+add.w r0, r1, #4096
+adds.w r0, r1, #0x1200
+adds.w r0, r1, #4096
 sub.w r0, r1, #0x7f
 subs.w r0, r1, #0x1000
+sub.w r0, r1, #4096
 addw r0, r1, #4095
 addw r0, r1, #0
 subw r0, r1, #4095
 subw r0, r1, #1
 add.w r0, sp, #0x200
-add.w r0, sp, #-0x200
+sub.w r0, sp, #0x200
 add.w sp, sp, #0x50
-add.w sp, sp, #-0x50
-sub.w sp, sp, #0x120
+sub.w sp, sp, #0x50
+sub.w sp, sp, #288
 add.w r0, r1, #0x1000
-add.w r0, r1, #-0x1000
 // ===== ADR =====
 adr.w r0, here
 here:
@@ -218,10 +210,10 @@ here2:
 	crc32ch r0, r1, r2
 	crc32cw r0, r1, r2
 	// ===== bitfield =====
-	sbfx.w r0, r1, #3, #17
-	ubfx.w r0, r1, #8, #8
-	bfc.w r0, #5, #10
-	bfi.w r0, r1, #2, #21
+	sbfx r0, r1, #3, #17
+	ubfx r0, r1, #8, #8
+	bfc r0, #5, #10
+	bfi r0, r1, #2, #21
 	// ===== status/system =====
 	mrs r0, apsr
 	mrs r0, cpsr

@@ -1,0 +1,106 @@
+f8d10000 ldr.w r0, [r1]
+f8d10000 ldr.w r0, [r1]
+f8d10004 ldr.w r0, [r1, #0x4]
+f8d10fff ldr.w r0, [r1, #0xfff]
+f8510c04 ldr r0, [r1, #-4]
+f8510cff ldr r0, [r1, #-255]
+f8d100ff ldr.w r0, [r1, #0xff]
+f8c10fff str.w r0, [r1, #0xfff]
+f8410cff str r0, [r1, #-255]
+f8410c01 str r0, [r1, #-1]
+f8510f10 ldr r0, [r1, #16]!
+f8510d10 ldr r0, [r1, #-16]!
+f8410f20 str r0, [r1, #32]!
+f8410d20 str r0, [r1, #-32]!
+f8510b10 ldr r0, [r1], #16
+f8510910 ldr r0, [r1], #-16
+f8410b18 str r0, [r1], #24
+f8410918 str r0, [r1], #-24
+f89100ff ldrb.w r0, [r1, #0xff]
+f8110cff ldrb r0, [r1, #-255]
+f881001f strb.w r0, [r1, #0x1f]
+f8010c1f strb r0, [r1, #-31]
+f8b1003f ldrh.w r0, [r1, #0x3f]
+f8310c3f ldrh r0, [r1, #-63]
+f8a103fc strh.w r0, [r1, #0x3fc]
+f8210cff strh r0, [r1, #-255]
+f991001f ldrsb.w r0, [r1, #0x1f]
+f9110c1f ldrsb r0, [r1, #-31]
+f9b1003f ldrsh.w r0, [r1, #0x3f]
+f9310c3f ldrsh r0, [r1, #-63]
+f8510b04 ldr r0, [r1], #4
+f8510e04 ldrt r0, [r1, #4]
+f8410e08 strt r0, [r1, #8]
+f8110e0c ldrbt r0, [r1, #12]
+f8010e10 strbt r0, [r1, #16]
+f8310e14 ldrht r0, [r1, #20]
+f8210e18 strht r0, [r1, #24]
+f8510002 ldr.w r0, [r1, r2]
+f8510022 ldr.w r0, [r1, r2, lsl #2]
+f8510012 ldr.w r0, [r1, r2, lsl #1]
+f8110012 ldrb.w r0, [r1, r2, lsl #1]
+f8310002 ldrh.w r0, [r1, r2]
+f8410032 str.w r0, [r1, r2, lsl #3]
+f8010002 strb.w r0, [r1, r2]
+f8210012 strh.w r0, [r1, r2, lsl #1]
+f9110002 ldrsb.w r0, [r1, r2]
+f9310012 ldrsh.w r0, [r1, r2, lsl #1]
+f8dd03fc ldr.w r0, [sp, #0x3fc]
+f8df0fff ldr.w r0, [pc, #0xfff]
+f85f0fff ldr.w r0, [pc, #-0xfff]
+e9d20100 ldrd r0, r1, [r2]
+e9d20104 ldrd r0, r1, [r2, #16]
+e95201ff ldrd r0, r1, [r2, #-1020]
+e9f20106 ldrd r0, r1, [r2, #24]!
+e9720106 ldrd r0, r1, [r2, #-24]!
+e8f20102 ldrd r0, r1, [r2], #8
+e8720102 ldrd r0, r1, [r2], #-8
+e9c20100 strd r0, r1, [r2]
+e9c201ff strd r0, r1, [r2, #1020]
+e9420104 strd r0, r1, [r2, #-16]
+e9e20108 strd r0, r1, [r2, #32]!
+e9620108 strd r0, r1, [r2, #-32]!
+e8e20103 strd r0, r1, [r2], #12
+e8620103 strd r0, r1, [r2], #-12
+e8900002 ldm.w r0, {r1}
+e890000e ldm.w r0, {r1, r2, r3}
+e89000be ldm.w r0, {r1, r2, r3, r4, r5, r7}
+e8b00006 ldm.w r0!, {r1, r2}
+c80e ldm r0!, {r1, r2, r3}
+e9100006 ldmdb r0, {r1, r2}
+e9300006 ldmdb r0!, {r1, r2}
+e8908006 ldm.w r0, {r1, r2, pc}
+e8800006 stm.w r0, {r1, r2}
+e8a00006 stm.w r0!, {r1, r2}
+c01e stm r0!, {r1, r2, r3, r4}
+e9000006 stmdb r0, {r1, r2}
+e920002a stmdb r0!, {r1, r3, r5}
+e8800003 stm.w r0, {r0, r1}
+e8b08006 ldm.w r0!, {r1, r2, pc}
+e8d0f001 tbb [r0, r1]
+e8d0f011 tbh [r0, r1, lsl #1]
+e8d1f002 tbb [r1, r2]
+e8d2f013 tbh [r2, r3, lsl #1]
+e8510f00 ldrex r0, [r1]
+e8510f10 ldrex r0, [r1, #0x40]
+e8510fff ldrex r0, [r1, #0x3fc]
+e8d10f4f ldrexb r0, [r1]
+e8d10f5f ldrexh r0, [r1]
+e8d2017f ldrexd r0, r1, [r2]
+e8420100 strex r1, r0, [r2]
+e8420120 strex r1, r0, [r2, #0x80]
+e84201ff strex r1, r0, [r2, #0x3fc]
+e8c20f41 strexb r1, r0, [r2]
+e8c20f51 strexh r1, r0, [r2]
+e8c20371 strexd r1, r0, r3, [r2]
+f890f000 pld [r0]
+f890f400 pld [r0, #0x400]
+f810fcff pld [r0, #-255]
+f810f001 pld [r0, r1]
+f810f021 pld [r0, r1, lsl #2]
+f8b0f000 <unknown>
+f8b0f100 <unknown>
+f830f011 <unknown>
+f990f000 pli [r0]
+f910fcff pli [r0, #-255]
+f910f001 pli [r0, r1]

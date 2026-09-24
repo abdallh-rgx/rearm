@@ -1,0 +1,223 @@
+ea010002 and.w r0, r1, r2
+ea0100c2 and.w r0, r1, r2, lsl #3
+ea1110d2 ands.w r0, r1, r2, lsr #7
+ea0170e2 and.w r0, r1, r2, asr #31
+ea012032 and.w r0, r1, r2, ror #8
+ea810002 eor.w r0, r1, r2
+ea913002 eors.w r0, r1, r2, lsl #12
+eba10052 sub.w r0, r1, r2, lsr #1
+ebb16022 subs.w r0, r1, r2, asr #24
+ebc14032 rsb r0, r1, r2, ror #16
+ebd10002 rsbs r0, r1, r2
+eb010082 add.w r0, r1, r2, lsl #2
+eb111052 adds.w r0, r1, r2, lsr #5
+eb412042 adc.w r0, r1, r2, lsl #9
+eb510002 adcs.w r0, r1, r2
+eb6120d2 sbc.w r0, r1, r2, lsr #11
+eb711022 sbcs.w r0, r1, r2, asr #4
+ea4100f2 orr.w r0, r1, r2, ror #3
+ea5170c2 orrs.w r0, r1, r2, lsl #31
+ea610002 orn r0, r1, r2
+ea711082 orns r0, r1, r2, lsl #6
+ea210002 bic.w r0, r1, r2
+ea3140e2 bics.w r0, r1, r2, asr #19
+fa01f002 lsl.w r0, r1, r2
+fa21f002 lsr.w r0, r1, r2
+fa41f002 asr.w r0, r1, r2
+fa61f002 ror.w r0, r1, r2
+ea4f1041 lsl.w r0, r1, #0x5
+ea4f3051 lsr.w r0, r1, #0xd
+ea4f00a1 asr.w r0, r1, #0x2
+ea4f60f1 ror.w r0, r1, #0x1b
+ea6f4041 mvn.w r0, r1, lsl #17
+ea7f00d1 mvns.w r0, r1, lsr #3
+ea4f0031 rrx r0, r1
+ea100f01 tst.w r0, r1
+ea102f01 tst.w r0, r1, lsl #8
+ea902f51 teq.w r0, r1, lsr #9
+ebb01fe1 cmp.w r0, r1, asr #7
+ebb00f71 cmp.w r0, r1, ror #1
+eb107f81 cmn.w r0, r1, lsl #30
+f00100ff and r0, r1, #0xff
+f4017080 and r0, r1, #0x100
+f4015090 and r0, r1, #0x1200
+f0113001 ands r0, r1, #0x1010101
+f0013080 and r0, r1, #0x80808080
+f001407f and r0, r1, #0xff000000
+f01110ff ands r0, r1, #0xff00ff
+f481002b eor r0, r1, #0xab0000
+f0910002 eors r0, r1, #0x2
+f1a13010 sub.w r0, r1, #0x10101010
+f1b13081 subs.w r0, r1, #0x81818181
+f1c13055 rsb.w r0, r1, #0x55555555
+f1d140ff rsbs.w r0, r1, #0x7f800000
+f1014040 add.w r0, r1, #0xc0000000
+f11130fe adds.w r0, r1, #0xfefefefe
+f0410099 orr r0, r1, #0x99
+f0513077 orrs r0, r1, #0x77777777
+f0610040 orn r0, r1, #0x40
+f47160ff orns r0, r1, #0x7f8
+f0210050 bic r0, r1, #0x50
+f03120be bics r0, r1, #0xbe00be00
+f04f00ff mov.w r0, #0xff
+f04f1034 mov.w r0, #0x340034
+f05f4001 movs.w r0, #0x81000000
+f06f407f mvn r0, #0xff000000
+f07f0042 mvns r0, #0x42
+f0100f01 tst.w r0, #0x1
+f0903f77 teq.w r0, #0x77777777
+f1b00f40 cmp.w r0, #0x40
+f1105f4c cmn.w r0, #0x33000000
+f5015080 add.w r0, r1, #0x1000
+f5115090 adds.w r0, r1, #0x1200
+f5115080 adds.w r0, r1, #0x1000
+f1a1007f sub.w r0, r1, #0x7f
+f5b15080 subs.w r0, r1, #0x1000
+f5a15080 sub.w r0, r1, #0x1000
+f60170ff addw r0, r1, #0xfff
+f2010000 addw r0, r1, #0x0
+f6a170ff subw r0, r1, #0xfff
+f2a10001 subw r0, r1, #0x1
+f50d7000 add.w r0, sp, #0x200
+f5ad7000 sub.w r0, sp, #0x200
+f10d0d50 add.w sp, sp, #0x50
+f1ad0d50 sub.w sp, sp, #0x50
+f5ad7d90 sub.w sp, sp, #0x120
+f5015080 add.w r0, r1, #0x1000
+f20f0000 adr.w r0, #0
+f20f1100 adr.w r1, #256
+f2412034 movw r0, #0x1234
+f64f61dc movw r1, #0xfedc
+f2400256 movw r2, #0x56
+f2480301 movw r3, #0x8001
+f640740f movw r4, #0xf0f
+f24f05f0 movw r5, #0xf0f0
+f2c56078 movt r0, #0x5678
+f6ca31cd movt r1, #0xabcd
+f2c00200 movt r2, #0x0
+f6cf73ff movt r3, #0xffff
+f6c0240a movt r4, #0xa0a
+f2c50500 movt r5, #0x5000
+f3010004 ssat r0, #0x5, r1
+f32110ce ssat r0, #0xf, r1, asr #7
+f30100df ssat r0, #0x20, r1, lsl #3
+f3810009 usat r0, #0x9, r1
+f38100df usat r0, #0x1f, r1, lsl #3
+f3210006 ssat16 r0, #0x7, r1
+f322000f ssat16 r0, #0x10, r2
+f3a1000b usat16 r0, #0xb, r1
+f3a3000f usat16 r0, #0xf, r3
+fa4ff081 sxtb.w r0, r1
+fa4ff091 sxtb.w r0, r1, ror #8
+fa4ff0a1 sxtb.w r0, r1, ror #16
+fa4ff0b1 sxtb.w r0, r1, ror #24
+fa0ff081 sxth.w r0, r1
+fa0ff091 sxth.w r0, r1, ror #8
+fa2ff081 sxtb16 r0, r1
+fa2ff091 sxtb16 r0, r1, ror #8
+fa2ff0a1 sxtb16 r0, r1, ror #16
+fa2ff0b1 sxtb16 r0, r1, ror #24
+fa5ff081 uxtb.w r0, r1
+fa5ff091 uxtb.w r0, r1, ror #8
+fa1ff081 uxth.w r0, r1
+fa1ff0a1 uxth.w r0, r1, ror #16
+fa3ff081 uxtb16 r0, r1
+fa3ff091 uxtb16 r0, r1, ror #8
+fa41f082 sxtab r0, r1, r2
+fa41f092 sxtab r0, r1, r2, ror #8
+fa01f082 sxtah r0, r1, r2
+fa01f0b2 sxtah r0, r1, r2, ror #24
+fa21f082 sxtab16 r0, r1, r2
+fa21f0a2 sxtab16 r0, r1, r2, ror #16
+fa51f082 uxtab r0, r1, r2
+fa51f092 uxtab r0, r1, r2, ror #8
+fa11f082 uxtah r0, r1, r2
+fa11f092 uxtah r0, r1, r2, ror #8
+fa31f082 uxtab16 r0, r1, r2
+fa31f092 uxtab16 r0, r1, r2, ror #8
+fa91f081 rev.w r0, r1
+fa91f091 rev16.w r0, r1
+fa91f0b1 revsh.w r0, r1
+fa91f0a1 rbit r0, r1
+fa91f002 sadd16 r0, r1, r2
+fa81f002 sadd8 r0, r1, r2
+faa1f002 sasx r0, r1, r2
+fad1f002 ssub16 r0, r1, r2
+fac1f002 ssub8 r0, r1, r2
+fae1f002 ssax r0, r1, r2
+fa91f012 qadd16 r0, r1, r2
+fa81f012 qadd8 r0, r1, r2
+faa1f012 qasx r0, r1, r2
+fad1f012 qsub16 r0, r1, r2
+fac1f012 qsub8 r0, r1, r2
+fae1f012 qsax r0, r1, r2
+fa91f022 shadd16 r0, r1, r2
+fa81f022 shadd8 r0, r1, r2
+faa1f022 shasx r0, r1, r2
+fad1f022 shsub16 r0, r1, r2
+fac1f022 shsub8 r0, r1, r2
+fae1f022 shsax r0, r1, r2
+fa91f042 uadd16 r0, r1, r2
+fa81f042 uadd8 r0, r1, r2
+faa1f042 uasx r0, r1, r2
+fad1f042 usub16 r0, r1, r2
+fac1f042 usub8 r0, r1, r2
+fae1f042 usax r0, r1, r2
+fa91f052 uqadd16 r0, r1, r2
+fa81f052 uqadd8 r0, r1, r2
+faa1f052 uqasx r0, r1, r2
+fad1f052 uqsub16 r0, r1, r2
+fac1f052 uqsub8 r0, r1, r2
+fae1f052 uqsax r0, r1, r2
+fa91f062 uhadd16 r0, r1, r2
+fa81f062 uhadd8 r0, r1, r2
+faa1f062 uhasx r0, r1, r2
+fad1f062 uhsub16 r0, r1, r2
+fac1f062 uhsub8 r0, r1, r2
+fae1f062 uhsax r0, r1, r2
+faa1f082 sel r0, r1, r2
+fab1f081 clz r0, r1
+eac10002 pkhbt r0, r1, r2
+eac11042 pkhbt r0, r1, r2, lsl #5
+eac20001 pkhbt r0, r2, r1
+eac12062 pkhtb r0, r1, r2, asr #9
+fa82f081 qadd r0, r1, r2
+fa82f0a1 qsub r0, r1, r2
+fa82f091 qdadd r0, r1, r2
+fa82f0b1 qdsub r0, r1, r2
+fac1f082 <unknown>
+fac1f092 <unknown>
+fac1f0a2 <unknown>
+fad1f082 <unknown>
+fad1f092 <unknown>
+fad1f0a2 <unknown>
+f34100d0 sbfx r0, r1, #0x3, #0x11
+f3c12007 ubfx r0, r1, #0x8, #0x8
+f36f104e bfc r0, #5, #10
+f3610096 bfi r0, r1, #2, #21
+f3ef8000 mrs r0, apsr
+f3ef8000 mrs r0, apsr
+f3ff8000 mrs r0, spsr
+f3808800 msr APSR_nzcvq, r0
+f3808800 msr APSR_nzcvq, r0
+f3808400 msr APSR_g, r0
+f3808c00 msr APSR_nzcvqg, r0
+f3908100 msr SPSR_c, r0
+f3bf8f5f dmb sy
+f3bf8f57 dmb nsh
+f3bf8f52 dmb oshst
+f3bf8f4b dsb ish
+f3bf8f46 dsb nshst
+f3bf8f4f dsb sy
+f3bf8f6f isb sy
+f3bf8f6f isb sy
+f3af8000 nop.w
+f3af8001 yield.w
+f3af8002 wfe.w
+f3af8003 wfi.w
+f3af8004 sev.w
+f7f1a234 udf.w #0x1234
+f7faabcd udf.w #0xabcd
+b662 cpsie i
+b671 cpsid f
+b663 cpsie if

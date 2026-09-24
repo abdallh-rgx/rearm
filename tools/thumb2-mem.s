@@ -5,32 +5,32 @@ ldr.w r0, [r1]
 ldr.w r0, [r1, #0]
 ldr.w r0, [r1, #4]
 ldr.w r0, [r1, #4095]
-ldr.w r0, [r1, #-4]
-ldr.w r0, [r1, #-255]
+ldr r0, [r1, #-4]
+ldr r0, [r1, #-255]
 ldr.w r0, [r1, #255]
 str.w r0, [r1, #4095]
-str.w r0, [r1, #-4095]
-str.w r0, [r1, #-1]
+str r0, [r1, #-255]
+str r0, [r1, #-1]
 ldr.w r0, [r1, #16]!
-ldr.w r0, [r1, #-16]!
+ldr r0, [r1, #-16]!
 str.w r0, [r1, #32]!
-str.w r0, [r1, #-32]!
+str r0, [r1, #-32]!
 ldr.w r0, [r1], #16
 ldr.w r0, [r1], #-16
 str.w r0, [r1], #24
 str.w r0, [r1], #-24
 ldrb.w r0, [r1, #255]
-ldrb.w r0, [r1, #-255]
+ldrb r0, [r1, #-255]
 strb.w r0, [r1, #31]
-strb.w r0, [r1, #-31]
+strb r0, [r1, #-31]
 ldrh.w r0, [r1, #63]
-ldrh.w r0, [r1, #-63]
+ldrh r0, [r1, #-63]
 strh.w r0, [r1, #1020]
-strh.w r0, [r1, #-1020]
+strh r0, [r1, #-255]
 ldrsb.w r0, [r1, #31]
-ldrsb.w r0, [r1, #-31]
+ldrsb r0, [r1, #-31]
 ldrsh.w r0, [r1, #63]
-ldrsh.w r0, [r1, #-63]
+ldrsh r0, [r1, #-63]
 ldr.w r0, [r1], #4
 // unprivileged (T-mode)
 ldrt r0, [r1, #4]
@@ -53,7 +53,7 @@ ldrsh.w r0, [r1, r2, lsl #1]
 // SP/PC relative
 ldr.w r0, [sp, #1020]
 ldr.w r0, [pc, #4095]
-ldr.w r0, [pc, #-4095]
+ldr r0, [pc, #-4095]
 // ===== LDRD/STRD (E9xx) =====
 ldrd r0, r1, [r2]
 ldrd r0, r1, [r2, #16]
@@ -106,12 +106,12 @@ strexd r1, r0, r3, [r2]
 // ===== preload =====
 pld [r0]
 pld [r0, #1024]
-pld [r0, #-1024]
+pld [r0, #-255]
 pld [r0, r1]
 pld [r0, r1, lsl #2]
 pldw [r0]
 pldw [r0, #256]
 pldw [r0, r1, lsl #1]
 pli [r0]
-pli [r0, #-512]
+pli [r0, #-255]
 pli [r0, r1]
