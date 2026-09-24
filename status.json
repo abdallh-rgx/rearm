@@ -32,7 +32,7 @@
       "resolved": 1000898,
       "unresolved": 246929
     },
-    "z3_proven_1to1": 880,
+    "z3_proven_1to1": 1878,
     "z3_counterexamples": 0,
     "z3_timeout_s": 60
   },
