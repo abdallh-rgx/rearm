@@ -180,16 +180,17 @@ fn encode_t16(ins: &Ins) -> Option<u16> {
             }
         // B T1 (cond): off ±256, even
         B { cond, off } if *cond != Cond::Al && *cond != Cond::Nv && off % 2 == 0 && (-256..=254).contains(off) => {
-            let v = (*off as u32) & 0xFF;
+            let v = ((*off >> 1) as u32) & 0xFF;
             0xD000 | ((cond.bits() as u32) << 8) | v
         }
         // B T2: off ±2046, even
         B { cond: Cond::Al, off } if off % 2 == 0 && (-2048..=2046).contains(off) => {
-            let v = (*off as u32) & 0x7FF;
+            let v = ((*off >> 1) as u32) & 0x7FF;
             0xE000 | v
         }
-        // SXTB/SXTH/UXTB/UXTH (no rotation)
-        Extend { op, rd, rn: 0, rm, rot: 0 } if *rd < 8 && *rm < 8 => {
+        // SXTB/SXTH/UXTB/UXTH (no rotation; 16-bit has no B16 forms)
+        Extend { op, rd, rn: 0, rm, rot: 0 } if *rd < 8 && *rm < 8 && matches!(op,
+            ExtOp::Sxth | ExtOp::Sxtb | ExtOp::Uxth | ExtOp::Uxtb) => {
             let code = match op {
                 ExtOp::Sxth => 0b00, ExtOp::Sxtb => 0b01, ExtOp::Uxth => 0b10, _ => 0b11,
             };
@@ -266,6 +267,11 @@ fn encode_t32_word(ins: &Ins) -> Result<u32, EncodeErr> {
                 f0_imm(op5, s_e as u32, rn_e, rd_e, *imm12)
             }
         }
+        // Shifts by register: fa op1 = 2*type, Rn = the amount register.
+        DpReg { op: DpOp::Mov, s: false, rn: 0, rd, rm, shift, amount: ShiftAmount::Reg(rs) } => {
+            let op1 = (shift.bits() as u32) * 2;
+            0xFA00_F000 | (op1 << 20) | ((*rs as u32) << 16) | ((*rd as u32) << 8) | *rm as u32
+        }
         DpReg { op, s, rn, rd, rm, shift, amount } => {
             // MOV/MVN via Rn=15 (ORR/ORN slots); tests via Rd=15+S.
             let (opcode, rn_e, rd_e, op_e) = match op {
@@ -301,11 +307,6 @@ fn encode_t32_word(ins: &Ins) -> Result<u32, EncodeErr> {
                 }
                 ShiftAmount::Reg(_) => return Err(enc_err("reg-shift only via fa")),
             }
-        }
-        // Shifts by register: fa op1 = 2*type, Rn = the amount register.
-        DpReg { op: DpOp::Mov, s: false, rn: 0, rd, rm, shift, amount: ShiftAmount::Reg(rs) } => {
-            let op1 = (shift.bits() as u32) * 2;
-            0xFA00_F000 | (op1 << 20) | ((*rs as u32) << 16) | ((*rd as u32) << 8) | *rm as u32
         }
         Movw { rd, imm16 } => f0_imm(0b10010, 0, (imm16 >> 12) as u8, *rd, imm16 & 0xFFF),
         Movt { rd, imm16 } => f0_imm(0b10110, 0, (imm16 >> 12) as u8, *rd, imm16 & 0xFFF),
@@ -404,13 +405,13 @@ fn encode_t32_word(ins: &Ins) -> Result<u32, EncodeErr> {
             let code = match kind { Barrier::Dsb => 4, Barrier::Dmb => 5, Barrier::Isb => 6 };
             0xF3BF_8F00 | (code << 4) | *opt as u32
         }
-        Udf { imm } => 0xF7F0_0000 | (((*imm as u32) >> 12) as u32) | 0xA000 | (*imm as u32 & 0xFFF),
+        Udf { imm } => ((0xF7F0u32 | (*imm as u32 >> 12)) << 16) | 0xA000 | (*imm as u32 & 0xFFF),
 
         // ======== branches ========
         B { cond, off } if *cond != Cond::Al && *cond != Cond::Nv => enc_branch_t3(*cond, *off)?,
         B { cond: Cond::Al, off } => enc_branch_t4(*off)?,
-        Bl { off } => enc_bl(*off, 0b1101)?,
-        Blx { off } => enc_bl(*off, 0b1100)?,
+        Bl { off } => enc_bl(*off, 1)?,
+        Blx { off } => enc_bl(*off, 0)?,
         Bx { rm } => 0x4700 | ((*rm as u32) << 3),
         BlxReg { rm } => 0x4700 | 0x80 | ((*rm as u32) << 3),
 
@@ -557,14 +558,14 @@ fn enc_branch_t3(cond: Cond, off: i32) -> Result<u32, EncodeErr> {
     if off % 2 != 0 || !(-1048576..=1048574).contains(&off) {
         return Err(enc_err("Bcc.W offset"));
     }
-    let v = (off as u32) & 0x1F_FFFF;
+    let v = (off as u32) & 0x1F_FFFF; // S:J2:J1:imm6:imm11:0
     let s = (v >> 20) & 1;
     let j2 = (v >> 19) & 1;
     let j1 = (v >> 18) & 1;
     let imm6 = (v >> 12) & 0x3F;
     let imm11 = (v >> 1) & 0x7FF;
     Ok(0xF000_8000
-        | (s << 26) | ((cond.bits() as u32) << 6) | imm6
+        | (s << 26) | ((cond.bits() as u32) << 22) | (imm6 << 16)
         | (j1 << 13) | (j2 << 11) | imm11)
 }
 
@@ -572,7 +573,7 @@ fn enc_branch_t4(off: i32) -> Result<u32, EncodeErr> {
     if off % 2 != 0 || !(-16777216..=16777214).contains(&off) {
         return Err(enc_err("B.W offset"));
     }
-    let v = (off as u32) & 0x1FF_FFFF;
+    let v = (off as u32) & 0x1FF_FFFF; // S:I1:I2:imm10:imm11:0
     let s = (v >> 24) & 1;
     let i1 = (v >> 23) & 1;
     let i2 = (v >> 22) & 1;
@@ -581,15 +582,15 @@ fn enc_branch_t4(off: i32) -> Result<u32, EncodeErr> {
     let j1 = (!(i1 ^ s)) & 1;
     let j2 = (!(i2 ^ s)) & 1;
     Ok(0xF000_9000
-        | (s << 26) | imm10
+        | (s << 26) | (imm10 << 16)
         | (j1 << 13) | (1 << 12) | (j2 << 11) | imm11)
 }
 
-fn enc_bl(off: i32, hw2_top: u32) -> Result<u32, EncodeErr> {
+fn enc_bl(off: i32, bit12: u32) -> Result<u32, EncodeErr> {
     if off % 2 != 0 || !(-16777216..=16777214).contains(&off) {
         return Err(enc_err("branch offset"));
     }
-    let v = (off as u32) & 0x1FF_FFFF;
+    let v = (off as u32) & 0x1FF_FFFF; // S:I1:I2:imm10:imm11:0
     let s = (v >> 24) & 1;
     let i1 = (v >> 23) & 1;
     let i2 = (v >> 22) & 1;
@@ -598,9 +599,8 @@ fn enc_bl(off: i32, hw2_top: u32) -> Result<u32, EncodeErr> {
     let j1 = (!(i1 ^ s)) & 1;
     let j2 = (!(i2 ^ s)) & 1;
     Ok(0xF000_0000
-        | (s << 26) | imm10
-        | (hw2_top << 12)
-        | (j1 << 13) | (j2 << 11) | imm11)
+        | (s << 26) | (imm10 << 16)
+        | (0b11 << 14) | (j1 << 13) | (bit12 << 12) | (j2 << 11) | imm11)
 }
 
 // ---------- f8 load/store ----------

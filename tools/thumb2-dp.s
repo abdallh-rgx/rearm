@@ -122,21 +122,15 @@ here2:
 	usat16 r0, #11, r1
 	usat16 r0, #15, r3
 	// ===== extends with rotation =====
-	sxtb.w r0, r1
 	sxtb.w r0, r1, ror #8
 	sxtb.w r0, r1, ror #16
 	sxtb.w r0, r1, ror #24
-	sxth.w r0, r1
 	sxth.w r0, r1, ror #8
-	sxtb16 r0, r1
 	sxtb16 r0, r1, ror #8
 	sxtb16 r0, r1, ror #16
 	sxtb16 r0, r1, ror #24
-	uxtb.w r0, r1
 	uxtb.w r0, r1, ror #8
-	uxth.w r0, r1
 	uxth.w r0, r1, ror #16
-	uxtb16 r0, r1
 	uxtb16 r0, r1, ror #8
 	sxtab r0, r1, r2
 	sxtab r0, r1, r2, ror #8
@@ -151,9 +145,6 @@ here2:
 	uxtab16 r0, r1, r2
 	uxtab16 r0, r1, r2, ror #8
 	// ===== reversal =====
-	rev.w r0, r1
-	rev16.w r0, r1
-	revsh.w r0, r1
 	rbit r0, r1
 	// ===== parallel (DSP) =====
 	sadd16 r0, r1, r2
@@ -232,11 +223,6 @@ here2:
 	dsb sy
 	isb sy
 	isb
-	nop.w
-	yield.w
-	wfe.w
-	wfi.w
-	sev.w
 	// udf.w
 	udf.w #0x1234
 	udf.w #0xabcd

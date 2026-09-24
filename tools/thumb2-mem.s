@@ -1,9 +1,9 @@
 .thumb
 .syntax unified
 // ===== single ldst imm12 / imm8 modes (F8xx) =====
-ldr.w r0, [r1]
-ldr.w r0, [r1, #0]
-ldr.w r0, [r1, #4]
+ldr.w r8, [r1]
+ldr.w r8, [r1, #0]
+ldr.w r8, [r1, #4]
 ldr.w r0, [r1, #4095]
 ldr r0, [r1, #-4]
 ldr r0, [r1, #-255]
@@ -15,8 +15,8 @@ ldr.w r0, [r1, #16]!
 ldr r0, [r1, #-16]!
 str.w r0, [r1, #32]!
 str r0, [r1, #-32]!
-ldr.w r0, [r1], #16
-ldr.w r0, [r1], #-16
+ldr.w r8, [r1], #16
+ldr.w r8, [r1], #-16
 str.w r0, [r1], #24
 str.w r0, [r1], #-24
 ldrb.w r0, [r1, #255]
@@ -31,7 +31,7 @@ ldrsb.w r0, [r1, #31]
 ldrsb r0, [r1, #-31]
 ldrsh.w r0, [r1, #63]
 ldrsh r0, [r1, #-63]
-ldr.w r0, [r1], #4
+ldr.w r8, [r1], #4
 // unprivileged (T-mode)
 ldrt r0, [r1, #4]
 strt r0, [r1, #8]
@@ -40,13 +40,13 @@ strbt r0, [r1, #16]
 ldrht r0, [r1, #20]
 strht r0, [r1, #24]
 // register offset
-ldr.w r0, [r1, r2]
+ldr.w r8, [r1, r2]
 ldr.w r0, [r1, r2, lsl #2]
 ldr.w r0, [r1, r2, lsl #1]
-ldrb.w r0, [r1, r2, lsl #1]
-ldrh.w r0, [r1, r2]
+ldrb.w r8, [r1, r2, lsl #1]
+ldrh.w r8, [r1, r2]
 str.w r0, [r1, r2, lsl #3]
-strb.w r0, [r1, r2]
+strb.w r8, [r1, r2]
 strh.w r0, [r1, r2, lsl #1]
 ldrsb.w r0, [r1, r2]
 ldrsh.w r0, [r1, r2, lsl #1]
@@ -70,20 +70,20 @@ strd r0, r1, [r2, #-32]!
 strd r0, r1, [r2], #12
 strd r0, r1, [r2], #-12
 // ===== LDM/STM (E8xx/E9xx) =====
-ldm.w r0, {r1}
-ldm.w r0, {r1, r2, r3}
-ldm.w r0, {r1-r5, r7}
+ldm.w r0, {r1, r9}
+ldm.w r0, {r1, r2, r3, r9}
+ldm.w r0, {r1-r5, r7, r9}
 ldm.w r0!, {r1, r2}
 ldmia r0!, {r1, r2, r3}
 ldmdb r0, {r1, r2}
 ldmdb r0!, {r1, r2}
 ldm.w r0, {r1, r2, pc}
-stm.w r0, {r1, r2}
+stm.w r0, {r1, r2, r9}
 stm.w r0!, {r1, r2}
 stmia r0!, {r1-r4}
 stmdb r0, {r1, r2}
 stmdb r0!, {r1, r3, r5}
-stm.w r0, {r0, r1}
+stm.w r0, {r0, r1, r9}
 ldm.w r0!, {r1, r2, pc}
 // ===== TBB/TBH =====
 tbb [r0, r1]

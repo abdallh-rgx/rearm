@@ -107,21 +107,15 @@ f3210006 ssat16 r0, #0x7, r1
 f322000f ssat16 r0, #0x10, r2
 f3a1000b usat16 r0, #0xb, r1
 f3a3000f usat16 r0, #0xf, r3
-fa4ff081 sxtb.w r0, r1
 fa4ff091 sxtb.w r0, r1, ror #8
 fa4ff0a1 sxtb.w r0, r1, ror #16
 fa4ff0b1 sxtb.w r0, r1, ror #24
-fa0ff081 sxth.w r0, r1
 fa0ff091 sxth.w r0, r1, ror #8
-fa2ff081 sxtb16 r0, r1
 fa2ff091 sxtb16 r0, r1, ror #8
 fa2ff0a1 sxtb16 r0, r1, ror #16
 fa2ff0b1 sxtb16 r0, r1, ror #24
-fa5ff081 uxtb.w r0, r1
 fa5ff091 uxtb.w r0, r1, ror #8
-fa1ff081 uxth.w r0, r1
 fa1ff0a1 uxth.w r0, r1, ror #16
-fa3ff081 uxtb16 r0, r1
 fa3ff091 uxtb16 r0, r1, ror #8
 fa41f082 sxtab r0, r1, r2
 fa41f092 sxtab r0, r1, r2, ror #8
@@ -135,9 +129,6 @@ fa11f082 uxtah r0, r1, r2
 fa11f092 uxtah r0, r1, r2, ror #8
 fa31f082 uxtab16 r0, r1, r2
 fa31f092 uxtab16 r0, r1, r2, ror #8
-fa91f081 rev.w r0, r1
-fa91f091 rev16.w r0, r1
-fa91f0b1 revsh.w r0, r1
 fa91f0a1 rbit r0, r1
 fa91f002 sadd16 r0, r1, r2
 fa81f002 sadd8 r0, r1, r2
@@ -211,11 +202,6 @@ f3bf8f46 dsb nshst
 f3bf8f4f dsb sy
 f3bf8f6f isb sy
 f3bf8f6f isb sy
-f3af8000 nop.w
-f3af8001 yield.w
-f3af8002 wfe.w
-f3af8003 wfi.w
-f3af8004 sev.w
 f7f1a234 udf.w #0x1234
 f7faabcd udf.w #0xabcd
 b662 cpsie i

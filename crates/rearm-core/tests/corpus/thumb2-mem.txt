@@ -1,6 +1,6 @@
-f8d10000 ldr.w r0, [r1]
-f8d10000 ldr.w r0, [r1]
-f8d10004 ldr.w r0, [r1, #0x4]
+f8d18000 ldr.w r8, [r1]
+f8d18000 ldr.w r8, [r1]
+f8d18004 ldr.w r8, [r1, #0x4]
 f8d10fff ldr.w r0, [r1, #0xfff]
 f8510c04 ldr r0, [r1, #-4]
 f8510cff ldr r0, [r1, #-255]
@@ -12,8 +12,8 @@ f8510f10 ldr r0, [r1, #16]!
 f8510d10 ldr r0, [r1, #-16]!
 f8410f20 str r0, [r1, #32]!
 f8410d20 str r0, [r1, #-32]!
-f8510b10 ldr r0, [r1], #16
-f8510910 ldr r0, [r1], #-16
+f8518b10 ldr r8, [r1], #16
+f8518910 ldr r8, [r1], #-16
 f8410b18 str r0, [r1], #24
 f8410918 str r0, [r1], #-24
 f89100ff ldrb.w r0, [r1, #0xff]
@@ -28,20 +28,20 @@ f991001f ldrsb.w r0, [r1, #0x1f]
 f9110c1f ldrsb r0, [r1, #-31]
 f9b1003f ldrsh.w r0, [r1, #0x3f]
 f9310c3f ldrsh r0, [r1, #-63]
-f8510b04 ldr r0, [r1], #4
+f8518b04 ldr r8, [r1], #4
 f8510e04 ldrt r0, [r1, #4]
 f8410e08 strt r0, [r1, #8]
 f8110e0c ldrbt r0, [r1, #12]
 f8010e10 strbt r0, [r1, #16]
 f8310e14 ldrht r0, [r1, #20]
 f8210e18 strht r0, [r1, #24]
-f8510002 ldr.w r0, [r1, r2]
+f8518002 ldr.w r8, [r1, r2]
 f8510022 ldr.w r0, [r1, r2, lsl #2]
 f8510012 ldr.w r0, [r1, r2, lsl #1]
-f8110012 ldrb.w r0, [r1, r2, lsl #1]
-f8310002 ldrh.w r0, [r1, r2]
+f8118012 ldrb.w r8, [r1, r2, lsl #1]
+f8318002 ldrh.w r8, [r1, r2]
 f8410032 str.w r0, [r1, r2, lsl #3]
-f8010002 strb.w r0, [r1, r2]
+f8018002 strb.w r8, [r1, r2]
 f8210012 strh.w r0, [r1, r2, lsl #1]
 f9110002 ldrsb.w r0, [r1, r2]
 f9310012 ldrsh.w r0, [r1, r2, lsl #1]
@@ -62,20 +62,20 @@ e9e20108 strd r0, r1, [r2, #32]!
 e9620108 strd r0, r1, [r2, #-32]!
 e8e20103 strd r0, r1, [r2], #12
 e8620103 strd r0, r1, [r2], #-12
-e8900002 ldm.w r0, {r1}
-e890000e ldm.w r0, {r1, r2, r3}
-e89000be ldm.w r0, {r1, r2, r3, r4, r5, r7}
+e8900202 ldm.w r0, {r1, r9}
+e890020e ldm.w r0, {r1, r2, r3, r9}
+e89002be ldm.w r0, {r1, r2, r3, r4, r5, r7, r9}
 e8b00006 ldm.w r0!, {r1, r2}
 c80e ldm r0!, {r1, r2, r3}
 e9100006 ldmdb r0, {r1, r2}
 e9300006 ldmdb r0!, {r1, r2}
 e8908006 ldm.w r0, {r1, r2, pc}
-e8800006 stm.w r0, {r1, r2}
+e8800206 stm.w r0, {r1, r2, r9}
 e8a00006 stm.w r0!, {r1, r2}
 c01e stm r0!, {r1, r2, r3, r4}
 e9000006 stmdb r0, {r1, r2}
 e920002a stmdb r0!, {r1, r3, r5}
-e8800003 stm.w r0, {r0, r1}
+e8800203 stm.w r0, {r0, r1, r9}
 e8b08006 ldm.w r0!, {r1, r2, pc}
 e8d0f001 tbb [r0, r1]
 e8d0f011 tbh [r0, r1, lsl #1]

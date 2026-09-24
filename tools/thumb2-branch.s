@@ -66,6 +66,7 @@ t3:
 	blx arm0
 	b t2
 
+.section .armtargets,"ax"
 .align 2
 .arm
 arm0:

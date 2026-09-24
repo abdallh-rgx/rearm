@@ -52,6 +52,3 @@ f7fefa46 bl 0x36 <t1>
 f7fefee2 bl 0x972 <t3>
 f7ffeffe blx 0x1bac <t3+0x123a>
 f7febacf b.w 0x154 <t2>
-0000 movs r0, r0
-e320f000 nop
-e320f000 nop

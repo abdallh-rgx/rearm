@@ -222,6 +222,15 @@ fn decode_t16_misc(w: u32) -> Result<Ins, DecodeErr> {
             let op = if bt(w, 7) { DpOp::Sub } else { DpOp::Add };
             Ok(Ins::DpImm { op, s: false, rn: 13, rd: 13, imm12: imm7 as u16 })
         }
+        // 1011 0110: CPS — before PUSH (bits[11:10]=01 pattern overlaps)
+        _ if bb(w, 11, 8) == 0b0110 => {
+            let enable = !bt(w, 4);
+            let mut aif = 0u8;
+            if bt(w, 2) { aif |= 4; } // A
+            if bt(w, 1) { aif |= 2; } // I
+            if bt(w, 0) { aif |= 1; } // F
+            Ok(Ins::Cps { enable, aif, change_mode: false, mode: 0 })
+        }
         // 1011 001x / 1011 101x: CBZ (bit11=0) / CBNZ (bit11=1)
         _ if bb(w, 11, 9) == 0b001 => {
             let i = bb(w, 9, 9) as i32;
@@ -230,13 +239,13 @@ fn decode_t16_misc(w: u32) -> Result<Ins, DecodeErr> {
             Ok(Ins::Cbz { nz: bt(w, 11), rn, off: (imm5 << 1) | (i << 6) })
         }
         // 1011 010x: PUSH {reglist(+LR)}
-        _ if bb(w, 11, 10) == 0b01 => {
+        _ if bb(w, 11, 9) == 0b010 => {
             let mut m = bb(w, 7, 0) as u16;
             if bt(w, 8) { m |= 1 << 14; }
             Ok(Ins::LdmStm { load: false, rn: 13, mode: LdmMode::Db, wback: true, user: false, list: RegList::from_bitmap(m) })
         }
         // 1011 11xx: POP
-        _ if bb(w, 11, 10) == 0b11 => {
+        _ if bb(w, 11, 9) == 0b110 => {
             let mut m = bb(w, 7, 0) as u16;
             if bt(w, 8) { m |= 1 << 15; }
             Ok(Ins::LdmStm { load: true, rn: 13, mode: LdmMode::Ia, wback: true, user: false, list: RegList::from_bitmap(m) })
@@ -251,15 +260,6 @@ fn decode_t16_misc(w: u32) -> Result<Ins, DecodeErr> {
                 2 => Ok(Ins::Extend { op: ExtOp::Uxth, rd: rd_l, rn: 0, rm, rot: 0 }),
                 _ => Ok(Ins::Extend { op: ExtOp::Uxtb, rd: rd_l, rn: 0, rm, rot: 0 }),
             }
-        }
-        // 1011 0110: CPS — imod = bit4 (0=enable), A/I/F = bits 2/1/0
-        _ if bb(w, 11, 8) == 0b0110 => {
-            let enable = !bt(w, 4);
-            let mut aif = 0u8;
-            if bt(w, 2) { aif |= 4; } // A
-            if bt(w, 1) { aif |= 2; } // I
-            if bt(w, 0) { aif |= 1; } // F
-            Ok(Ins::Cps { enable, aif, change_mode: false, mode: 0 })
         }
         // 1011 1010: REV/REV16/REVSH (op at bits 7:6)
         _ if bb(w, 11, 9) == 0b101 => {
@@ -500,9 +500,13 @@ fn decode_f0(w: u32) -> Result<Ins, DecodeErr> {
     let cond_field = bb(hw1, 9, 6);
     if !bt(hw2, 14) {
         // bit14 = 0: Bcc/B.W or the f3 misc-control space.
+        if bt(hw2, 12) {
+            // bit12 = 1 → T4 B.W (imm10 occupies the cond-field bits).
+            return Ok(Ins::B { cond: Cond::Al, off: sign_ext(bl_imm(w), 25) });
+        }
         if cond_field != 0b1110 && cond_field != 0b1111 {
-            // Branch: bit12 = 0 → T3 Bcc, bit12 = 1 → T4 B.W.
-            return if !bt(hw2, 12) {
+            // bit12 = 0 → T3 Bcc.
+            return {
                 // T3 Bcc: imm = SignExtend21(S : J2(hw2.11) : J1(hw2.13) : imm6 : imm11 : 0)
                 let s = bt(w, 26);
                 let imm6 = bb(hw1, 5, 0);
@@ -512,9 +516,6 @@ fn decode_f0(w: u32) -> Result<Ins, DecodeErr> {
                 let v = (s as u32) << 20 | (j2 as u32) << 19 | (j1 as u32) << 18
                     | imm6 << 12 | imm11 << 1;
                 Ok(Ins::B { cond: Cond::from_bits(cond_field as u8), off: sign_ext(v, 21) })
-            } else {
-                // T4 B.W: imm = SignExtend25(S : I1 : I2 : imm10 : imm11 : 0)
-                Ok(Ins::B { cond: Cond::Al, off: sign_ext(bl_imm(w), 25) })
             };
         }
         // f3 misc-control: dispatch by hw1[7:4] (op) + Rn.
@@ -622,44 +623,38 @@ fn decode_f3(w: u32) -> Result<Ins, DecodeErr> {
     let hw2 = w & 0xFFFF;
     let rn = bb(hw1, 3, 0) as u8;
     let rd = bb(hw2, 11, 8) as u8;
-    let op = bb(hw1, 7, 4); // bits [7:5] = op, bit4 = R (SPSR) for MRS/MSR
+    let op = bb(hw1, 7, 4);
+    let imm5 = (bb(hw2, 14, 12) << 2) | bb(hw2, 7, 6);
 
-    match op >> 1 {
-        0b000 => {
-            // (3,0): SSAT (sh=LSL); (3,2): SSAT (sh=ASR) or SSAT16 (imm5=0)
-            let imm5 = (bb(hw2, 14, 12) << 2) | bb(hw2, 7, 6);
-            let sat = bb(hw2, 5, 0) as u8 + 1;
-            if bt(hw1, 5) && imm5 == 0 {
-                Ok(Ins::Ssat16 { rd, imm: sat, rn })
+    match op {
+        0b0000 => { // SSAT (sh = LSL)
+            Ok(Ins::Ssat { rd, imm: bb(hw2, 5, 0) as u8 + 1, rn, sh: imm5 as u8, asr: false })
+        }
+        0b0010 => { // SSAT (sh = ASR) or SSAT16 (imm5 == 0)
+            if imm5 == 0 {
+                Ok(Ins::Ssat16 { rd, imm: bb(hw2, 5, 0) as u8 + 1, rn })
             } else {
-                Ok(Ins::Ssat { rd, imm: sat, rn, sh: imm5 as u8, asr: bt(hw1, 5) })
+                Ok(Ins::Ssat { rd, imm: bb(hw2, 5, 0) as u8 + 1, rn, sh: imm5 as u8, asr: true })
             }
         }
-        0b001 => {
-            // (3,8): USAT (sh=LSL); (3,A): USAT (sh=ASR) or USAT16 (imm5=0)
-            let imm5 = (bb(hw2, 14, 12) << 2) | bb(hw2, 7, 6);
-            let sat = bb(hw2, 5, 0) as u8;
-            if bt(hw1, 5) && imm5 == 0 {
-                Ok(Ins::Usat16 { rd, imm: sat, rn })
+        0b1000 => { // USAT (sh = LSL)
+            Ok(Ins::Usat { rd, imm: bb(hw2, 5, 0) as u8, rn, sh: imm5 as u8, asr: false })
+        }
+        0b1010 => { // USAT (sh = ASR) or USAT16 (imm5 == 0)
+            if imm5 == 0 {
+                Ok(Ins::Usat16 { rd, imm: bb(hw2, 5, 0) as u8, rn })
             } else {
-                Ok(Ins::Usat { rd, imm: sat, rn, sh: imm5 as u8, asr: bt(hw1, 5) })
+                Ok(Ins::Usat { rd, imm: bb(hw2, 5, 0) as u8, rn, sh: imm5 as u8, asr: true })
             }
         }
-        0b010 => {
-            // (3,4): SBFX — lsb = imm3:imm2, width = widthm1(5:0)+1
-            let lsb = ((bb(hw2, 14, 12) << 2) | bb(hw2, 7, 6)) as u8;
-            let width = bb(hw2, 5, 0) as u8 + 1;
-            Ok(Ins::Sbfx { rd, rn, lsb, width })
+        0b0100 => { // SBFX: lsb = imm3:imm2, width = widthm1+1
+            Ok(Ins::Sbfx { rd, rn, lsb: imm5 as u8, width: bb(hw2, 5, 0) as u8 + 1 })
         }
-        0b110 => {
-            // (3,C): UBFX
-            let lsb = ((bb(hw2, 14, 12) << 2) | bb(hw2, 7, 6)) as u8;
-            let width = bb(hw2, 5, 0) as u8 + 1;
-            Ok(Ins::Ubfx { rd, rn, lsb, width })
+        0b1100 => { // UBFX
+            Ok(Ins::Ubfx { rd, rn, lsb: imm5 as u8, width: bb(hw2, 5, 0) as u8 + 1 })
         }
-        0b011 => {
-            // (3,6): BFI (Rn=15 → BFC): lsb = imm3:imm2, msb at [5:0]
-            let lsb = ((bb(hw2, 14, 12) << 2) | bb(hw2, 7, 6)) as u8;
+        0b0110 => { // BFI (Rn=15 → BFC): lsb = imm3:imm2, msb at [5:0]
+            let lsb = imm5 as u8;
             let msb = bb(hw2, 5, 0) as u8;
             if rn == 15 {
                 Ok(Ins::Bfc { rd, lsb, width: msb - lsb + 1 })
