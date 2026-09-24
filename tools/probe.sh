@@ -16,9 +16,8 @@ r = subprocess.run([MC, "-triple=thumbv7-none-eabi", f"-mattr={ATTRS}",
                    input=src, capture_output=True, text=True)
 for ln in r.stdout.splitlines():
     if "encoding:" in ln:
-        # "instruction  @ encoding: [0x.., 0x.., 0x.., 0x..]"
         pre = ln.split("@")[0].strip()
-        enc = ln.split("[")[1].split("]")[0]
+        enc = ln.split("encoding: [")[1].split("]")[0]
         bs = [b.strip() for b in enc.split(",")]
         print(" ".join(b[2:].rjust(2, "0") for b in bs), pre)
 if r.returncode != 0:
