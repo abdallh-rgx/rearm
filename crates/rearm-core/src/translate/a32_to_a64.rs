@@ -41,6 +41,12 @@ fn cset(out: &mut A64, cond: Cond, dst: XR) {
     out.csel(false, 1, 31, 31, cond.invert(), dst);
 }
 
+/// Register operand with PC materialization: r15 → scratch (A32: pc+8).
+#[inline]
+fn pc_op(out: &mut A64, r: R, scratch: XR, pc: u32) -> XR {
+    if r == 15 { load_pc(out, scratch, pc); scratch } else { x(r) }
+}
+
 /// Translate one A32 instruction at source address `pc` into `out`.
 /// Returns false if the instruction is not yet covered.
 pub fn translate_a32(ins: &Ins, pc: u32, out: &mut A64) -> Result<bool, TranslateErr> {
@@ -63,9 +69,8 @@ pub fn translate_a32(ins: &Ins, pc: u32, out: &mut A64) -> Result<bool, Translat
                     translate_dp(*op, *s, *rn, *rd, Operand::RegShift(*rm, *shift, *a as u64), None, pc, out)?
                 }
                 ShiftAmount::Reg(rs) => {
-                    if *rn == 15 || *rm == 15 {
-                        // PC-relative register-shifted base/operand would need a
-                        // 6th scratch register; not covered.
+                    // rs == PC needs a 6th live scratch; not covered.
+                    if *rn == 15 || *rm == 15 || *rs == 15 {
                         return Ok(false);
                     }
                     translate_regshift(*op, *s, *rn, *rd, *rm, *shift, *rs, pc, out)?
@@ -78,23 +83,33 @@ pub fn translate_a32(ins: &Ins, pc: u32, out: &mut A64) -> Result<bool, Translat
 
         // ======== multiply ========
         Ins::Mul { rd, rn, rm, s } => {
-            out.madd(false, false, x(*rm), 31, x(*rn), x(*rd));
+            let n = pc_op(out, *rn, 17, pc);
+            let m = pc_op(out, *rm, 18, pc);
+            out.madd(false, false, m, 31, n, x(*rd));
             if *s {
                 out.logic_reg(false, 3, false, false, 0, x(*rd), x(*rd), 31); // ands wzr
             }
         }
         Ins::Mla { rd, rn, rm, ra, s: _ } => {
-            out.madd(false, false, x(*rm), x(*ra), x(*rn), x(*rd));
+            let n = pc_op(out, *rn, 17, pc);
+            let m = pc_op(out, *rm, 18, pc);
+            let a = pc_op(out, *ra, 19, pc);
+            out.madd(false, false, m, a, n, x(*rd));
         }
         Ins::Mls { rd, rn, rm, ra } => {
-            out.madd(false, true, x(*rm), x(*ra), x(*rn), x(*rd));
+            let n = pc_op(out, *rn, 17, pc);
+            let m = pc_op(out, *rm, 18, pc);
+            let a = pc_op(out, *ra, 19, pc);
+            out.madd(false, true, m, a, n, x(*rd));
         }
         Ins::Smull { rdlo, rdhi, rn, rm, s: _ } => {
+            if *rn == 15 || *rm == 15 { return Ok(false); } // scratch pressure
             out.maddl(false, false, x(*rm), 31, x(*rn), 16); // x16 = SMULL wn, wm
             out.lsr_imm(true, 16, x(*rdhi), 32);
             out.logic_reg(false, 1, false, false, 0, 31, 16, x(*rdlo)); // mov w rdlo, w16
         }
         Ins::Umull { rdlo, rdhi, rn, rm, s: _ } => {
+            if *rn == 15 || *rm == 15 { return Ok(false); } // scratch pressure
             out.maddl(true, false, x(*rm), 31, x(*rn), 16); // x16 = UMULL wn, wm
             out.lsr_imm(true, 16, x(*rdhi), 32);
             out.logic_reg(false, 1, false, false, 0, 31, 16, x(*rdlo));
@@ -102,7 +117,9 @@ pub fn translate_a32(ins: &Ins, pc: u32, out: &mut A64) -> Result<bool, Translat
         // UMAAL: rdhi:rdlo = zext(rdlo) + zext(rdhi) + zext(rn)*zext(rm).
         // LLVM-verified sequence: umull + 2× add-uxtw + lsr + movs.
         Ins::Umaal { rdlo, rdhi, rn, rm } => {
-            out.umull(x(*rm), x(*rn), 16);            // x16 = rn*rm
+            let m = pc_op(out, *rm, 17, pc);
+            let n = pc_op(out, *rn, 18, pc);
+            out.umull(m, n, 16);                 // x16 = rn*rm
             out.add_uxtw(16, x(*rdhi), 16);            // x16 += zext32(rdhi)
             out.add_uxtw(16, x(*rdlo), 16);            // x16 += zext32(rdlo)
             out.lsr_imm(true, 16, 17, 32);            // x17 = high 32
@@ -110,40 +127,54 @@ pub fn translate_a32(ins: &Ins, pc: u32, out: &mut A64) -> Result<bool, Translat
             out.logic_reg(false, 1, false, false, 0, 31, 16, x(*rdlo)); // rdlo = w16
         }
         Ins::Smlal { rdlo, rdhi, rn, rm, s: _ } => {
+            let m = pc_op(out, *rm, 17, pc);
+            let n = pc_op(out, *rn, 18, pc);
             out.logic_reg(false, 1, false, false, 0, 31, x(*rdlo), 16); // mov w16, w rdlo
             out.bfi(true, x(*rdhi), 16, 32, 32); // x16[63:32] = rdhi
-            out.maddl(false, false, x(*rm), 16, x(*rn), 16); // x16 += SMULL(n,m)
+            out.maddl(false, false, m, 16, n, 16); // x16 += SMULL(n,m)
             out.lsr_imm(true, 16, x(*rdhi), 32);
             out.logic_reg(false, 1, false, false, 0, 31, 16, x(*rdlo));
         }
         Ins::Umlal { rdlo, rdhi, rn, rm, s: _ } => {
+            let m = pc_op(out, *rm, 17, pc);
+            let n = pc_op(out, *rn, 18, pc);
             out.logic_reg(false, 1, false, false, 0, 31, x(*rdlo), 16);
             out.bfi(true, x(*rdhi), 16, 32, 32);
-            out.maddl(true, false, x(*rm), 16, x(*rn), 16); // x16 += UMULL(n,m)
+            out.maddl(true, false, m, 16, n, 16); // x16 += UMULL(n,m)
             out.lsr_imm(true, 16, x(*rdhi), 32);
             out.logic_reg(false, 1, false, false, 0, 31, 16, x(*rdlo));
         }
         Ins::Smulxy { rd, rn, rm, x: hx, y: hy } => {
-            half16(out, x(*rn), hx.bit(), 17);
-            half16(out, x(*rm), hy.bit(), 18);
+            let n = pc_op(out, *rn, 17, pc);
+            let m = pc_op(out, *rm, 18, pc);
+            half16(out, n, hx.bit(), 17);
+            half16(out, m, hy.bit(), 18);
             out.madd(false, false, 18, 31, 17, x(*rd)); // rd = w17 * w18
         }
         Ins::Smlaxy { rd, rn, rm, ra, x: hx, y: hy } => {
-            half16(out, x(*rn), hx.bit(), 17);
-            half16(out, x(*rm), hy.bit(), 18);
-            out.madd(false, false, 18, x(*ra), 17, x(*rd)); // rd = ra + w17*w18
+            let n = pc_op(out, *rn, 17, pc);
+            let m = pc_op(out, *rm, 18, pc);
+            let a = pc_op(out, *ra, 19, pc);
+            half16(out, n, hx.bit(), 17);
+            half16(out, m, hy.bit(), 18);
+            out.madd(false, false, 18, a, 17, x(*rd)); // rd = ra + w17*w18
         }
         Ins::Smulwy { rd, rn, rm, y: hy } => {
-            half16(out, x(*rm), hy.bit(), 18);
-            out.maddl(false, false, 18, 31, x(*rn), 16); // x16 = sext(rn) * sext16(rm)
+            let m = pc_op(out, *rm, 18, pc);
+            half16(out, m, hy.bit(), 18);
+            let n = pc_op(out, *rn, 19, pc);
+            out.maddl(false, false, 18, 31, n, 16); // x16 = sext(n) * sext16(m)
             out.lsr_imm(true, 16, 16, 16); // bits [47:16] → low 32
             out.logic_reg(false, 1, false, false, 0, 31, 16, x(*rd)); // mov w rd, w16
         }
         Ins::Smlawy { rd, rn, rm, ra, y: hy } => {
-            half16(out, x(*rm), hy.bit(), 18);
-            out.maddl(false, false, 18, 31, x(*rn), 16);
+            let m = pc_op(out, *rm, 18, pc);
+            half16(out, m, hy.bit(), 18);
+            let n = pc_op(out, *rn, 19, pc);
+            let a = pc_op(out, *ra, 17, pc);
+            out.maddl(false, false, 18, 31, n, 16);
             out.lsr_imm(true, 16, 16, 16);
-            out.addsub_reg(false, 0, false, 0, 0, 16, x(*ra), x(*rd)); // rd = w16 + ra
+            out.addsub_reg(false, 0, false, 0, 0, 16, a, x(*rd)); // rd = w16 + a
         }
         Ins::Smuad { rd, rn, rm, x: sw } => {
             dual_halves(out, *rn, *rm, *sw, 17, 18, 15, 19);
@@ -177,8 +208,16 @@ pub fn translate_a32(ins: &Ins, pc: u32, out: &mut A64) -> Result<bool, Translat
             out.maddl(false, true, 19, 16, 18, 16); // x16 = p1 - p2
             accumulate64(out, *rdlo, *rdhi);
         }
-        Ins::Sdiv { rd, rn, rm } => { out.sdiv(false, x(*rn), x(*rm), x(*rd)); }
-        Ins::Udiv { rd, rn, rm } => { out.udiv(false, x(*rn), x(*rm), x(*rd)); }
+        Ins::Sdiv { rd, rn, rm } => {
+            let n = pc_op(out, *rn, 17, pc);
+            let m = pc_op(out, *rm, 18, pc);
+            out.sdiv(false, n, m, x(*rd));
+        }
+        Ins::Udiv { rd, rn, rm } => {
+            let n = pc_op(out, *rn, 17, pc);
+            let m = pc_op(out, *rm, 18, pc);
+            out.udiv(false, n, m, x(*rd));
+        }
 
         // ======== parallel (DSP) ========
         Ins::Parallel { kind, shape, rd, rn, rm } => {
@@ -1045,6 +1084,9 @@ pub(crate) fn translate_dp(op: DpOp, s: bool, rn: R, rd: R, o: Operand, carry_co
                             Shift::Lsl => (32u32.wrapping_sub(amount as u32) % 32) as u8,
                             _ => ((amount as u32).wrapping_sub(1) % 32) as u8,
                         };
+                        // extract the shifter-carry BEFORE the flag-setting op
+                        // (it may write rd == rm and destroy the source)
+                        out.ubfx(false, src, 18, bit, 1); // w18 = carry-out
                         emit_shift(out, src, 15, shift, amount as u8);
                         out.e(MRS_X16);
                         if opc == 0 {
@@ -1054,7 +1096,6 @@ pub(crate) fn translate_dp(op: DpOp, s: bool, rn: R, rd: R, o: Operand, carry_co
                             out.logic_reg(false, 3, false, false, 0, x(rd), x(rd), 31);
                         }
                         out.e(MRS_X17);
-                        out.ubfx(false, src, 18, bit, 1);
                         out.bfi(true, 18, 17, 29, 1);
                         out.ubfx(true, 16, 19, 28, 1);
                         out.bfi(true, 19, 17, 28, 1);
@@ -1066,7 +1107,8 @@ pub(crate) fn translate_dp(op: DpOp, s: bool, rn: R, rd: R, o: Operand, carry_co
                 DpOp::Add | DpOp::Sub | DpOp::Rsb => {
                     let is_sub = op != DpOp::Add;
                     let src: XR = if rm == 15 { load_pc(out, 17, pc); 17 } else { x(rm) };
-                    let base: XR = if rn == 15 { load_pc(out, 16, pc); 16 } else { x(rn) };
+                    // base avoids x16 — the shifted-operand temp
+                    let base: XR = if rn == 15 { load_pc(out, 19, pc); 19 } else { x(rn) };
                     if op == DpOp::Rsb {
                         emit_shift(out, src, 16, shift, amount as u8);
                         out.addsub_reg(false, 1, s, 0, 0, 16, base, x(rd));
@@ -1079,7 +1121,8 @@ pub(crate) fn translate_dp(op: DpOp, s: bool, rn: R, rd: R, o: Operand, carry_co
                 }
                 DpOp::Adc | DpOp::Sbc | DpOp::Rsc => {
                     let src: XR = if rm == 15 { load_pc(out, 17, pc); 17 } else { x(rm) };
-                    let base: XR = if rn == 15 { load_pc(out, 16, pc); 16 } else { x(rn) };
+                    // base avoids x16 — the shifted-operand temp
+                    let base: XR = if rn == 15 { load_pc(out, 19, pc); 19 } else { x(rn) };
                     if amount == 0 && shift == Shift::Lsl {
                         translate_adc_sbc(op, s, base, src, rd, out)?;
                     } else {

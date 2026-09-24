@@ -29,8 +29,8 @@
       "llvm": "19.1.7"
     },
     "branches_relocated": {
-      "resolved": 0,
-      "unresolved": 35000
+      "resolved": 1000898,
+      "unresolved": 246929
     },
     "z3_proven_1to1": 880,
     "z3_counterexamples": 0,
@@ -85,20 +85,23 @@
       "functions": 906
     },
     "z3_differential": {
-      "libue4_sampled": 500,
-      "libue4_proven": 225,
+      "libue4_sampled": 2000,
+      "libue4_proven": 356,
       "libue4_counterexamples": 0,
-      "libtdatamaster_sampled": 500,
-      "libtdatamaster_proven": 289,
+      "libtdatamaster_sampled": 600,
+      "libtdatamaster_proven": 324,
       "libtdatamaster_counterexamples": 0,
-      "libbugly_sampled": 300,
-      "libbugly_proven": 177,
+      "libbugly_sampled": 600,
+      "libbugly_proven": 318,
       "libbugly_counterexamples": 0,
       "bugs_found_by_pubg_differential": [
-        "MOVS (shifted reg) read the shifter-carry bit AFTER the shift destroyed the source (rd==rm)",
-        "ORNS.W (immediate) fallback encoded BICS instead of ORN when the complemented immediate was not bitmask-encodable",
+        "MOVS/ANDS (shifted register): shifter-carry bit extracted AFTER the flag-setting op destroyed the source (rd==rm)",
+        "ORNS.W (immediate) fallback encoded BICS instead of ORN for non-bitmask-encodable immediates",
+        "MUL/MLA/MLS/SMULL-family/SMLAWY/SMLAL/SDIV: PC operands (r15) read the x15 scratch instead of the pc+8 value",
+        "register-shifted Add/SBC: base PC materialization into x16 clobbered by the shift temp",
+        "rs==15 (PC as shift-amount register) now correctly unsupported instead of mistranslated",
         "T32 BFI decode panicked on UNPREDICTABLE msb<lsb (data-in-text)",
-        "T32 SSAT/USAT sat_imm field read 6 bits instead of 5 (data-in-text -> width overflow)"
+        "T32 SSAT/USAT sat_imm field read 6 bits instead of 5/4 (data-in-text width overflow)"
       ]
     }
   }
