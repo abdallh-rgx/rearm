@@ -160,13 +160,15 @@ pub fn encode_a32(ins: &Ins) -> Result<u32, EncodeErr> {
                 | ((*wback as u32) << 21) | ((*load as u32) << 20)
                 | ((*rn as u32) << 16) | list.bitmap() as u32
         }
-        Ins::ExclLoad { size, rt, rn } => {
+        Ins::ExclLoad { size, rt, rn, imm } => {
             let op = match size { Size::B8 => 0b110, Size::H16 => 0b111, _ => 0b100 };
+            let _ = imm; // A32 LDREX imm4 is architecturally 1111 in practice
             (Cond::Al.bits() as u32) << 28 | (1 << 24) | ((op as u32) << 21) | (1 << 20)
                 | ((*rn as u32) << 16) | ((*rt as u32) << 12) | (0xF << 8) | (0b1001 << 4) | 0xF
         }
-        Ins::ExclStore { size, rs, rt, rn } => {
+        Ins::ExclStore { size, rs, rt, rn, imm } => {
             let op = match size { Size::B8 => 0b110, Size::H16 => 0b111, _ => 0b100 };
+            let _ = imm;
             (Cond::Al.bits() as u32) << 28 | (1 << 24) | ((op as u32) << 21)
                 | ((*rn as u32) << 16) | ((*rs as u32) << 12) | (0xF << 8) | (0b1001 << 4) | *rt as u32
         }

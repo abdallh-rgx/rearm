@@ -383,13 +383,23 @@ pub fn translate_a32(ins: &Ins, pc: u32, out: &mut A64) -> Result<bool, Translat
         Ins::Crc32 { .. } => return Ok(false),
 
         // ======== atomics ========
-        Ins::ExclLoad { size, rt, rn } => {
+        Ins::ExclLoad { size, rt, rn, imm } => {
             let sz = match size { Size::B8 => 0u8, Size::H16 => 1, Size::W32 => 2, _ => 3 };
-            out.ldxr(sz, x(*rt), x(*rn));
+            if *imm != 0 {
+                out.add_imm(true, x(*rn), 16, *imm as u16); // x16 = rn + imm
+                out.ldxr(sz, x(*rt), 16);
+            } else {
+                out.ldxr(sz, x(*rt), x(*rn));
+            }
         }
-        Ins::ExclStore { size, rs, rt, rn } => {
+        Ins::ExclStore { size, rs, rt, rn, imm } => {
             let sz = match size { Size::B8 => 0u8, Size::H16 => 1, Size::W32 => 2, _ => 3 };
-            out.stxr(sz, x(*rs), x(*rt), x(*rn));
+            if *imm != 0 {
+                out.add_imm(true, x(*rn), 16, *imm as u16);
+                out.stxr(sz, x(*rs), x(*rt), 16);
+            } else {
+                out.stxr(sz, x(*rs), x(*rt), x(*rn));
+            }
         }
         // ldrexd rt, rt2, [rn] → ldxp x_rt, x_rt2, [x_rn] (8 bytes = 64-bit pair)
         Ins::ExclLoadD { rt, rt2, rn } => {

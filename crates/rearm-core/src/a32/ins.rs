@@ -288,10 +288,10 @@ pub enum Ins {
     },
     LdrdStrd { store: bool, rt: R, rt2: R, rn: R, imm: i32, index: bool, add: bool, wback: bool },
     LdmStm { load: bool, rn: R, mode: LdmMode, wback: bool, user: bool, list: RegList },
-    ExclLoad { size: Size, rt: R, rn: R },
+    ExclLoad { size: Size, rt: R, rn: R, imm: i32 },
     ExclLoadD { rt: R, rt2: R, rn: R },
-    // stores keep Rt(value) at bits(3:0)
-    ExclStore { size: Size, rs: R, rt: R, rn: R },
+    // stores keep Rt(value); imm = byte offset (A32 imm4×4, T32 imm8×4)
+    ExclStore { size: Size, rs: R, rt: R, rn: R, imm: i32 },
     ExclStoreD { rs: R, rt: R, rt2: R, rn: R },
     LdaStl { load: bool, size: Size, rt: R, rn: R },
     LdaexD { rt: R, rt2: R, rn: R },

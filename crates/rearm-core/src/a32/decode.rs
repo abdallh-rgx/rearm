@@ -197,14 +197,14 @@ fn decode_sync(word: u32) -> Result<Ins, DecodeErr> {
     let l = bit(word, 20);
     let rm = bits(word, 3, 0) as u8;
     Ok(match bits(word, 23, 21) {
-        0b100 if l => Ins::ExclLoad { size: Size::W32, rt, rn },
-        0b100 => Ins::ExclStore { size: Size::W32, rs: rt, rt: rm, rn },
+        0b100 if l => Ins::ExclLoad { size: Size::W32, rt, rn, imm: 0 },
+        0b100 => Ins::ExclStore { size: Size::W32, rs: rt, rt: rm, rn, imm: 0 },
         0b101 if l => Ins::ExclLoadD { rt, rt2: rm, rn },
         0b101 => Ins::ExclStoreD { rs: rt, rt: rm, rt2: (rm + 1) & 15, rn },
-        0b110 if l => Ins::ExclLoad { size: Size::B8, rt, rn },
-        0b110 => Ins::ExclStore { size: Size::B8, rs: rt, rt: rm, rn },
-        0b111 if l => Ins::ExclLoad { size: Size::H16, rt, rn },
-        0b111 => Ins::ExclStore { size: Size::H16, rs: rt, rt: rm, rn },
+        0b110 if l => Ins::ExclLoad { size: Size::B8, rt, rn, imm: 0 },
+        0b110 => Ins::ExclStore { size: Size::B8, rs: rt, rt: rm, rn, imm: 0 },
+        0b111 if l => Ins::ExclLoad { size: Size::H16, rt, rn, imm: 0 },
+        0b111 => Ins::ExclStore { size: Size::H16, rs: rt, rt: rm, rn, imm: 0 },
         _ => return Err(DecodeErr(word)),
     })
 }
