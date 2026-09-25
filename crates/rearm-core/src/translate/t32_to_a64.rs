@@ -27,6 +27,7 @@ use crate::a64::encode::{A64, XR};
 use crate::translate::a32_to_a64::{translate_a32, translate_dp, TranslateErr};
 
 use crate::translate::a32_to_a64::Operand;
+use crate::translate::a32_to_a64::branch_off_or_zero;
 
 #[inline]
 fn x(r: R) -> XR { r as XR }
@@ -299,7 +300,7 @@ fn translate_t32_inner(ins: &Ins, addr: u32, out: &mut A64) -> Result<bool, Tran
             } else {
                 load_imm_t32(out, 14, addr.wrapping_add(4) | 1);
             }
-            out.bl(*off)?;
+            out.bl(branch_off_or_zero(*off))?;
             Ok(true)
         }
 

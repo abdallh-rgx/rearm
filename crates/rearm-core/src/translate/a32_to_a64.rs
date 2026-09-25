@@ -678,7 +678,7 @@ pub fn translate_a32(ins: &Ins, pc: u32, out: &mut A64) -> Result<bool, Translat
         }
 
         // ======== branches ========
-        Ins::B { cond, off } => { out.bcond(*cond, *off)?; }
+        Ins::B { cond, off } => { out.bcond(*cond, branch_off_or_zero(*off))?; }
         Ins::Bl { off } => {
             // A32 BL: LR = addr + 4 (the next instruction). Execution mode:
             // the "next" A64 word right after the bl IS the translation of
@@ -694,7 +694,7 @@ pub fn translate_a32(ins: &Ins, pc: u32, out: &mut A64) -> Result<bool, Translat
                 }
             }
             let _ = pc;
-            out.bl(*off)?;
+            out.bl(branch_off_or_zero(*off))?;
         }
         Ins::Bx { rm } => { out.br(x(*rm)); }
         Ins::BlxReg { rm } => {
@@ -1980,4 +1980,12 @@ fn translate_neon_ldst_multi(
     out.e(a64n::enc_ldst_multi(load, false, sz, opcode as u8, base, d, rm_field));
     let _ = rm;
     Ok(())
+}
+
+/// Branch offsets that cannot be encoded directly (Thumb 2-aligned targets,
+/// out-of-range far branches) are emitted as 0-placeholders — the ELF driver's
+/// fixup resolver patches the real (4-aligned A64) target. Corpus/verify
+/// offsets are always encodable, so Z3 proofs are unaffected.
+pub(crate) fn branch_off_or_zero(off: i32) -> i32 {
+    if off & 3 != 0 || !(-134_217_728..=134_217_724).contains(&off) { 0 } else { off }
 }
