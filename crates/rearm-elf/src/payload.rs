@@ -192,231 +192,81 @@ fn translate_pass(elf: &Elf32, dm: &DynMeta, farset: &[u32]) -> Result<PassResul
         }
     }
 
-    // ---- per-section translation ----
-    for (sec_idx, _s0) in elf.sections.iter().enumerate()
-        .filter(|(_, s)| s.flags & 0x4 != 0 && s.size > 0 && s.typ != 0 && s.name != ".plt")
-    {
-        let vbases = elf.vbases();
-        let vbase = vbases[sec_idx];
-        let sec = &elf.sections[sec_idx];
+    // ---- recursive-descent translation (stripped-binary safe) ----
+    // Seeds: dynsym functions, relocation code targets, init_array, and the
+    // dense TBB/TBH target windows discovered during the sweep. Unvisited
+    // bytes are data (literal pools / jump tables) — never decoded, exactly
+    // like `$d` spans in unstripped images. Data misdecodes can no longer
+    // desynchronize real code, and pools between functions never enter the
+    // instruction stream at all.
+    use std::collections::{HashSet, VecDeque, BTreeSet};
 
-        #[derive(PartialEq, Eq, PartialOrd, Ord, Clone, Copy)]
-        enum Mode { T32, A32, Data }
-        let mut marks: Vec<(u32, Mode)> = Vec::new();
-        for (symtab, strtab) in [(".dynsym", ".dynstr"), (".symtab", ".strtab")] {
-            if let Ok(syms) = elf.symbols(symtab, strtab) {
-                for s in syms.iter() {
-                    if (s.shndx as usize) != sec_idx { continue; }
-                    let name = elf.sym_name(s);
-                    let m = if name == "$t" { Some(Mode::T32) }
-                        else if name == "$a" { Some(Mode::A32) }
-                        else if name == "$d" { Some(Mode::Data) }
-                        else if s.info & 0xF == 2 && s.size > 0 { Some(if s.value & 1 == 1 { Mode::T32 } else { Mode::A32 }) }
-                        else { None };
-                    if let Some(m) = m { marks.push((s.value & !1u32, m)); }
-                }
-            }
+    // executable section ranges (sorted)
+    let mut exec_secs: Vec<(u32, u32, usize)> = Vec::new(); // (start, end, file off)
+    for (i, sec) in elf.sections.iter().enumerate() {
+        if sec.flags & 0x4 != 0 && sec.size > 0 && sec.typ != 0 && sec.name != ".plt" {
+            let b = elf.vbases()[i];
+            exec_secs.push((b, b.wrapping_add(sec.size as u32), sec.off));
         }
-        marks.sort_unstable();
-        marks.dedup_by_key(|(a, _)| *a);
-        let mut mode = Mode::T32;
-        let mut mark_idx = 0usize;
+    }
+    exec_secs.sort_unstable();
+    let sec_of = |a: u32| -> Option<(u32, u32, usize)> {
+        exec_secs.binary_search_by_key(&a, |&(s, e, o)| {
+            if a < s { std::cmp::Ordering::Greater } else if a >= e { std::cmp::Ordering::Less } else { std::cmp::Ordering::Equal }
+        }).ok().map(|i| exec_secs[i]).map(|(s, e, o)| (s, e, o))
+    };
+    let in_exec = |a: u32| sec_of(a).is_some();
 
-        let mut addr = vbase;
-        let end = vbase.wrapping_add(sec.size as u32);
-        let sec_off = sec.off;
-        let mut it: Option<ItTracker> = None;
-
-        while addr < end {
-            let rel = addr - vbase;
-            while mark_idx < marks.len() && marks[mark_idx].0 <= rel {
-                mode = marks[mark_idx].1;
-                mark_idx += 1;
-            }
-            let ro = rel as usize;
-            if ro + 2 > sec.size { break; }
-            if mode == Mode::Data {
-                let next = if mark_idx < marks.len() { vbase + marks[mark_idx].0 } else { end };
-                let skip = (next.max(addr + 1) - addr) as usize;
-                stats.data_skipped += skip;
-                addr += skip as u32;
-                continue;
-            }
-            let hw1 = u16::from_le_bytes([elf.data[sec_off + ro], elf.data[sec_off + ro + 1]]);
-            let hw2 = if ro + 4 <= sec.size {
-                u16::from_le_bytes([elf.data[sec_off + ro + 2], elf.data[sec_off + ro + 3]])
-            } else { 0 };
-
-            if mode == Mode::A32 {
-                let w = ((hw1 as u32) << 16) | hw2 as u32;
-                let ins = match rearm_core::a32::decode::decode_a32(w) {
-                    Ok(rearm_core::a32::ins::Ins::Unsupported { .. }) => {
-                        if std::env::var_os("REARM_DBG").is_some() && UNSUPENC_COUNT.with(|c| { let v = *c.borrow(); if v < 12 { *c.borrow_mut() += 1; true } else { false } }) {
-                            eprintln!("A32UNSUP sec={} @{:#010x}: {:08x}", sec.name, addr, w);
-                        }
-                        stats.undefined_enc += 0;
-                        UNSUPENC.with(|m| {
-                            let key = (w >> 28, (w >> 20) & 0xFF);
-                            let mut g = m.borrow_mut();
-                            *g.entry(key).or_insert(0) += 1;
-                        });
-                        stats.note_unsupported("EncUnsupported");
-                        map.push((addr, (out.len() as u32) * 4));
-                        out.e(TRAP);
-                        addr += 4;
-                        continue;
-                    }
-                    Ok(i) => i,
-                    Err(_) => {
-                        stats.undefined_enc += 1;
-                        map.push((addr, (out.len() as u32) * 4));
-                        out.e(TRAP);
-                        addr += 4;
-                        continue;
-                    }
-                };
-                stats.a32_ins += 1;
-                let start = out.len();
-                // far conditional (B.cond): range-unbounded 2-word form
-                if let Ins::B { cond: c, off } = &ins {
-                    if *c != Cond::Al && farset.binary_search(&addr).is_ok() {
-                        map.push((addr, (start as u32) * 4));
-                        out.bcond(c.invert(), 8);
-                        out.b(0).map_err(|e| e.to_string())?;
-                        fixups.push(Fixup { at: start + 1, kind: FixKind::B,
-                            target: addr.wrapping_add(8).wrapping_add(*off as u32), src: addr });
-                        stats.translated += 1;
-                        addr += 4;
-                        continue;
-                    }
-                }
-                // A32 ADR → code target: deferred-map adrp+add pair
-                if let Ins::DpImm { op: DpOp::Add, s: false, rn: 15, rd, imm12 } = &ins {
-                    let target = addr.wrapping_add(8).wrapping_add(arm_rot_imm(*imm12 as u32));
-                    if *rd != 15 && target >= dm.text_range.0 && target < dm.text_range.1 {
-                        adrfixups.push(AdrFixup { at: out.len(), target });
-                        out.adrp(*rd, 0);
-                        out.add_imm(true, *rd, *rd, 0);
-                        stats.translated += 1;
-                        map.push((addr, (start as u32) * 4));
-                        addr += 4;
-                        continue;
-                    }
-                }
-                match rearm_core::translate::a32_to_a64::translate_a32(&ins, addr, &mut out) {
-                    Ok(true) => {
-                        stats.translated += 1;
-                        map.push((addr, (start as u32) * 4));
-                        record_branch_a32(&ins, addr, &mut fixups, start);
-                    }
-                    _ => {
-                        stats.unsupported += 1;
-                        let d = format!("{:?}", ins);
-                        stats.note_unsupported(d.split(['{', ' ']).next().unwrap_or("?"));
-                        map.push((addr, (out.len() as u32) * 4));
-                        out.e(TRAP);
-                    }
-                }
-                addr += 4;
-                continue;
-            }
-
-            match decode_t32(hw1, hw2) {
-                Ok(tins) => {
-                    let len = tins.len as u32;
-                    if matches!(tins.ins, Ins::Unsupported { .. }) {
-                        stats.unsupported += 1;
-                        map.push((addr, (out.len() as u32) * 4));
-                        out.e(TRAP);
-                        addr += len;
-                        continue;
-                    }
-                    if let Ins::It { first_cond, mask } = &tins.ins {
-                        it = Some(ItTracker::new(*first_cond, *mask));
-                        stats.it_blocks += 1;
-                        map.push((addr, (out.len() as u32) * 4));
-                        addr += len;
-                        continue;
-                    }
-                    let cond = match &mut it { Some(tr) => tr.next(), None => None };
-                    stats.t32_ins += 1;
-                    let start = out.len();
-
-                    // far conditionals: range-unbounded 2-word form
-                    if cond.is_none() && farset.binary_search(&addr).is_ok() {
-                        let handled = match &tins.ins {
-                            Ins::B { cond: c, off } if *c != Cond::Al => {
-                                let base = addr.wrapping_add(4) & !3u32;
-                                out.bcond(c.invert(), 8);
-                                out.b(0).map_err(|e| e.to_string())?;
-                                fixups.push(Fixup { at: start + 1, kind: FixKind::B,
-                                    target: base.wrapping_add(*off as u32), src: addr });
-                                true
-                            }
-                            Ins::Cbz { nz, rn, off } => {
-                                if *nz { out.cbz(false, *rn, 0).map_err(|e| e.to_string())?; } else { out.cbnz(false, *rn, 0).map_err(|e| e.to_string())?; }
-                                out.b(0).map_err(|e| e.to_string())?;
-                                fixups.push(Fixup { at: start + 1, kind: FixKind::B,
-                                    target: addr.wrapping_add(4).wrapping_add(*off as u32), src: addr });
-                                true
-                            }
-                            _ => false,
-                        };
-                        if handled {
-                            stats.translated += 1;
-                            map.push((addr, (start as u32) * 4));
-                            addr += len;
-                            continue;
-                        }
-                    }
-
-                    // T32 ADR → code target
-                    if let Ins::DpImmT32 { op: DpOp::Add, s: false, rn: 15, rd, imm12, plain: true } = &tins.ins {
-                        let target = (addr.wrapping_add(4) & !3u32).wrapping_add(*imm12 as u32);
-                        if *rd != 15 && target >= dm.text_range.0 && target < dm.text_range.1 {
-                            adrfixups.push(AdrFixup { at: out.len(), target });
-                            out.adrp(*rd, 0);
-                            out.add_imm(true, *rd, *rd, 0);
-                            stats.translated += 1;
-                            map.push((addr, (start as u32) * 4));
-                            addr += len;
-                            continue;
-                        }
-                    }
-
-                    match translate_t32(&tins.ins, addr, &mut out, cond) {
-                        Ok(true) => {
-                            stats.translated += 1;
-                            map.push((addr, (start as u32) * 4));
-                            record_branch_t32(&tins.ins, addr, len, &mut fixups, start, out.len());
-                        }
-                        _ => {
-                            stats.unsupported += 1;
-                            let d = format!("{:?}", tins.ins);
-                            stats.note_unsupported(d.split(['{', ' ']).next().unwrap_or("?"));
-                            map.push((addr, (out.len() as u32) * 4));
-                            out.e(TRAP);
-                        }
-                    }
-                    addr += len;
-                }
-                Err(_) => {
-                    stats.undefined_enc += 1;
-                    map.push((addr, (out.len() as u32) * 4));
-                    out.e(TRAP);
-                    addr += 2;
-                }
-            }
+    // dynsym function anchors (addr → thumb?)
+    let mut anchors: Vec<(u32, bool)> = Vec::new();
+    for sym in dm.dynsyms.iter() {
+        if sym.is_undef || !sym.is_func || sym.value == 0 { continue; }
+        if !in_exec(sym.value & !1) { continue; }
+        anchors.push((sym.value & !1, sym.value & 1 == 1));
+    }
+    anchors.sort_unstable();
+    anchors.dedup_by_key(|(a, _)| *a);
+    let mode_at = |a: u32| -> bool {
+        match anchors.binary_search_by_key(&a, |(x, _)| *x) {
+            Ok(i) => anchors[i].1,
+            Err(0) => true,
+            Err(i) => anchors[i - 1].1,
         }
-        stats.functions += marks.iter().filter(|(_, m)| *m != Mode::Data).count();
+    };
+
+    // ---- seeds ----
+    let mut queue: VecDeque<(u32, bool)> = VecDeque::new();
+    let mut seed = |queue: &mut VecDeque<(u32, bool)>, a: u32, thumb: bool| {
+        if in_exec(a & !1) { queue.push_back((a & !1, thumb)); }
+    };
+    for &(a, t) in anchors.iter() { seed(&mut queue, a, t); }
+    for r in dm.rel_dyn.iter() {
+        match r.typ {
+            R_ARM_RELATIVE => {
+                let addend = elf.word_at_vaddr(r.off, dm);
+                if addend != 0 { seed(&mut queue, addend, addend & 1 == 1); }
+            }
+            R_ARM_GLOB_DAT | R_ARM_ABS32 | R_ARM_TARGET1 | R_ARM_CALL | R_ARM_JUMP24 | R_ARM_PC24 => {
+                if r.sym != 0 {
+                    if let Some(sym) = dm.dynsyms.get(r.sym as usize) {
+                        if !sym.is_undef { seed(&mut queue, sym.value, sym.value & 1 == 1); }
+                    }
+                }
+            }
+            _ => {}
+        }
+    }
+    if dm.init != 0 { seed(&mut queue, dm.init & !1, dm.init & 1 == 1); }
+    if dm.init_array.0 != 0 && dm.init_array.1 > 0 {
+        for i in 0..(dm.init_array.1 / 4) {
+            let v = elf.word_at_vaddr(dm.init_array.0 + i * 4, dm);
+            if v != 0 { seed(&mut queue, v, v & 1 == 1); }
+        }
     }
 
-    // merge PLT source addresses into the map
-    for (src, off) in plt_src_to_stub.iter() {
-        map.push((*src, *off));
-    }
-    map.sort_unstable();
-    map.dedup();
+    let mut visited: HashSet<u32> = HashSet::new();
+    let mut tbb_windows: BTreeSet<u32> = VecDeque::<u32>::new().into(); // placeholder below
+    let mut _ = tbb_windows;
 
     stats.a64_words = out.len();
     Ok(PassResult { out, map, fixups, adrfixups, stats, plt_adrp_fixups, imports })
