@@ -59,7 +59,20 @@ impl crate::RewriteStats {
                 eprintln!("[rearm] unsupported: {:>9}x {}", c, k);
             }
         });
+        UNSUPENC.with(|m| {
+            let mut v: Vec<((u32, u32), usize)> = m.borrow().iter().map(|(k, c)| (*k, *c)).collect();
+            v.sort_by(|a, b| b.1.cmp(&a.1));
+            for ((cond, op1), c) in v.iter().take(40) {
+                eprintln!("[rearm] undec: cond={:X} op1={:02X} op2={:03X} => {}x",
+                    cond, op1 & 0xFF, (op1 >> 0) & 0xFF, c / 2);
+            }
+        });
     }
+}
+
+thread_local! {
+    static UNSUPENC: std::cell::RefCell<std::collections::BTreeMap<(u32, u32), usize>> =
+        const { std::cell::RefCell::new(std::collections::BTreeMap::new()) };
 }
 
 // ==================== fixups ====================
@@ -236,6 +249,18 @@ fn translate_pass(elf: &Elf32, dm: &DynMeta, farset: &[u32]) -> Result<PassResul
             if mode == Mode::A32 {
                 let w = ((hw1 as u32) << 16) | hw2 as u32;
                 let ins = match rearm_core::a32::decode::decode_a32(w) {
+                    Ok(rearm_core::a32::ins::Ins::Unsupported { .. }) => {
+                        stats.undefined_enc += 0;
+                        UNSUPENC.with(|m| {
+                            let e = m.entry((w >> 28, (w >> 20) & 0xFF)).or_insert(0);
+                            *e += 1;
+                        });
+                        stats.note_unsupported("EncUnsupported");
+                        map.push((addr, (out.len() as u32) * 4));
+                        out.e(TRAP);
+                        addr += 4;
+                        continue;
+                    }
                     Ok(i) => i,
                     Err(_) => {
                         stats.undefined_enc += 1;
