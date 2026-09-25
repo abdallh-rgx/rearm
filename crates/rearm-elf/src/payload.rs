@@ -73,6 +73,7 @@ impl crate::RewriteStats {
 thread_local! {
     static UNSUPENC: std::cell::RefCell<std::collections::BTreeMap<(u32, u32), usize>> =
         const { std::cell::RefCell::new(std::collections::BTreeMap::new()) };
+    static UNSUPENC_COUNT: std::cell::RefCell<usize> = const { std::cell::RefCell::new(0) };
 }
 
 // ==================== fixups ====================
@@ -250,6 +251,9 @@ fn translate_pass(elf: &Elf32, dm: &DynMeta, farset: &[u32]) -> Result<PassResul
                 let w = ((hw1 as u32) << 16) | hw2 as u32;
                 let ins = match rearm_core::a32::decode::decode_a32(w) {
                     Ok(rearm_core::a32::ins::Ins::Unsupported { .. }) => {
+                        if std::env::var_os("REARM_DBG").is_some() && UNSUPENC_COUNT.with(|c| { let v = *c.borrow(); if v < 12 { *c.borrow_mut() += 1; true } else { false } }) {
+                            eprintln!("A32UNSUP sec={} @{:#010x}: {:08x}", sec.name, addr, w);
+                        }
                         stats.undefined_enc += 0;
                         UNSUPENC.with(|m| {
                             let key = (w >> 28, (w >> 20) & 0xFF);
