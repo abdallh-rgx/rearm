@@ -42,6 +42,26 @@ pub struct Payload {
     pub tls_relocs: usize,
 }
 
+thread_local! {
+    static UNSUP: std::cell::RefCell<std::collections::BTreeMap<String, usize>> =
+        const { std::cell::RefCell::new(std::collections::BTreeMap::new()) };
+}
+
+impl crate::RewriteStats {
+    pub fn note_unsupported(&mut self, what: &str) {
+        UNSUP.with(|m| *m.borrow_mut().entry(what.to_string()).or_insert(0) += 1);
+    }
+    pub fn print_unsupported_histogram(&self) {
+        UNSUP.with(|m| {
+            let mut v: Vec<(String, usize)> = m.borrow().iter().map(|(k, c)| (k.clone(), *c)).collect();
+            v.sort_by(|a, b| b.1.cmp(&a.1));
+            for (k, c) in v.iter().take(28) {
+                eprintln!("[rearm] unsupported: {:>9}x {}", c, k);
+            }
+        });
+    }
+}
+
 // ==================== fixups ====================
 
 #[derive(Clone, Copy, PartialEq)]
