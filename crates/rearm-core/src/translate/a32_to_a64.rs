@@ -680,24 +680,38 @@ pub fn translate_a32(ins: &Ins, pc: u32, out: &mut A64) -> Result<bool, Translat
         // ======== branches ========
         Ins::B { cond, off } => { out.bcond(*cond, *off)?; }
         Ins::Bl { off } => {
-            // A32 BL: LR = addr + 4 (the next instruction's address).
+            // A32 BL: LR = addr + 4 (the next instruction). Execution mode:
+            // the "next" A64 word right after the bl IS the translation of
+            // the next source instruction — LR = adrp/add of that word, no
+            // runtime relocation, no thunk.
             if crate::translate::bias::bias_on() {
-                let next = (out.len() * 4 + 4) as u32; // adrp(+add) then bl → return word
-                let lo = crate::translate::bias::shadow_off().wrapping_add(pc.wrapping_add(4));
-                let _ = next;
-                // LR fast path: the payload offset of the A64 word right after
-                // the bl — computed against the *code* layout below.
-                crate::translate::bias::bias_lr_bl(out, *off, 0)?;
-                let _ = lo;
-            } else {
-                // const/verify mode: callers of the ELF driver patch targets;
-                // Z3 models LR abstractly.
+                let l = out.len();
+                let t3 = ((l + 3) * 4) as u32;   // adrp+add+bl
+                if t3 & 0xFFF == 0 {
+                    crate::translate::bias::bias_addr(out, 14, ((l + 2) * 4) as u32);
+                } else {
+                    crate::translate::bias::bias_addr(out, 14, t3);
+                }
             }
             let _ = pc;
             out.bl(*off)?;
         }
         Ins::Bx { rm } => { out.br(x(*rm)); }
-        Ins::BlxReg { rm } => { out.blr(x(*rm)); }
+        Ins::BlxReg { rm } => {
+            // A32 BLX (reg): LR = addr + 4 (no thumb bit from ARM state).
+            // Const/verify mode keeps the v1 contract (reference models LR
+            // abstractly); bias mode materializes it for execution.
+            if crate::translate::bias::bias_on() {
+                let l = out.len();
+                let t2 = ((l + 2) * 4) as u32;   // adrp+add+blr
+                if t2 & 0xFFF == 0 {
+                    crate::translate::bias::bias_addr(out, 14, ((l + 1) * 4) as u32);
+                } else {
+                    crate::translate::bias::bias_addr(out, 14, t2);
+                }
+            }
+            out.blr(x(*rm));
+        }
         Ins::Svc { imm: _ } => { out.svc(0); }
 
         _ => return Ok(false),

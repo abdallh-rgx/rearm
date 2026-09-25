@@ -158,14 +158,26 @@ fn translate_t32_inner(ins: &Ins, addr: u32, out: &mut A64) -> Result<bool, Tran
             if *plain {
                 let val = *imm12 as u64;
                 if *rn == 15 && *op == DpOp::Add {
-                    // ADR (T1/T3): result = Align(PC,4) + imm12 — a constant.
-                    load_imm_t32(out, x(*rd), t32_pc_aligned(addr).wrapping_add(*imm12 as u32));
+                    // ADR (T1/T3): result = Align(PC,4) + imm12.
+                    if crate::translate::bias::bias_on() {
+                        // Execution: shadow-image address of the target. Code
+                        // targets are re-pointed by the driver (it owns the
+                        // code map); data targets are exactly this address.
+                        crate::translate::bias::bias_src(
+                            out, x(*rd), t32_pc_aligned(addr).wrapping_add(*imm12 as u32));
+                    } else {
+                        load_imm_t32(out, x(*rd), t32_pc_aligned(addr).wrapping_add(*imm12 as u32));
+                    }
                     return Ok(true);
                 }
                 if *rn == 15 {
                     // SUBW Rd, PC, #imm: generic PC read (32-bit T32 is
                     // 4-aligned, so addr+4 == Align(addr+4,4) here).
-                    load_imm_t32(out, 16, addr.wrapping_add(4));
+                    if crate::translate::bias::bias_on() {
+                        crate::translate::bias::bias_src(out, 16, addr.wrapping_add(4));
+                    } else {
+                        load_imm_t32(out, 16, addr.wrapping_add(4));
+                    }
                     translate_dp(*op, false, 16, *rd, Operand::Imm(val), None, addr, out)?;
                     return Ok(true);
                 }
@@ -177,7 +189,11 @@ fn translate_t32_inner(ins: &Ins, addr: u32, out: &mut A64) -> Result<bool, Tran
             let (val, carry) = thumb_expand_imm(*imm12);
             if *rn == 15 {
                 // Generic PC read: addr + 4 (no alignment).
-                load_imm_t32(out, 16, addr.wrapping_add(4));
+                if crate::translate::bias::bias_on() {
+                    crate::translate::bias::bias_src(out, 16, addr.wrapping_add(4));
+                } else {
+                    load_imm_t32(out, 16, addr.wrapping_add(4));
+                }
                 translate_dp(*op, *s, 16, *rd, Operand::Imm(val as u64), carry, addr, out)?;
             } else {
                 translate_dp(*op, *s, *rn, *rd, Operand::Imm(val as u64), carry, addr, out)?;
@@ -194,7 +210,11 @@ fn translate_t32_inner(ins: &Ins, addr: u32, out: &mut A64) -> Result<bool, Tran
             let mut rm2 = *rm;
             if *rn == 15 || *rm == 15 {
                 // addr+4 for both (identical values — one materialization).
-                load_imm_t32(out, 16, addr.wrapping_add(4));
+                if crate::translate::bias::bias_on() {
+                    crate::translate::bias::bias_src(out, 16, addr.wrapping_add(4));
+                } else {
+                    load_imm_t32(out, 16, addr.wrapping_add(4));
+                }
                 if *rn == 15 { rn2 = 16; }
                 if *rm == 15 { rm2 = 16; }
             }
@@ -206,8 +226,14 @@ fn translate_t32_inner(ins: &Ins, addr: u32, out: &mut A64) -> Result<bool, Tran
         // ======== LDR (literal) ========
         Ins::Ldst { store: false, rn: 15, rm: None, rt, imm, .. } => {
             let effective = t32_pc_aligned(addr).wrapping_add(*imm as u32);
-            load_imm_t32(out, 16, effective);
-            out.ldst_uimm(2, 1, 0, 16, x(*rt)); // ldr w(rt), [x16]
+            if crate::translate::bias::bias_on() {
+                // Execution: read the pool word from the (relocated) shadow
+                // image — relocated pointers stay world-correct automatically.
+                crate::translate::bias::bias_ldr_word(out, x(*rt), effective);
+            } else {
+                load_imm_t32(out, 16, effective);
+                out.ldst_uimm(2, 1, 0, 16, x(*rt)); // ldr w(rt), [x16]
+            }
             Ok(true)
         }
 
@@ -220,7 +246,31 @@ fn translate_t32_inner(ins: &Ins, addr: u32, out: &mut A64) -> Result<bool, Tran
 
         // ======== table branch ========
         Ins::Tbb { rn, rm, half } => {
-            // index from [Rn + Rm]
+            if crate::translate::bias::bias_on() {
+                // Execution: the table bytes live in the shadow image at their
+                // source addresses; the target is computed source-space and
+                // mapped through the runtime thunk (byte offsets are dynamic).
+                // Rn == 15 (the common PC-relative form): table = Align(PC,4).
+                let pc_al = t32_pc_aligned(addr);
+                if *rn == 15 {
+                    crate::translate::bias::bias_src(out, 16, pc_al);
+                    if *half { out.ldst_reg_uext(1, 1, x(*rm), 16, 15); }  // ldrh w15,[x16,wRm]
+                    else { out.ldst_reg_uext(0, 1, x(*rm), 16, 15); }        // ldrb w15,[x16,wRm]
+                } else {
+                    out.addsub_ext(true, 0, false, x(*rm), 2, 0, x(*rn), 16); // x16 = Rn + uxtw(Rm)
+                    if *half { out.ldst_uimm(1, 1, 0, 16, 15); }
+                    else { out.ldst_uimm(0, 1, 0, 16, 15); }
+                }
+                if *half { out.lsl_imm(false, 15, 15, 1); }  // w15 *= 2
+                // w15 += shadow(Align(PC,4)) → source-space target
+                crate::translate::bias::bias_src(out, 17, pc_al);
+                out.addsub_reg(false, 0, false, 0, 0, 15, 17, 15);
+                // thunk: map w15 → base+payload offset, then branch.
+                crate::translate::bias::emit_thunk_call_tbb(out);
+                out.br(15);
+                return Ok(true);
+            }
+            // v1 const/verify path
             out.addsub_ext(true, 0, false, x(*rm), 2, 0, x(*rn), 16); // x16 = Rn + uxtw(Rm)
             if *half { out.ldst_uimm(1, 1, 0, 16, 15); }              // ldrh w15, [x16]
             else { out.ldst_uimm(0, 1, 0, 16, 15); }                  // ldrb w15, [x16]
