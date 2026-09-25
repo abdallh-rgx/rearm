@@ -240,8 +240,8 @@ fn translate_t32_inner(ins: &Ins, addr: u32, out: &mut A64) -> Result<bool, Tran
 
         // ======== compare-and-branch ========
         Ins::Cbz { nz, rn, off } => {
-            if *nz { out.cbnz(false, x(*rn), *off)?; }
-            else { out.cbz(false, x(*rn), *off)?; }
+            if *nz { out.cbnz(false, x(*rn), branch_off_or_zero(*off))?; }
+            else { out.cbz(false, x(*rn), branch_off_or_zero(*off))?; }
             Ok(true)
         }
 

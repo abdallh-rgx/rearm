@@ -713,6 +713,8 @@ pub fn translate_a32(ins: &Ins, pc: u32, out: &mut A64) -> Result<bool, Translat
             out.blr(x(*rm));
         }
         Ins::Svc { imm: _ } => { out.svc(0); }
+        Ins::Bkpt { imm } => { out.e(0xD420_0000 | (((*imm as u32) & 0xFFFF) << 5)); }
+        Ins::Cps { .. } => { out.nop(); }
 
         _ => return Ok(false),
     }

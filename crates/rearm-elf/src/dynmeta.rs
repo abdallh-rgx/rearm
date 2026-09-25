@@ -212,7 +212,7 @@ impl Elf32 {
         // Entry (12 bytes, after the 20-byte PLT0):
         //   add ip, pc, #X     ; e28fc600 + rot
         //   add ip, ip, #Y     ; e28cc000 + rot
-        //   ldr pc, [ip, #Z]!  ; e5bcf000 + Z
+        //   ldr pc, [ip, #Z]!  ; e5bcf000 + Z  (pre-indexed writeback)
         // GOT slot = plt_addr + 8 + X + Y + Z.
         let mut plt_to_got = Vec::new();
         if let Some(plt) = self.section(".plt") {
@@ -222,18 +222,21 @@ impl Elf32 {
                 let w1 = rd32(a);
                 let w2 = rd32(a + 4);
                 let w3 = rd32(a + 8);
-                // parse ARM add-immediate with rotation: imm = rot(imm8) by imm32<11:8>*2
                 let parse_add = |w: u32| -> Option<u32> {
-                    if w & 0x0FFF_0000 != 0x028F_0000 && w & 0x0FFF_F000 != 0xE28F_C000
-                        && (w & 0x0FFF_F000) != 0xE28F_C000 && (w & 0x0FF0_F000) != 0xE28F_C000 {
-                        // accept any add ip, pc, #imm form by opcode bits
-                    }
                     if w & 0x0FE0_0000 != 0x0280_0000 { return None; }
                     let rot = ((w >> 8) & 0xF) as u32;
                     let imm8 = w & 0xFF;
                     Some(imm8.rotate_right(rot.wrapping_mul(2)))
                 };
-                let (Some(x), Some(y), Some(z)) = (parse_add(w1), parse_add(w2), parse_add(w3)) else { break };
+                // ldr pc, [ip, #Z]!  (and the no-writeback variant)
+                let parse_ldr = |w: u32| -> Option<u32> {
+                    let is_ldr_pc_ip = (w & 0x0FF0_0000 == 0x05B0_0000 || w & 0x0FF0_0000 == 0x0590_0000)
+                        && (w & 0x000F_0000) == 0x000C_0000  // Rn = ip
+                        && (w & 0xF000) == 0xF000;             // Rt = pc
+                    if !is_ldr_pc_ip { return None; }
+                    Some(w & 0xFFF)
+                };
+                let (Some(x), Some(y), Some(z)) = (parse_add(w1), parse_add(w2), parse_ldr(w3)) else { break; };
                 let addr = plt.addr + off as u32;
                 let got = addr.wrapping_add(8).wrapping_add(x).wrapping_add(y).wrapping_add(z);
                 plt_to_got.push((addr, got));
