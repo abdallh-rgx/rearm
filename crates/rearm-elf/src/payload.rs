@@ -45,6 +45,7 @@ pub struct Payload {
 // ==================== fixups ====================
 
 #[derive(Clone, Copy, PartialEq)]
+#[derive(Debug)]
 enum FixKind { B, Bcond, Bl, Cbz, Cbnz }
 
 struct Fixup { at: usize, kind: FixKind, target: u32, src: u32 }
@@ -260,6 +261,9 @@ fn translate_pass(elf: &Elf32, dm: &DynMeta, farset: &[u32]) -> Result<PassResul
                     }
                     _ => {
                         stats.unsupported += 1;
+                        if std::env::var_os("REARM_DBG").is_some() {
+                            eprintln!("UNSUP A32 @{:#x}: {:?}", addr, ins);
+                        }
                         map.push((addr, (out.len() as u32) * 4));
                         out.e(TRAP);
                     }
@@ -339,6 +343,9 @@ fn translate_pass(elf: &Elf32, dm: &DynMeta, farset: &[u32]) -> Result<PassResul
                         }
                         _ => {
                             stats.unsupported += 1;
+                            if std::env::var_os("REARM_DBG").is_some() {
+                                eprintln!("UNSUP T32 @{:#x}: {:?}", addr, tins.ins);
+                            }
                             map.push((addr, (out.len() as u32) * 4));
                             out.e(TRAP);
                         }
@@ -539,6 +546,9 @@ fn resolve_fixups(p: &mut PassResult) {
     for f in fixups.iter() {
         let Ok(i) = p.map.binary_search_by_key(&f.target, |&(x, _)| x) else {
             p.stats.branches_unresolved += 1;
+            if std::env::var_os("REARM_DBG").is_some() {
+                eprintln!("UNRES @{:#x} kind={:?} -> {:#x}", f.src, f.kind, f.target);
+            }
             continue;
         };
         let dst = p.map[i].1;
