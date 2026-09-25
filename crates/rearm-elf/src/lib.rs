@@ -29,6 +29,11 @@ use rearm_core::translate::a32_to_a64::load_imm32;
 use rearm_core::translate::t32_to_a64::{translate_t32, ItTracker};
 use rearm_core::common::Cond;
 
+pub mod dynmeta;
+pub mod objread;
+pub mod payload;
+pub mod soemit;
+
 // ============================ ELF32 reader ============================
 
 pub struct Elf32 {

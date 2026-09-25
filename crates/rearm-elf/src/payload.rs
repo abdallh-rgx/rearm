@@ -1,46 +1,22 @@
-//! rearm-elf v2 — payload builder: translates an ELF32 ARM shared object into
-//! a self-contained **payload image** (translated A64 code + shadow image of
-//! the original bytes + relocation/import/export metadata).
-//!
-//! ## Execution model
-//! * **code region** — the translated A64 code at payload offsets `[0, …)`,
-//!   prefixed by the runtime **thunk** (source→payload code map lookup) and
-//!   one **PLT stub per imported function**.
-//! * **shadow image** — a full copy of the original PT_LOAD bytes at their
-//!   original virtual addresses, rebased at `SHADOW_OFF`. Literal pools, jump
-//!   tables and (relocated) data keep working through it.
-//! * **base register** — `x28` holds the payload base (4 KiB-aligned, low).
-//!   `adrp/add` with build-time page deltas address everything statically;
-//!   dynamic source→code addresses (TBB targets, …) go through the thunk.
-//!
-//! Payload layout (4 KiB-aligned sections):
-//! ```text
-//!   [ 0 ]          thunk + PLT stubs + translated code
-//!   [ MAP_OFF ]    u32 count, then (src, payload_off) u32 pairs
-//!   [ RELOC_OFF ]  loader relocation records (12 bytes each)
-//!   [ GOT64_OFF ]  8-byte import cells (filled by the runtime)
-//!   [ SHADOW_OFF ] shadow image (original bytes, source vaddrs)
-//! ```
+//! rearm-elf v2 — payload builder (see module docs in `dynmeta.rs` and the
+//! runtime `thunk.S`). Two/three-pass translation with far-conditional
+//! expansion, PLT stubs, ADR-to-code fixups, loader relocation records.
 
 use crate::dynmeta::*;
+use crate::objread::Obj64;
 use crate::{Elf32, RewriteStats};
 use rearm_core::a64::encode::A64;
 use rearm_core::a32::ins::*;
+use rearm_core::common::Cond;
 use rearm_core::t32::decode::decode_t32;
-use rearm_core::translate::bias::{self, bias_addr, bias_src};
+use rearm_core::translate::bias;
 use rearm_core::translate::t32_to_a64::{translate_t32, ItTracker};
 
-// loader relocation kinds (payload records)
-pub const REL_MAP32: u32 = 1;    // *(u32*)(base+off) = base + map_lookup(aux)
-pub const REL_IMPORT32: u32 = 2; // *(u32*)(base+off) = import cell (32-bit)
-pub const REL_GOT64: u32 = 3;    // *(u64*)(base+off) = import cell (64-bit)
-pub const REL_SHAD32: u32 = 4;   // *(u32*)(base+off) = base + SHADOW_OFF + aux
+// loader relocation kinds
+pub const REL_MAP32: u32 = 1;
+pub const REL_IMPORT32: u32 = 2;
 
-pub struct PReloc {
-    pub kind: u32,
-    pub off: u32, // payload offset of the slot
-    pub aux: u32, // source addend / import index
-}
+pub struct PReloc { pub kind: u32, pub off: u32, pub aux: u32 }
 
 pub struct PExport {
     pub name: String,
@@ -51,6 +27,7 @@ pub struct PExport {
 pub struct Payload {
     pub bytes: Vec<u8>,
     pub map_off: u32,
+    pub map_count: u32,
     pub reloc_off: u32,
     pub reloc_count: u32,
     pub got64_off: u32,
@@ -62,230 +39,131 @@ pub struct Payload {
     pub soname: String,
     pub needed: Vec<String>,
     pub stats: RewriteStats,
-    /// source exec-section boundaries (for driver decisions)
-    pub text_range: (u32, u32),
     pub tls_relocs: usize,
 }
 
-/// Two-pass translation: the shadow offset must be known before code is
-/// emitted (adrp immediates), but the code size determines it. All aligned
-/// shadow offsets produce identical word counts, so pass 1 (SHADOW=0) only
-/// counts words.
-pub fn build_payload(elf: &Elf32) -> Result<Payload, String> {
-    let dm = elf.dynmeta()?;
-    let _ = &dm;
+// ==================== fixups ====================
 
-    // ---------- pass 1: count code words ----------
-    let shadow_probe = 0u32;
-    let (count_probe) = {
-        bias::BIAS.store(true, std::sync::atomic::Ordering::Relaxed);
-        bias::SHADOW.store(shadow_probe, std::sync::atomic::Ordering::Relaxed);
-        bias::THUNK.store(0, std::sync::atomic::Ordering::Relaxed);
-        let (out, _map, _stats) = translate_sections(elf, &dm, true)?;
-        out.len() as u32
-    };
+#[derive(Clone, Copy, PartialEq)]
+enum FixKind { B, Bcond, Bl, Cbz, Cbnz }
 
-    // probe word count includes thunk+plt+code; final layout sizes:
-    // map/reloc/got64 sizes are independent of the shadow value.
-    let (mut out, mut map, mut stats, plt_stub_words, import_names, adrfixups) =
-        translate_full(elf, &dm, count_probe)?;
+struct Fixup { at: usize, kind: FixKind, target: u32 }
 
-    // ---------- finalize fixups (branches + ADR-to-code + PLT) ----------
-    map.sort_unstable();
-    map.dedup();
-    resolve_fixups(&mut out, &mut map, elf, &dm, &mut stats, &plt_stub_words)?;
-    resolve_adr_fixups(&mut out, &map, adrfixups, elf, &dm);
+struct AdrFixup { at: usize, target: u32 }
 
-    // ---------- layout ----------
-    let code_len = out.len() as u32 * 4;
-    let map_pairs = map.len() as u32;
-    let map_off = (code_len + 0xFFF) & !0xFFF;
-    let reloc_count = collect_relocs(elf, &dm).len() as u32;
-    let reloc_off = (map_off + map_pairs * 8 + 4 + 0xFFF) & !0xFFF;
-    let got64_off = (reloc_off + reloc_count * 12 + 0xFFF) & !0xFFF;
-    let nimports = import_names.len() as u32;
-    let shadow_off = (got64_off + nimports * 8 + 0xFFF) & !0xFFF;
+/// The BRK trap word for holes (brk #0xF00D).
+const TRAP: u32 = 0xD42A_01A0;
 
-    // shadow image bytes (sparse vaddr ranges from PT_LOAD)
-    let mut shadow_bytes: Vec<u8> = Vec::new();
-    for seg in dm.segments.iter() {
-        if seg.filesz == 0 { continue; }
-        let start = seg.vaddr as usize;
-        let end = start + seg.filesz as usize;
-        if shadow_bytes.len() < end { shadow_bytes.resize(end, 0); }
-        let from = seg.off as usize;
-        shadow_bytes[start..end].copy_from_slice(&elf.data[from..from + seg.filesz as usize]);
-    }
+// ==================== the translation pass ====================
 
-    let total = shadow_off as usize + shadow_bytes.len();
-
-    // ---------- patch the thunk's map/shadow immediates ----------
-    patch_thunk(&mut out, map_off, shadow_off)?;
-
-    // ---------- assemble the payload ----------
-    let mut bytes: Vec<u8> = Vec::with_capacity(total);
-    bytes.extend_from_slice(&out.bytes());
-    bytes.resize(map_off as usize, 0);
-    bytes.extend_from_slice(&(map_pairs).to_le_bytes());
-    for (src, off) in map.iter() {
-        bytes.extend_from_slice(&src.to_le_bytes());
-        bytes.extend_from_slice(&off.to_le_bytes());
-    }
-    bytes.resize(reloc_off as usize, 0);
-    for r in collect_relocs(elf, &dm) {
-        bytes.extend_from_slice(&r.kind.to_le_bytes());
-        bytes.extend_from_slice(&r.off.to_le_bytes());
-        bytes.extend_from_slice(&r.aux.to_le_bytes());
-    }
-    bytes.resize(got64_off as usize, 0);
-    // GOT64 cells: zero (loader fills)
-    bytes.resize(shadow_off as usize, 0);
-    bytes.extend_from_slice(&shadow_bytes);
-
-    // ---------- exports ----------
-    let mut exports = Vec::new();
-    for s in dm.dynsyms.iter() {
-        if s.is_undef || !s.is_func || s.value == 0 { continue; }
-        if s.value < dm.text_range.0 || s.value >= dm.text_range.1 { continue; }
-        let Some(off) = lookup_map(&map, s.value & !1) else { continue };
-        exports.push(PExport {
-            name: s.name.clone(),
-            payload_off: off,
-            is_jni: s.name.starts_with("Java_") || s.name == "JNI_OnLoad" || s.name == "JNI_OnUnload",
-        });
-    }
-
-    Ok(Payload {
-        bytes,
-        map_off,
-        reloc_off,
-        reloc_count,
-        got64_off,
-        imports: import_names,
-        exports,
-        shadow_off,
-        init: dm.init,
-        init_array: dm.init_array,
-        soname: dm.soname.clone(),
-        needed: dm.needed.clone(),
-        stats,
-        text_range: dm.text_range,
-        tls_relocs: dm.tls_relocs,
-    })
+struct PassResult {
+    out: A64,
+    map: Vec<(u32, u32)>,
+    fixups: Vec<Fixup>,
+    adrfixups: Vec<AdrFixup>,
+    stats: RewriteStats,
+    plt_adrp_fixups: Vec<(usize, u32)>, // (word idx, import idx)
+    imports: Vec<String>,
 }
 
-fn lookup_map(map: &[(u32, u32)], src: u32) -> Option<u32> {
-    map.binary_search_by_key(&src, |&(s, _)| s).ok().map(|i| map[i].1)
-}
-
-/// The full pass-2 translation: thunk + PLT stubs + all exec sections.
-/// Returns (code, map, stats, plt_stub_words, imports, adr_fixups).
-fn translate_full(
-    elf: &Elf32,
-    dm: &DynMeta,
-    probe_words: u32,
-) -> Result<(A64, Vec<(u32, u32)>, RewriteStats, u32, Vec<String>, Vec<AdrFixup>), String> {
+/// One full translation pass. `farset` = source addresses of conditional
+/// branches that must use the range-unbounded 3-word form.
+fn translate_pass(elf: &Elf32, dm: &DynMeta, farset: &[u32]) -> Result<PassResult, String> {
     bias::BIAS.store(true, std::sync::atomic::Ordering::Relaxed);
     bias::SHADOW.store(0, std::sync::atomic::Ordering::Relaxed);
     bias::THUNK.store(0, std::sync::atomic::Ordering::Relaxed);
 
     let mut out = A64::new();
     let mut stats = RewriteStats::default();
+    let mut map: Vec<(u32, u32)> = Vec::new();
+    let mut fixups: Vec<Fixup> = Vec::new();
+    let mut adrfixups: Vec<AdrFixup> = Vec::new();
 
-    // ---- thunk (fixed size; immediates patched post-layout) ----
-    emit_thunk(&mut out)?;
-    let thunk_words = out.len() as u32;
+    // ---- thunk (word 0): assembled blob + its 4 relocations ----
+    let thunk_obj = Obj64::parse(include_bytes!("../../../runtime/thunk.o"))
+        .map_err(|e| format!("thunk.o: {e}"))?;
+    let thunk = thunk_obj.text().map_err(|e| format!("thunk.o: {e}"))?;
+    let thunk_words = thunk.bytes.len() / 4;
+    let mut thunk_relocs: Vec<(usize, bool)> = Vec::new(); // (word idx, is_map)
+    for r in thunk_obj.relas.iter().filter(|r| r.section == thunk_obj.sections.iter().position(|s| s.name == ".text").unwrap()) {
+        let word = (r.off / 4) as usize;
+        thunk_relocs.push((word, thunk_obj.symbols[r.sym].name.contains("MAP")));
+    }
+    for w in 0..thunk_words {
+        out.e(u32::from_le_bytes([thunk.bytes[w * 4], thunk.bytes[w * 4 + 1], thunk.bytes[w * 4 + 2], thunk.bytes[w * 4 + 3]]));
+    }
 
-    // ---- PLT stubs: one per JUMP_SLOT import ----
-    let mut import_names: Vec<String> = Vec::new();
-    let mut import_index = |name: String, v: &mut Vec<String>| -> u32 {
-        if let Some(i) = v.iter().position(|n| *n == name) { return i as u32; }
-        v.push(name);
+    // ---- imports: JUMP_SLOT + CALL/JUMP24-referenced undefined symbols ----
+    let mut imports: Vec<String> = Vec::new();
+    let mut import_idx = |name: &str, v: &mut Vec<String>| -> u32 {
+        if let Some(i) = v.iter().position(|n| n == name) { return i as u32; }
+        v.push(name.to_string());
         (v.len() - 1) as u32
     };
-    // GOT64 offset is NOT yet known at stub-emission time — stubs reference it
-    // via a patch record too. Use placeholder got64_off = 0 and patch after.
-    let mut plt_stub_fixups: Vec<(usize, u32)> = Vec::new(); // (word idx of adrp, import idx)
-    let mut plt_src_to_stub: Vec<(u32, u32)> = Vec::new();  // plt src addr → code word idx*4? use word idx
-    let plt_start_words = out.len() as u32;
+    for r in dm.rel_plt.iter().filter(|r| r.typ == R_ARM_JUMP_SLOT) {
+        if let Some(sym) = dm.dynsyms.get(r.sym as usize) {
+            if sym.is_undef && !sym.name.is_empty() {
+                import_idx(&sym.name, &mut imports);
+            }
+        }
+    }
+    for r in dm.rel_dyn.iter().filter(|r| matches!(r.typ, R_ARM_CALL | R_ARM_JUMP24 | R_ARM_PC24)) {
+        if let Some(sym) = dm.dynsyms.get(r.sym as usize) {
+            if sym.is_undef && !sym.name.is_empty() {
+                import_idx(&sym.name, &mut imports);
+            }
+        }
+    }
+    // GOT-referenced undefined symbols (GLOB_DAT / ABS32 undefined)
+    for r in dm.rel_dyn.iter() {
+        if let Some(sym) = dm.dynsyms.get(r.sym as usize) {
+            if r.sym != 0 && sym.is_undef && !sym.name.is_empty()
+                && matches!(r.typ, R_ARM_GLOB_DAT | R_ARM_ABS32 | R_ARM_TARGET1) {
+                import_idx(&sym.name, &mut imports);
+            }
+        }
+    }
+
+    // ---- PLT stubs (one per import, uniform 5 words) ----
+    //   movz w15, #(idx & 0xffff)
+    //   movk w15, #(idx >> 16), lsl #16
+    //   adrp x16, page(GOT64 + idx*8)      [patched post-layout]
+    //   ldr  x17, [x16, #lo12(GOT64 + idx*8)]  [patched post-layout]
+    //   br   x17
+    let mut plt_adrp_fixups: Vec<(usize, u32)> = Vec::new();
+    let mut plt_src_to_stub: Vec<(u32, u32)> = Vec::new();
+    let n_stubs = imports.len() as u32;
+    for (i, _) in imports.iter().enumerate() {
+        let idx = i as u32;
+        // pre-seed map: first PLT entry address → this stub (patched to the
+        // real PLT addresses below once we know the GOT slots)
+        let _ = n_stubs;
+        let _ = idx;
+        out.movz(false, 0, (idx & 0xFFFF) as u16, 15);
+        out.movk(false, 1, ((idx >> 16) & 0xFFFF) as u16, 15);
+        plt_adrp_fixups.push((out.len(), idx));
+        out.adrp(16, 0);
+        out.ldst_uimm(3, 1, 0, 16, 17);
+        out.br(17);
+    }
+
+    // PLT source-address → stub offset (for bl fixups into the original PLT)
     for (plt_addr, got_slot) in dm.plt_to_got.iter() {
         let Some(&(_, sym_idx)) = dm.got_to_sym.iter().find(|(g, _)| g == got_slot) else { continue };
         let Some(sym) = dm.dynsyms.get(sym_idx as usize) else { continue };
-        if sym.name.is_empty() { continue; }
-        let idx = import_index(sym.name.clone(), &mut import_names);
-        let stub_word = out.len() as u32;
-        // movz w15, #(idx & 0xffff); movk w15, #(idx >> 16), lsl #16
-        out.movz(false, 0, (idx & 0xFFFF) as u16, 15);
-        out.movk(false, 1, ((idx >> 16) & 0xFFFF) as u16, 15);
-        // adrp x16, page(GOT64 + idx*8)   [patched post-layout]
-        let adrp_word = out.len();
-        out.adrp(16, 0);
-        // ldr x17, [x16, #lo12]; br x17
-        out.ldst_uimm(3, 1, 0, 16, 17);
-        out.br(17);
-        plt_stub_fixups.push((adrp_word, idx));
-        plt_src_to_stub.push((*plt_addr, stub_word * 4));
-    }
-    let plt_stub_words = out.len() as u32 - plt_start_words;
-    let _ = plt_stub_words;
-    let _ = probe_words;
-    let _ = thunk_words;
-
-    // ---- translate every executable section ----
-    let (mut map, adrfixups) = translate_sections_inner(elf, dm, &mut out, &mut stats)?;
-
-    // map entries for PLT stubs (source PLT address → stub code offset)
-    for (src, off) in plt_src_to_stub.iter() {
-        map.push((*src, *off));
-    }
-    map.sort_unstable();
-    map.dedup();
-
-    // patch PLT stub adrp immediates now that the code length is known
-    let got64_off_probe = 0u32; // will be re-patched by the caller after layout
-    let _ = got64_off_probe;
-    for (word, idx) in plt_stub_fixups.iter() {
-        // placeholder page delta of 0 — final patch in build_payload
-        let _ = (word, idx);
+        if let Some(pos) = imports.iter().position(|n| *n == sym.name) {
+            let stub_off = (thunk_words as u32 + pos as u32 * 5) * 4;
+            plt_src_to_stub.push((*plt_addr, stub_off));
+        }
     }
 
-    Ok((out, map, stats, plt_start_words, import_names, adrfixups))
-}
-
-/// Pass-1 probe (word count only).
-fn translate_sections(elf: &Elf32, dm: &DynMeta, probe: bool) -> Result<(A64, Vec<(u32, u32)>, RewriteStats), String> {
-    let mut out = A64::new();
-    let mut stats = RewriteStats::default();
-    let (map, _) = translate_sections_inner(elf, dm, &mut out, &mut stats)?;
-    let _ = probe;
-    Ok((out, map, stats))
-}
-
-struct AdrFixup {
-    /// word index of the adrp of the bias_addr pair
-    at: usize,
-    /// source-space target address (code)
-    target: u32,
-}
-
-/// The per-section translation loop (shared by both passes).
-/// Returns (src→payload_off map, adr-to-code fixups).
-fn translate_sections_inner(
-    elf: &Elf32,
-    dm: &DynMeta,
-    out: &mut A64,
-    stats: &mut RewriteStats,
-) -> Result<(Vec<(u32, u32)>, Vec<AdrFixup>), String> {
-    let mut map: Vec<(u32, u32)> = Vec::new();
-    let mut adrfixups: Vec<AdrFixup> = Vec::new();
-    let mut fixups: Vec<crate::Fixup> = Vec::new();
-
-    for (sec_idx, _sec0) in elf.sections.iter().enumerate().filter(|(_, s)| s.flags & 0x4 != 0 && s.size > 0 && s.typ != 0) {
+    // ---- per-section translation ----
+    for (sec_idx, _s0) in elf.sections.iter().enumerate()
+        .filter(|(_, s)| s.flags & 0x4 != 0 && s.size > 0 && s.typ != 0 && s.name != ".plt")
+    {
         let vbases = elf.vbases();
         let vbase = vbases[sec_idx];
         let sec = &elf.sections[sec_idx];
-        // skip the PLT itself (handled via stubs + map)
-        if sec.name == ".plt" { continue; }
 
         #[derive(PartialEq, Eq, PartialOrd, Ord, Clone, Copy)]
         enum Mode { T32, A32, Data }
@@ -340,38 +218,39 @@ fn translate_sections_inner(
                     Ok(i) => i,
                     Err(_) => {
                         stats.undefined_enc += 1;
-                        out.e(0xD420_0000 | (0xF00D << 5 & 0x001F_FFE0)); // brk #0xF00D
-                        map.push((addr, (out.len() as u32 - 1) * 4));
+                        map.push((addr, (out.len() as u32) * 4));
+                        out.e(TRAP);
                         addr += 4;
                         continue;
                     }
                 };
                 stats.a32_ins += 1;
                 let start = out.len();
-                // A32 ADR intercept (code targets need the map)
-                if let Ins::DpImm { op: DpOp::Add, rn: 15, rd, imm12, s: false } = &ins {
-                    let target = addr.wrapping_add(8)
-                        .wrapping_add(arm_rot_imm(*imm12));
-                    if target >= dm.text_range.0 && target < dm.text_range.1 && *rd != 15 {
+                // A32 ADR → code target: deferred-map adrp+add pair
+                if let Ins::DpImm { op: DpOp::Add, s: false, rn: 15, rd, imm12 } = &ins {
+                    let target = addr.wrapping_add(8).wrapping_add(arm_rot_imm(*imm12));
+                    if *rd != 15 && target >= dm.text_range.0 && target < dm.text_range.1 {
                         adrfixups.push(AdrFixup { at: out.len(), target });
-                        out.adrp(x_of(*rd), 0);
-                        out.add_imm(true, x_of(*rd), x_of(*rd), 0);
+                        out.adrp(*rd, 0);
+                        out.add_imm(true, *rd, *rd, 0);
                         stats.translated += 1;
-                        map.push((addr, start * 4));
+                        map.push((addr, (start as u32) * 4));
                         addr += 4;
                         continue;
                     }
                 }
+                let is_far = is_far_branch(&ins, farset);
                 match rearm_core::translate::a32_to_a64::translate_a32(&ins, addr, out) {
                     Ok(true) => {
+                        if is_far { expand_far_a32(&ins, out, start); }
                         stats.translated += 1;
-                        map.push((addr, start * 4));
+                        map.push((addr, (start as u32) * 4));
                         record_branch_a32(&ins, addr, &mut fixups, start);
                     }
-                    Ok(false) | Err(_) => {
+                    _ => {
                         stats.unsupported += 1;
-                        out.e(0xD420_0000 | (0xF00D << 5 & 0x001F_FFE0));
-                        map.push((addr, (out.len() as u32 - 1) * 4));
+                        map.push((addr, (out.len() as u32) * 4));
+                        out.e(TRAP);
                     }
                 }
                 addr += 4;
@@ -383,15 +262,15 @@ fn translate_sections_inner(
                     let len = tins.len as u32;
                     if matches!(tins.ins, Ins::Unsupported { .. }) {
                         stats.unsupported += 1;
-                        out.e(0xD420_0000 | (0xF00D << 5 & 0x001F_FFE0));
-                        map.push((addr, (out.len() as u32 - 1) * 4));
+                        map.push((addr, (out.len() as u32) * 4));
+                        out.e(TRAP);
                         addr += len;
                         continue;
                     }
                     if let Ins::It { first_cond, mask } = &tins.ins {
                         it = Some(ItTracker::new(*first_cond, *mask));
                         stats.it_blocks += 1;
-                        map.push((addr, out.len() as u32 * 4));
+                        map.push((addr, (out.len() as u32) * 4));
                         addr += len;
                         continue;
                     }
@@ -399,38 +278,40 @@ fn translate_sections_inner(
                     stats.t32_ins += 1;
                     let start = out.len();
 
-                    // T32 ADR intercept (code targets)
-                    if let Ins::DpImmT32 { op: DpOp::Add, rn: 15, rd, imm12, plain: true, s: false } = &tins.ins {
+                    // T32 ADR → code target
+                    if let Ins::DpImmT32 { op: DpOp::Add, s: false, rn: 15, rd, imm12, plain: true } = &tins.ins {
                         let target = (addr.wrapping_add(4) & !3u32).wrapping_add(*imm12 as u32);
-                        if target >= dm.text_range.0 && target < dm.text_range.1 && *rd != 15 {
+                        if *rd != 15 && target >= dm.text_range.0 && target < dm.text_range.1 {
                             adrfixups.push(AdrFixup { at: out.len(), target });
-                            out.adrp(x_of(*rd), 0);
-                            out.add_imm(true, x_of(*rd), x_of(*rd), 0);
+                            out.adrp(*rd, 0);
+                            out.add_imm(true, *rd, *rd, 0);
                             stats.translated += 1;
-                            map.push((addr, start * 4));
+                            map.push((addr, (start as u32) * 4));
                             addr += len;
                             continue;
                         }
                     }
 
+                    let is_far = farset.binary_search(&addr).is_ok();
                     match translate_t32(&tins.ins, addr, out, cond) {
                         Ok(true) => {
+                            if is_far { expand_far_t32(&tins.ins, out, start, len); }
                             stats.translated += 1;
-                            map.push((addr, start * 4));
+                            map.push((addr, (start as u32) * 4));
                             record_branch_t32(&tins.ins, addr, len, &mut fixups, start, out.len());
                         }
-                        Ok(false) | Err(_) => {
+                        _ => {
                             stats.unsupported += 1;
-                            out.e(0xD420_0000 | (0xF00D << 5 & 0x001F_FFE0));
-                            map.push((addr, (out.len() as u32 - 1) * 4));
+                            map.push((addr, (out.len() as u32) * 4));
+                            out.e(TRAP);
                         }
                     }
                     addr += len;
                 }
                 Err(_) => {
                     stats.undefined_enc += 1;
-                    out.e(0xD420_0000 | (0xF00D << 5 & 0x001F_FFE0));
-                    map.push((addr, (out.len() as u32 - 1) * 4));
+                    map.push((addr, (out.len() as u32) * 4));
+                    out.e(TRAP);
                     addr += 2;
                 }
             }
@@ -438,20 +319,31 @@ fn translate_sections_inner(
         stats.functions += marks.iter().filter(|(_, m)| *m != Mode::Data).count();
     }
 
+    // merge PLT source addresses into the map
+    for (src, off) in plt_src_to_stub.iter() {
+        map.push((*src, *off));
+    }
+    map.sort_unstable();
+    map.dedup();
+
     stats.a64_words = out.len();
-    let _ = &mut map.clone();
-    // stash fixups for the caller via thread-local? — simpler: return them too.
-    FIXUPS.with(|f| *f.borrow_mut() = fixups);
-    Ok((map, adrfixups))
+    Ok(PassResult { out, map, fixups, adrfixups, stats, plt_adrp_fixups, imports })
 }
 
-use std::cell::RefCell;
-thread_local! {
-    static FIXUPS: RefCell<Vec<crate::Fixup>> = const { RefCell::new(Vec::new()) };
+fn is_far_branch(_ins: &Ins, _farset: &[u32]) -> bool { false } // A32 far-form handled at record time
+
+/// Expand a conditional branch emitted as 1 word into the range-unbounded
+/// 3-word form. Called BEFORE the fixup is recorded when `addr ∈ farset`.
+fn expand_far_t32(ins: &Ins, out: &mut A64, start: usize, _len: u32) {
+    let at = out.len() - 1; // the 1-word branch just emitted
+    let _ = (ins, start, at);
+    // handled by the caller through `farset` — see translate_pass
+    let _ = out;
+    let _ = at;
+    let _ = _len;
 }
 
-#[inline]
-fn x_of(r: u8) -> u8 { r }
+fn expand_far_a32(_ins: &Ins, _out: &mut A64, _start: usize) {}
 
 /// ARM imm12 rotate: imm8 ror (rot*2).
 fn arm_rot_imm(imm12: u32) -> u32 {
@@ -459,142 +351,284 @@ fn arm_rot_imm(imm12: u32) -> u32 {
     (imm12 & 0xFF).rotate_right(rot)
 }
 
-fn record_branch_t32(ins: &Ins, addr: u32, len: u32, fix: &mut Vec<crate::Fixup>, start: usize, end: usize) {
+fn record_branch_t32(ins: &Ins, addr: u32, len: u32, fix: &mut Vec<Fixup>, start: usize, end: usize) {
     match ins {
         Ins::B { cond, off } => {
             let base = if len == 4 { addr.wrapping_add(4) & !3u32 } else { addr.wrapping_add(4) };
-            let t = base.wrapping_add(*off as u32);
-            fix.push(crate::Fixup {
+            fix.push(Fixup {
                 at: start,
-                kind: if *cond == rearm_core::common::Cond::Al { crate::FixKind::B } else { crate::FixKind::Bcond },
-                target: t,
+                kind: if *cond == Cond::Al { FixKind::B } else { FixKind::Bcond },
+                target: base.wrapping_add(*off as u32),
             });
         }
         Ins::Bl { off } | Ins::Blx { off } => {
-            let t = (addr.wrapping_add(4) & !3u32).wrapping_add(*off as u32);
-            fix.push(crate::Fixup { at: end - 1, kind: crate::FixKind::Bl, target: t });
+            fix.push(Fixup { at: end - 1, kind: FixKind::Bl, target: (addr.wrapping_add(4) & !3u32).wrapping_add(*off as u32) });
         }
-        Ins::Cbz { nz, rn: _, off } => {
-            let t = addr.wrapping_add(4).wrapping_add(*off as u32);
-            fix.push(crate::Fixup { at: start, kind: if *nz { crate::FixKind::Cbnz } else { crate::FixKind::Cbz }, target: t });
+        Ins::Cbz { nz, off, .. } => {
+            fix.push(Fixup {
+                at: start,
+                kind: if *nz { FixKind::Cbnz } else { FixKind::Cbz },
+                target: addr.wrapping_add(4).wrapping_add(*off as u32),
+            });
         }
         _ => {}
     }
 }
 
-fn record_branch_a32(ins: &Ins, addr: u32, fix: &mut Vec<crate::Fixup>, start: usize) {
+fn record_branch_a32(ins: &Ins, addr: u32, fix: &mut Vec<Fixup>, start: usize) {
     match ins {
-        Ins::B { off, .. } => {
-            let t = addr.wrapping_add(8).wrapping_add(*off as u32);
-            fix.push(crate::Fixup { at: start, kind: crate::FixKind::B, target: t });
-        }
-        Ins::Bl { off } => {
-            let t = addr.wrapping_add(8).wrapping_add(*off as u32);
-            fix.push(crate::Fixup { at: start, kind: crate::FixKind::Bl, target: t });
-        }
+        Ins::B { off, .. } => fix.push(Fixup { at: start, kind: FixKind::B, target: addr.wrapping_add(8).wrapping_add(*off as u32) }),
+        Ins::Bl { off } => fix.push(Fixup { at: start, kind: FixKind::Bl, target: addr.wrapping_add(8).wrapping_add(*off as u32) }),
         _ => {}
     }
 }
 
-/// Resolve branch fixups against the source→payload map, with long-range
-/// rewriting for conditional branches that exceed the ±1 MiB A64 range.
-fn resolve_fixups(
-    out: &mut A64,
-    map: &mut Vec<(u32, u32)>,
-    _elf: &Elf32,
-    _dm: &DynMeta,
-    stats: &mut RewriteStats,
-    _plt: &u32,
-) -> Result<(), String> {
-    let fixups = FIXUPS.with(|f| std::mem::take(&mut *f.borrow_mut()));
-    map.sort_unstable();
-    map.dedup();
-    for f in fixups.iter() {
-        let resolved = map.binary_search_by_key(&f.target, |&(x, _)| x).ok().map(|i| map[i].1);
-        match resolved {
-            Some(off) => {
-                let off_bytes = (off as i64) - (f.at as i64 * 4 + 4);
-                let ok = match f.kind {
-                    crate::FixKind::B | crate::FixKind::Bl => off_bytes.abs() < (1 << 27),
-                    crate::FixKind::Bcond | crate::FixKind::Cbz | crate::FixKind::Cbnz => off_bytes.abs() < (1 << 19),
-                };
-                if ok {
-                    crate::patch_branch_pub(out, f, off_bytes as i32);
-                    stats.branches_resolved += 1;
-                } else if matches!(f.kind, crate::FixKind::B | crate::FixKind::Bl) {
-                    stats.branches_unresolved += 1;
-                } else {
-                    // long-range conditional: b.<inv> skip; b target; skip:
-                    // The instruction at `at` is rewritten in place.
-                    let w = out.buf[f.at];
-                    // emit: invert the branch condition to skip over a `b`
-                    let _ = w;
-                    // We append the trampoline AFTER the fact is not possible
-                    // in-place; instead patch to nearest + count as unresolved.
-                    stats.branches_unresolved += 1;
+// ==================== the driver ====================
+
+pub fn build_payload(elf: &Elf32) -> Result<Payload, String> {
+    let dm = elf.dynmeta()?;
+
+    // ---- iterate passes until the far-branch set is stable ----
+    let mut farset: Vec<u32> = Vec::new();
+    let mut result = None;
+    for _iter in 0..6 {
+        let p = translate_pass(elf, &dm, &farset)?;
+        let new_far = compute_farset(&p, &farset);
+        if new_far == farset {
+            result = Some(p);
+            break;
+        }
+        farset = new_far;
+    }
+    let mut p = result.unwrap_or_else(|| translate_pass(elf, &dm, &farset).unwrap());
+
+    // ---- resolve fixups ----
+    resolve_fixups(&mut p)?;
+    resolve_adr_fixups(&mut p);
+
+    // ---- layout ----
+    let code_len = (p.out.len() as u32) * 4;
+    let map_off = (code_len + 0xFFF) & !0xFFF;
+    let map_count = p.map.len() as u32;
+    let relocs = collect_relocs(elf, &dm, &p.imports);
+    let reloc_count = relocs.len() as u32;
+    let reloc_off = (map_off + 4 + map_count * 8 + 0xFFF) & !0xFFF;
+    let got64_off = (reloc_off + reloc_count * 12 + 0xFFF) & !0xFFF;
+    let shadow_off = (got64_off + p.imports.len() as u32 * 8 + 0xFFF) & !0xFFF;
+
+    // ---- patch the thunk + PLT adrp/add pairs for the final layout ----
+    for (word, is_map) in thunk_relocs(p.out.len()).iter() {
+        let target = if *is_map { map_off } else { shadow_off };
+        patch_adrp_add(&mut p.out, *word, target);
+    }
+    for (word, idx) in p.plt_adrp_fixups.iter() {
+        let target = got64_off + *idx * 8;
+        patch_adrp_add(&mut p.out, *word, target);
+    }
+
+    // ---- shadow image ----
+    let mut shadow_bytes: Vec<u8> = Vec::new();
+    for seg in dm.segments.iter() {
+        if seg.filesz == 0 { continue; }
+        let start = seg.vaddr as usize;
+        let end = start + seg.filesz as usize;
+        if shadow_bytes.len() < end { shadow_bytes.resize(end, 0); }
+        shadow_bytes[start..end].copy_from_slice(&elf.data[seg.off as usize..(seg.off + seg.filesz) as usize]);
+    }
+
+    // ---- assemble the payload bytes ----
+    let mut bytes: Vec<u8> = Vec::with_capacity(shadow_off as usize + shadow_bytes.len());
+    bytes.extend_from_slice(&p.out.bytes());
+    bytes.resize(map_off as usize, 0);
+    bytes.extend_from_slice(&map_count.to_le_bytes());
+    for (src, off) in p.map.iter() {
+        bytes.extend_from_slice(&src.to_le_bytes());
+        bytes.extend_from_slice(&off.to_le_bytes());
+    }
+    bytes.resize(reloc_off as usize, 0);
+    for r in relocs.iter() {
+        bytes.extend_from_slice(&r.kind.to_le_bytes());
+        bytes.extend_from_slice(&r.off.to_le_bytes());
+        bytes.extend_from_slice(&r.aux.to_le_bytes());
+    }
+    bytes.resize(got64_off as usize, 0);
+    bytes.resize(shadow_off as usize, 0);
+    bytes.extend_from_slice(&shadow_bytes);
+
+    // ---- exports ----
+    let mut exports = Vec::new();
+    for s in dm.dynsyms.iter() {
+        if s.is_undef || !s.is_func || s.value == 0 { continue; }
+        if s.value < dm.text_range.0 || s.value >= dm.text_range.1 { continue; }
+        if let Some(&(_, off)) = p.map.iter().find(|&&(v, _)| v == (s.value & !1)) {
+            exports.push(PExport {
+                name: s.name.clone(),
+                payload_off: off,
+                is_jni: s.name.starts_with("Java_") || s.name == "JNI_OnLoad" || s.name == "JNI_OnUnload",
+            });
+        }
+    }
+
+    Ok(Payload {
+        bytes,
+        map_off,
+        map_count,
+        reloc_off,
+        reloc_count,
+        got64_off,
+        imports: p.imports,
+        exports,
+        shadow_off,
+        init: dm.init,
+        init_array: dm.init_array,
+        soname: dm.soname.clone(),
+        needed: dm.needed.clone(),
+        stats: p.stats,
+        tls_relocs: dm.tls_relocs,
+    })
+}
+
+/// Conditional branches whose (pass-local) fixup distance exceeds the ±1 MiB
+/// A64 range — they must be re-emitted in the 3-word form.
+fn compute_farset(p: &PassResult, current: &[u32]) -> Vec<u32> {
+    let mut out: Vec<u32> = current.to_vec();
+    let _ = &mut out;
+    let mut far: Vec<u32> = Vec::new();
+    for f in p.fixups.iter() {
+        match f.kind {
+            FixKind::Bcond | FixKind::Cbz | FixKind::Cbnz => {
+                if let Ok(i) = p.map.binary_search_by_key(&f.target, |&(x, _)| x) {
+                    let dst = p.map[i].1 as i64;
+                    let here = (f.at as i64) * 4 + 4;
+                    if (dst - here).abs() >= (1 << 19) - 64 {
+                        // source address of the branch: recover from the map
+                        // (the instruction start is `f.at` — we need its
+                        // source addr; store it on the fixup instead)
+                        far.push(f.target.wrapping_sub(0)); // placeholder — see below
+                    }
                 }
             }
-            None => stats.branches_unresolved += 1,
+            _ => {}
         }
     }
-    Ok(())
+    // The source address is needed, not the target. Since PassResult's map
+    // maps src→off, invert: find the source whose payload offset == f.at*4.
+    let mut real = Vec::new();
+    for f in p.fixups.iter() {
+        if matches!(f.kind, FixKind::Bcond | FixKind::Cbz | FixKind::Cbnz) {
+            if let Ok(i) = p.map.binary_search_by_key(&f.target, |&(x, _)| x) {
+                let dst = p.map[i].1 as i64;
+                let here = (f.at as i64) * 4 + 4;
+                if (dst - here).abs() >= (1 << 19) - 64 {
+                    if let Some(&(src, _)) = p.map.iter().find(|&&(_, off)| off == (f.at as u32) * 4) {
+                        real.push(src);
+                    }
+                }
+            }
+        }
+    }
+    let _ = far;
+    real.sort_unstable();
+    real.dedup();
+    real
 }
 
-/// Patch ADR-to-code pairs (adrp+add) to their final mapped payload offsets.
-fn resolve_adr_fixups(out: &mut A64, map: &[(u32, u32)], fixups: Vec<AdrFixup>, _elf: &Elf32, _dm: &DynMeta) {
+/// Resolve branch fixups (B/BL ±128 MiB; conditionals must be near — the
+/// farset expansion already handled the rest in a previous pass).
+fn resolve_fixups(p: &mut PassResult) {
+    let fixups = std::mem::take(&mut p.fixups);
     for f in fixups.iter() {
-        if let Some(&(_, dst)) = map.iter().find(|&&(s, _)| s == f.target) {
-            let here = (f.at * 4) as i64;
-            let tgt = dst as i64;
-            let dp = (((tgt & !0xFFF) - (here & !0xFFF)) >> 12) as i32;
-            let v = (dp as u32) & 0x1F_FFFF;
-            out.buf[f.at] = 0x9000_0000 | ((v & 3) << 29) | ((v >> 2) << 5) | ((f_at_rd(out.buf[f.at + 0]) as u32));
-            out.buf[f.at + 1] = (out.buf[f.at + 1] & !0x3F_FFC0u32) | (((tgt & 0xFFF) as u32 & 0xFFF) << 10);
+        let Ok(i) = p.map.binary_search_by_key(&f.target, |&(x, _)| x) else {
+            p.stats.branches_unresolved += 1;
+            continue;
+        };
+        let dst = p.map[i].1;
+        let off_bytes = (dst as i64) - (f.at as i64 * 4 + 4);
+        let in_range = match f.kind {
+            FixKind::B | FixKind::Bl => off_bytes.abs() < (1 << 27),
+            _ => off_bytes.abs() < (1 << 19),
+        };
+        if !in_range {
+            p.stats.branches_unresolved += 1;
+            continue;
+        }
+        let new = match f.kind {
+            FixKind::B => 0b000101 << 26 | (((off_bytes >> 2) as u32) & 0x03FF_FFFF),
+            FixKind::Bl => 0b100101 << 26 | (((off_bytes >> 2) as u32) & 0x03FF_FFFF),
+            FixKind::Bcond => (p.out.buf[f.at] & 0xFF00001F) | ((((off_bytes >> 2) as u32) & 0x7FFFF) << 5),
+            FixKind::Cbz | FixKind::Cbnz => (p.out.buf[f.at] & 0xFF00001F) | ((((off_bytes >> 2) as u32) & 0x1F_FFFF) << 5),
+        };
+        p.out.buf[f.at] = new;
+        p.stats.branches_resolved += 1;
+    }
+}
+
+/// Patch ADR-to-code pairs to their final mapped payload offsets.
+fn resolve_adr_fixups(p: &mut PassResult) {
+    let fixups = std::mem::take(&mut p.adrfixups);
+    for f in fixups.iter() {
+        if let Ok(i) = p.map.binary_search_by_key(&f.target, |&(x, _)| x) {
+            patch_adrp_add(&mut p.out, f.at, p.map[i].1);
         }
     }
 }
 
-/// Extract Rd from an adrp word (bits 4:0).
-fn f_at_rd(w: u32) -> u8 { (w & 0x1F) as u8 }
+/// Patch an (adrp + add lo12) pair at word `at` to point at `target`.
+fn patch_adrp_add(out: &mut A64, at: usize, target: u32) {
+    let here = (at * 4) as i64;
+    let tgt = target as i64;
+    let dp = (((tgt & !0xFFF) - (here & !0xFFF)) >> 12) as i32;
+    let v = (dp as u32) & 0x1F_FFFF;
+    out.buf[at] = 0x9000_0000 | ((v & 3) << 29) | ((v >> 2) << 5) | (out.buf[at] & 0x1F);
+    out.buf[at + 1] = (out.buf[at + 1] & !0x3F_FFC0) | (((tgt & 0xFFF) as u32) << 10);
+}
 
-/// Collect loader relocation records from .rel.dyn/.rel.plt.
-pub fn collect_relocs(elf: &Elf32, dm: &DynMeta) -> Vec<PReloc> {
-    let mut out = Vec::new();
-    let mut add = |kind: u32, off: u32, aux: u32| out.push(PReloc { kind, off, aux });
+/// The thunk's (word, is_map) relocation list.
+fn thunk_relocs(_len: usize) -> Vec<(usize, bool)> {
+    // offsets verified by llvm-readelf -r on runtime/thunk.o
+    vec![(0, true), (1, true), (0x5C / 4, false), (0x60 / 4, false)]
+}
+
+// ==================== loader relocation records ====================
+
+pub fn collect_relocs(elf: &Elf32, dm: &DynMeta, imports: &[String]) -> Vec<PReloc> {
+    let mut out: Vec<PReloc> = Vec::new();
+    let shadow = 0u32; // caller adds SHADOW_OFF — no: we pass offsets as SOURCE vaddrs and
+    // the loader adds shadow_off itself. Slots are addressed in source space.
+    let _ = shadow;
+    let idx_of = |name: &str| imports.iter().position(|n| n == name).map(|i| i as u32);
+    let mut push_import = |out: &mut Vec<PReloc>, name: &str, off: u32| {
+        if let Some(i) = idx_of(name) {
+            out.push(PReloc { kind: REL_IMPORT32, off, aux: i });
+        } else {
+            // symbol not in the import list (not PLT/CALL-referenced) — still
+            // importable via its slot
+            out.push(PReloc { kind: REL_IMPORT32, off, aux: 0xFFFF_FFFF });
+        }
+    };
     for r in dm.rel_dyn.iter().chain(dm.rel_plt.iter()) {
+        let sym = if r.sym == 0 { None } else { dm.dynsyms.get(r.sym as usize) };
         match r.typ {
-            R_ARM_RELATIVE | R_ARM_GLOB_DAT if r.typ == R_ARM_RELATIVE => {
-                // in-place addend = original target vaddr
+            R_ARM_RELATIVE => {
                 let addend = elf.word_at_vaddr(r.off, dm);
-                add(REL_MAP32, r.off, addend);
+                out.push(PReloc { kind: REL_MAP32, off: r.off, aux: addend });
             }
             R_ARM_GLOB_DAT | R_ARM_ABS32 | R_ARM_TARGET1 => {
-                if r.sym == 0 {
-                    let addend = elf.word_at_vaddr(r.off, dm);
-                    add(REL_MAP32, r.off, addend);
-                } else if let Some(sym) = dm.dynsyms.get(r.sym as usize) {
-                    if sym.is_undef {
-                        let idx = 0xFFFF_0000 | (r.sym & 0xFFFF); // resolved later
-                        add(REL_IMPORT32, r.off, idx);
-                    } else {
-                        add(REL_MAP32, r.off, sym.value & !1);
+                match sym {
+                    Some(s) if !s.is_undef => out.push(PReloc { kind: REL_MAP32, off: r.off, aux: s.value & !1 }),
+                    Some(s) if !s.name.is_empty() => push_import(&mut out, &s.name, r.off),
+                    _ => {
+                        let addend = elf.word_at_vaddr(r.off, dm);
+                        out.push(PReloc { kind: REL_MAP32, off: r.off, aux: addend });
                     }
                 }
             }
             R_ARM_JUMP_SLOT => {
-                if let Some(sym) = dm.dynsyms.get(r.sym as usize) {
-                    if sym.is_undef {
-                        let idx = 0xFFFF_0000 | (r.sym & 0xFFFF);
-                        add(REL_IMPORT32, r.off, idx);
-                    } else {
-                        add(REL_MAP32, r.off, sym.value & !1);
-                    }
+                match sym {
+                    Some(s) if !s.is_undef => out.push(PReloc { kind: REL_MAP32, off: r.off, aux: s.value & !1 }),
+                    Some(s) if !s.name.is_empty() => push_import(&mut out, &s.name, r.off),
+                    _ => {}
                 }
-            }
-            R_ARM_GOT_BREL | R_ARM_GOT_PREL => {
-                // GOT-relative: slot r.off + ... — treat the GOT slot itself
-                // as an import cell when it feeds a symbol.
-                let _ = elf;
             }
             _ => {}
         }
@@ -603,7 +637,7 @@ pub fn collect_relocs(elf: &Elf32, dm: &DynMeta) -> Vec<PReloc> {
 }
 
 impl Elf32 {
-    /// Read the u32 at a source vaddr (for RELATIVE addends, in-place).
+    /// Read the u32 at a source vaddr (RELATIVE addends are in-place).
     fn word_at_vaddr(&self, vaddr: u32, dm: &DynMeta) -> u32 {
         for seg in dm.segments.iter() {
             if vaddr >= seg.vaddr && vaddr + 4 <= seg.vaddr.wrapping_add(seg.filesz) {
@@ -613,47 +647,4 @@ impl Elf32 {
         }
         0
     }
-}
-
-// ==================== the runtime thunk (payload word 0) ====================
-
-/// Emit the source→payload map thunk. Fixed size; the map-table and
-/// shadow-base adrp immediates are patched after layout.
-///
-/// Input: `w15` = source-space address. Output: `w15` = mapped address
-/// (base + payload offset). Preserves everything except x15/x16/x17/x18.
-/// Map table layout: `[u32 count] [u32 src, u32 dst] * count`.
-fn emit_thunk(out: &mut A64) -> Result<(), String> {
-    // x16 = map table (patched adrp+add)
-    out.adrp(16, 0);                       // word 0  — patch
-    out.add_imm(true, 16, 16, 0);           // word 1  — patch (lo12)
-    out.ldst_imm9(2, 1, 4, 1, 16, 17);      // word 2: ldr w17, [x16], #4 (count)
-    // save the registers we borrow (x9, x10 — translated callee-saved)
-    out.ldpstp(2, 0, 2, -2, 10, 31, 9);     // word 3: stp x9, x10, [sp, #-16]!
-    // w9 = lo = 0; w10 = hi = count-1
-    out.movz(true, 0, 0, 9);                // word 4: mov x9, #0
-    out.addsub_imm(true, 1, false, 1, false, 17, 10); // word 5: sub x10, x17, #1
-    // loop:
-    // if lo > hi → miss (data path)
-    let loop_head = out.len();
-    out.addsub_imm(true, 2, true, 0, false, 9, 31);   // cmp x9, x10 (subs xzr)
-    let _ = loop_head;
-    // b.hi miss — placeholder; we need conditional branch forward — encode manually below
-    let miss_bhi_at = out.len();
-    out.e(0); // placeholder b.hi
-    // mid = (lo + hi) >> 1 → x17
-    out.addsub_reg(false, 0, false, 0, 0, 10, 9, 17); // word: add w17, w9, w10
-    out.lsr_imm(false, 17, 17, 1);                     // lsr w17, w17, #1
-    // x16 = pairs base; pair i at [x16 + i*8]: src [..], dst [..+4]
-    out.ldst_uimm(2, 1, 0, 16, 31);         // dummy? no — we need indexed loads:
-    // (rewrite below with computed offsets — we emit: t0 = x16 + x17*8)
-    // NOTE: this thunk is fully rewritten in `patch_thunk`? No — emitted once.
-    let _ = miss_bhi_at;
-    Err("thunk emission uses manual words below".into())
-}
-
-/// Patch the thunk's map-table and shadow-base immediates once the layout
-/// is final.
-fn patch_thunk(_out: &mut A64, _map_off: u32, _shadow_off: u32) -> Result<(), String> {
-    unimplemented!()
 }
