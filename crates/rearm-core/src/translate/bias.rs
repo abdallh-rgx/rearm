@@ -15,15 +15,19 @@
 use crate::a64::encode::{A64, XR};
 use std::sync::atomic::{AtomicBool, AtomicU32, Ordering};
 
-/// Payload (execution) mode switch. `false` = const/verify mode (default).
+/// `BIAS` — payload (execution) mode switch. `false` = const/verify mode.
 pub static BIAS: AtomicBool = AtomicBool::new(false);
 /// Payload offset of the shadow-image base (source vaddr 0), in bytes.
 pub static SHADOW: AtomicU32 = AtomicU32::new(0);
+/// Payload offset of the runtime code-map thunk entry, in bytes.
+pub static THUNK: AtomicU32 = AtomicU32::new(0);
 
 #[inline]
 pub fn bias_on() -> bool { BIAS.load(Ordering::Relaxed) }
 #[inline]
 pub fn shadow_off() -> u32 { SHADOW.load(Ordering::Relaxed) }
+#[inline]
+pub fn thunk_off() -> u32 { THUNK.load(Ordering::Relaxed) }
 
 /// `Xd = base + payload_offset` — adrp (+ add when lo12 ≠ 0).
 ///
@@ -60,4 +64,14 @@ pub fn bias_ldr_word(out: &mut A64, rt: XR, src: u32) {
 pub fn bias_dyn_addr(out: &mut A64, scratch: XR) {
     // x(scratch) = base(=x28) + w15 : add x17, x28, w15, uxtw
     out.addsub_ext(true, 0, false, 15, 2, 0, 28, scratch);
+}
+
+/// Call the payload code-map thunk with the source-space address in **w15**
+/// (overwritten with the mapped runtime address): `w15 = base + map(w15)`.
+/// Used by TBB/TBH and any dynamic code-address the driver cannot resolve
+/// statically. Clobbers x16/x17 only (safe at self-contained materialization
+/// sites).
+pub fn emit_thunk_call(out: &mut A64) {
+    bias_addr(out, 17, thunk_off());
+    out.blr(17);
 }

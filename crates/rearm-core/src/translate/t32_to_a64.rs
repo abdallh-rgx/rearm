@@ -254,8 +254,8 @@ fn translate_t32_inner(ins: &Ins, addr: u32, out: &mut A64) -> Result<bool, Tran
                 let pc_al = t32_pc_aligned(addr);
                 if *rn == 15 {
                     crate::translate::bias::bias_src(out, 16, pc_al);
-                    if *half { out.ldst_reg_uext(1, 1, x(*rm), 16, 15); }  // ldrh w15,[x16,wRm]
-                    else { out.ldst_reg_uext(0, 1, x(*rm), 16, 15); }        // ldrb w15,[x16,wRm]
+                    if *half { out.ldst_reg_uxtw(1, 1, x(*rm), 16, 15); }  // ldrh w15,[x16,wRm]
+                    else { out.ldst_reg_uxtw(0, 1, x(*rm), 16, 15); }        // ldrb w15,[x16,wRm]
                 } else {
                     out.addsub_ext(true, 0, false, x(*rm), 2, 0, x(*rn), 16); // x16 = Rn + uxtw(Rm)
                     if *half { out.ldst_uimm(1, 1, 0, 16, 15); }
@@ -266,7 +266,7 @@ fn translate_t32_inner(ins: &Ins, addr: u32, out: &mut A64) -> Result<bool, Tran
                 crate::translate::bias::bias_src(out, 17, pc_al);
                 out.addsub_reg(false, 0, false, 0, 0, 15, 17, 15);
                 // thunk: map w15 → base+payload offset, then branch.
-                crate::translate::bias::emit_thunk_call_tbb(out);
+                crate::translate::bias::emit_thunk_call(out);
                 out.br(15);
                 return Ok(true);
             }
@@ -283,14 +283,39 @@ fn translate_t32_inner(ins: &Ins, addr: u32, out: &mut A64) -> Result<bool, Tran
 
         // ======== BL / BLX (immediate): LR = (addr+4) | 1 ========
         Ins::Bl { off } | Ins::Blx { off } => {
-            load_imm_t32(out, 14, addr.wrapping_add(4) | 1);
+            if crate::translate::bias::bias_on() {
+                // LR fast path: the A64 word right after the bl sequence is
+                // the translation of the next source instruction — LR =
+                // adrp/add of that word (no |1: A64 branch targets must be
+                // 4-aligned; thumb-bit tests on LR are vanishingly rare and
+                // documented as a known deviation).
+                let l = out.len();
+                let t3 = ((l + 3) * 4) as u32;   // adrp+add+bl
+                if t3 & 0xFFF == 0 {
+                    crate::translate::bias::bias_addr(out, 14, ((l + 2) * 4) as u32);
+                } else {
+                    crate::translate::bias::bias_addr(out, 14, t3);
+                }
+            } else {
+                load_imm_t32(out, 14, addr.wrapping_add(4) | 1);
+            }
             out.bl(*off)?;
             Ok(true)
         }
 
         // ======== BLX (register): LR = (addr+4) | 1 ========
         Ins::BlxReg { rm } => {
-            load_imm_t32(out, 14, addr.wrapping_add(4) | 1);
+            if crate::translate::bias::bias_on() {
+                let l = out.len();
+                let t2 = ((l + 2) * 4) as u32;   // adrp+add+blr
+                if t2 & 0xFFF == 0 {
+                    crate::translate::bias::bias_addr(out, 14, ((l + 1) * 4) as u32);
+                } else {
+                    crate::translate::bias::bias_addr(out, 14, t2);
+                }
+            } else {
+                load_imm_t32(out, 14, addr.wrapping_add(4) | 1);
+            }
             out.blr(x(*rm));
             Ok(true)
         }
