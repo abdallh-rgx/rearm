@@ -557,21 +557,33 @@ pub fn translate_a32(ins: &Ins, pc: u32, out: &mut A64) -> Result<bool, Translat
                 else { out.str_s((*imm as i32 / 4).unsigned_abs() as u16, base, *d as XR); }
             }
         }
-        Ins::VLdmStm { load, dbl, d, count, rn, wback, add: _ } => {
-            // A64: use LDP/STP for pairs, or LDR/STR sequences
-            let base = x(*rn);
-            let off: u16 = 0;
+        Ins::VLdmStm { load, dbl, d, count, rn, wback, add } => {
+            // VPUSH = VSTMDB Rn!, {Dd..} — lowest D-register at the LOWEST
+            // address: start = Rn - 8*count (dbl) / 4*count (single).
+            // VPOP = VLDMIA — start = Rn.
+            let words = if *dbl { 2u32 } else { 1u32 }; // 4-byte units
+            let total_words = (*count as u32) * words;
+            let start: XR = if *add || total_words == 0 {
+                x(*rn)
+            } else {
+                out.sub_imm(true, x(*rn), 16, total_words as u16);
+                16
+            };
             for i in 0..*count {
                 let reg = (*d as u32 + i as u32) as XR;
+                let off = (i as u16) * words as u16;
                 if *load {
-                    if *dbl { out.ldr_d(off + (i as u16) * 2, base, reg); }
-                    else { out.ldr_s(off + (i as u16) * 2, base, reg); }
+                    if *dbl { out.ldr_d(off, start, reg); }
+                    else { out.ldr_s(off, start, reg); }
                 } else {
-                    if *dbl { out.str_d(off + (i as u16) * 2, base, reg); }
-                    else { out.str_s(off + (i as u16) * 2, base, reg); }
+                    if *dbl { out.str_d(off, start, reg); }
+                    else { out.str_s(off, start, reg); }
                 }
             }
-            if *wback { return Ok(false); } // writeback TODO
+            if *wback {
+                if *add { out.addsub_imm(true, 0, false, total_words as u16, false, x(*rn), x(*rn)); }
+                else { out.addsub_imm(true, 1, false, total_words as u16, false, x(*rn), x(*rn)); }
+            }
         }
 
         // ======== NEON data-processing ========
@@ -635,18 +647,42 @@ pub fn translate_a32(ins: &Ins, pc: u32, out: &mut A64) -> Result<bool, Translat
             out.ldpstp(2, *store, mode, imm7, x(*rt2), x(*rn), x(*rt));
         }
         Ins::LdmStm { load, rn, mode, wback, user: _, list } => {
-            // LDM/STM → sequence of ldr/str at [base + 4*i]; base updated by ±4n.
+            // LDM/STM → sequence of ldr/str at [start + 4*i]; base ±4n.
+            // The lowest-numbered register always goes at the LOWEST address:
+            //   IA: start = Rn        IB: start = Rn + 4
+            //   DA: start = Rn-4(n-1) DB: start = Rn - 4n
+            // (T16 PUSH = STMDB SP!, POP = LDMIA SP! — both exact.)
             if list.is_empty() { return Ok(false); }
             let n = list.len() as u32;
             let total = (4 * n) as u16;
             let (_pre, inc) = mode.pu();
             let step: u32 = 4;
+            let start_delta: i32 = match mode {
+                LdmMode::Ia => 0,
+                LdmMode::Ib => 4,
+                LdmMode::Da => -(4 * (n as i32 - 1)),
+                LdmMode::Db => -(4 * n as i32),
+            };
+            let start_base: XR = if start_delta == 0 {
+                x(*rn)
+            } else if start_delta > 0 && start_delta <= 4095 {
+                out.add_imm(true, x(*rn), 16, start_delta as u16);
+                16
+            } else if start_delta < 0 && -start_delta <= 4095 {
+                out.sub_imm(true, x(*rn), 16, (-start_delta) as u16);
+                16
+            } else {
+                load_imm64(out, 17, start_delta.unsigned_abs() as u64);
+                if start_delta > 0 { out.addsub_reg(true, 0, false, 0, 0, x(*rn), 17, 16); }
+                else { out.addsub_reg(true, 1, false, 0, 0, x(*rn), 17, 16); }
+                16
+            };
             let mut pc_in_list = false;
             if *load {
                 for (i, &r) in list.0.iter().enumerate() {
                     let off = (i as u32) * step;
-                    let base = if off == 0 { x(*rn) } else {
-                        out.add_imm(true, x(*rn), 16, off as u16);
+                    let base = if off == 0 { start_base } else {
+                        out.add_imm(true, start_base, 16, off as u16);
                         16
                     };
                     if r == 15 {
@@ -663,8 +699,8 @@ pub fn translate_a32(ins: &Ins, pc: u32, out: &mut A64) -> Result<bool, Translat
             } else {
                 for (i, &r) in list.0.iter().enumerate() {
                     let off = (i as u32) * step;
-                    let base = if off == 0 { x(*rn) } else {
-                        out.add_imm(true, x(*rn), 16, off as u16);
+                    let base = if off == 0 { start_base } else {
+                        out.add_imm(true, start_base, 16, off as u16);
                         16
                     };
                     out.ldst_uimm(2, 0, 0, base, x(r));
