@@ -114,7 +114,8 @@ impl Elf32 {
         while i + 8 <= dyn_sz as usize {
             let o = dyn_off as usize + i;
             if o + 8 > self.data.len() { break; }
-            let tag = i64::from_le_bytes(self.data[o..o + 8].try_into().unwrap()) as u64;
+            // Elf32_Dyn = { i32 d_tag; u32 d_val } — 8 bytes total
+            let tag = i32::from_le_bytes([self.data[o], self.data[o + 1], self.data[o + 2], self.data[o + 3]]) as i64 as u64;
             let val = u32::from_le_bytes([self.data[o + 4], self.data[o + 5], self.data[o + 6], self.data[o + 7]]);
             let is_end = tag == 0;
             tags.push((tag, val));

@@ -47,7 +47,7 @@ pub struct Payload {
 #[derive(Clone, Copy, PartialEq)]
 enum FixKind { B, Bcond, Bl, Cbz, Cbnz }
 
-struct Fixup { at: usize, kind: FixKind, target: u32 }
+struct Fixup { at: usize, kind: FixKind, target: u32, src: u32 }
 
 struct AdrFixup { at: usize, target: u32 }
 
@@ -226,9 +226,22 @@ fn translate_pass(elf: &Elf32, dm: &DynMeta, farset: &[u32]) -> Result<PassResul
                 };
                 stats.a32_ins += 1;
                 let start = out.len();
+                // far conditional (B.cond): range-unbounded 2-word form
+                if let Ins::B { cond: c, off } = &ins {
+                    if *c != Cond::Al && farset.binary_search(&addr).is_ok() {
+                        map.push((addr, (start as u32) * 4));
+                        out.bcond(c.invert(), 8);
+                        out.b(0).map_err(|e| e.to_string())?;
+                        fixups.push(Fixup { at: start + 1, kind: FixKind::B,
+                            target: addr.wrapping_add(8).wrapping_add(*off as u32), src: addr });
+                        stats.translated += 1;
+                        addr += 4;
+                        continue;
+                    }
+                }
                 // A32 ADR → code target: deferred-map adrp+add pair
                 if let Ins::DpImm { op: DpOp::Add, s: false, rn: 15, rd, imm12 } = &ins {
-                    let target = addr.wrapping_add(8).wrapping_add(arm_rot_imm(*imm12));
+                    let target = addr.wrapping_add(8).wrapping_add(arm_rot_imm(*imm12 as u32));
                     if *rd != 15 && target >= dm.text_range.0 && target < dm.text_range.1 {
                         adrfixups.push(AdrFixup { at: out.len(), target });
                         out.adrp(*rd, 0);
@@ -239,10 +252,8 @@ fn translate_pass(elf: &Elf32, dm: &DynMeta, farset: &[u32]) -> Result<PassResul
                         continue;
                     }
                 }
-                let is_far = is_far_branch(&ins, farset);
-                match rearm_core::translate::a32_to_a64::translate_a32(&ins, addr, out) {
+                match rearm_core::translate::a32_to_a64::translate_a32(&ins, addr, &mut out) {
                     Ok(true) => {
-                        if is_far { expand_far_a32(&ins, out, start); }
                         stats.translated += 1;
                         map.push((addr, (start as u32) * 4));
                         record_branch_a32(&ins, addr, &mut fixups, start);
@@ -278,6 +289,34 @@ fn translate_pass(elf: &Elf32, dm: &DynMeta, farset: &[u32]) -> Result<PassResul
                     stats.t32_ins += 1;
                     let start = out.len();
 
+                    // far conditionals: range-unbounded 2-word form
+                    if cond.is_none() && farset.binary_search(&addr).is_ok() {
+                        let handled = match &tins.ins {
+                            Ins::B { cond: c, off } if *c != Cond::Al => {
+                                let base = addr.wrapping_add(4) & !3u32;
+                                out.bcond(c.invert(), 8);
+                                out.b(0).map_err(|e| e.to_string())?;
+                                fixups.push(Fixup { at: start + 1, kind: FixKind::B,
+                                    target: base.wrapping_add(*off as u32), src: addr });
+                                true
+                            }
+                            Ins::Cbz { nz, rn, off } => {
+                                if *nz { out.cbz(false, *rn, 0).map_err(|e| e.to_string())?; } else { out.cbnz(false, *rn, 0).map_err(|e| e.to_string())?; }
+                                out.b(0).map_err(|e| e.to_string())?;
+                                fixups.push(Fixup { at: start + 1, kind: FixKind::B,
+                                    target: addr.wrapping_add(4).wrapping_add(*off as u32), src: addr });
+                                true
+                            }
+                            _ => false,
+                        };
+                        if handled {
+                            stats.translated += 1;
+                            map.push((addr, (start as u32) * 4));
+                            addr += len;
+                            continue;
+                        }
+                    }
+
                     // T32 ADR → code target
                     if let Ins::DpImmT32 { op: DpOp::Add, s: false, rn: 15, rd, imm12, plain: true } = &tins.ins {
                         let target = (addr.wrapping_add(4) & !3u32).wrapping_add(*imm12 as u32);
@@ -292,10 +331,8 @@ fn translate_pass(elf: &Elf32, dm: &DynMeta, farset: &[u32]) -> Result<PassResul
                         }
                     }
 
-                    let is_far = farset.binary_search(&addr).is_ok();
-                    match translate_t32(&tins.ins, addr, out, cond) {
+                    match translate_t32(&tins.ins, addr, &mut out, cond) {
                         Ok(true) => {
-                            if is_far { expand_far_t32(&tins.ins, out, start, len); }
                             stats.translated += 1;
                             map.push((addr, (start as u32) * 4));
                             record_branch_t32(&tins.ins, addr, len, &mut fixups, start, out.len());
@@ -330,20 +367,7 @@ fn translate_pass(elf: &Elf32, dm: &DynMeta, farset: &[u32]) -> Result<PassResul
     Ok(PassResult { out, map, fixups, adrfixups, stats, plt_adrp_fixups, imports })
 }
 
-fn is_far_branch(_ins: &Ins, _farset: &[u32]) -> bool { false } // A32 far-form handled at record time
-
-/// Expand a conditional branch emitted as 1 word into the range-unbounded
-/// 3-word form. Called BEFORE the fixup is recorded when `addr ∈ farset`.
-fn expand_far_t32(ins: &Ins, out: &mut A64, start: usize, _len: u32) {
-    let at = out.len() - 1; // the 1-word branch just emitted
-    let _ = (ins, start, at);
-    // handled by the caller through `farset` — see translate_pass
-    let _ = out;
-    let _ = at;
-    let _ = _len;
-}
-
-fn expand_far_a32(_ins: &Ins, _out: &mut A64, _start: usize) {}
+fn is_far_branch(_ins: &Ins, _farset: &[u32]) -> bool { false } // superseded — see the section loop
 
 /// ARM imm12 rotate: imm8 ror (rot*2).
 fn arm_rot_imm(imm12: u32) -> u32 {
@@ -359,16 +383,18 @@ fn record_branch_t32(ins: &Ins, addr: u32, len: u32, fix: &mut Vec<Fixup>, start
                 at: start,
                 kind: if *cond == Cond::Al { FixKind::B } else { FixKind::Bcond },
                 target: base.wrapping_add(*off as u32),
+                src: addr,
             });
         }
         Ins::Bl { off } | Ins::Blx { off } => {
-            fix.push(Fixup { at: end - 1, kind: FixKind::Bl, target: (addr.wrapping_add(4) & !3u32).wrapping_add(*off as u32) });
+            fix.push(Fixup { at: end - 1, kind: FixKind::Bl, target: (addr.wrapping_add(4) & !3u32).wrapping_add(*off as u32), src: addr });
         }
         Ins::Cbz { nz, off, .. } => {
             fix.push(Fixup {
                 at: start,
                 kind: if *nz { FixKind::Cbnz } else { FixKind::Cbz },
                 target: addr.wrapping_add(4).wrapping_add(*off as u32),
+                src: addr,
             });
         }
         _ => {}
@@ -377,8 +403,8 @@ fn record_branch_t32(ins: &Ins, addr: u32, len: u32, fix: &mut Vec<Fixup>, start
 
 fn record_branch_a32(ins: &Ins, addr: u32, fix: &mut Vec<Fixup>, start: usize) {
     match ins {
-        Ins::B { off, .. } => fix.push(Fixup { at: start, kind: FixKind::B, target: addr.wrapping_add(8).wrapping_add(*off as u32) }),
-        Ins::Bl { off } => fix.push(Fixup { at: start, kind: FixKind::Bl, target: addr.wrapping_add(8).wrapping_add(*off as u32) }),
+        Ins::B { off, .. } => fix.push(Fixup { at: start, kind: FixKind::B, target: addr.wrapping_add(8).wrapping_add(*off as u32), src: addr }),
+        Ins::Bl { off } => fix.push(Fixup { at: start, kind: FixKind::Bl, target: addr.wrapping_add(8).wrapping_add(*off as u32), src: addr }),
         _ => {}
     }
 }
@@ -393,7 +419,7 @@ pub fn build_payload(elf: &Elf32) -> Result<Payload, String> {
     let mut result = None;
     for _iter in 0..6 {
         let p = translate_pass(elf, &dm, &farset)?;
-        let new_far = compute_farset(&p, &farset);
+        let new_far = compute_farset(&p);
         if new_far == farset {
             result = Some(p);
             break;
@@ -403,7 +429,7 @@ pub fn build_payload(elf: &Elf32) -> Result<Payload, String> {
     let mut p = result.unwrap_or_else(|| translate_pass(elf, &dm, &farset).unwrap());
 
     // ---- resolve fixups ----
-    resolve_fixups(&mut p)?;
+    resolve_fixups(&mut p);
     resolve_adr_fixups(&mut p);
 
     // ---- layout ----
@@ -488,49 +514,22 @@ pub fn build_payload(elf: &Elf32) -> Result<Payload, String> {
     })
 }
 
-/// Conditional branches whose (pass-local) fixup distance exceeds the ±1 MiB
-/// A64 range — they must be re-emitted in the 3-word form.
-fn compute_farset(p: &PassResult, current: &[u32]) -> Vec<u32> {
-    let mut out: Vec<u32> = current.to_vec();
-    let _ = &mut out;
+/// Source addresses of conditional branches whose (previous-pass) fixup
+/// distance exceeded the ±1 MiB A64 conditional-branch range — re-emitted in
+/// the range-unbounded 2-word form (`b.<inv> +8; b target`).
+fn compute_farset(p: &PassResult) -> Vec<u32> {
     let mut far: Vec<u32> = Vec::new();
     for f in p.fixups.iter() {
-        match f.kind {
-            FixKind::Bcond | FixKind::Cbz | FixKind::Cbnz => {
-                if let Ok(i) = p.map.binary_search_by_key(&f.target, |&(x, _)| x) {
-                    let dst = p.map[i].1 as i64;
-                    let here = (f.at as i64) * 4 + 4;
-                    if (dst - here).abs() >= (1 << 19) - 64 {
-                        // source address of the branch: recover from the map
-                        // (the instruction start is `f.at` — we need its
-                        // source addr; store it on the fixup instead)
-                        far.push(f.target.wrapping_sub(0)); // placeholder — see below
-                    }
-                }
-            }
-            _ => {}
+        if !matches!(f.kind, FixKind::Bcond | FixKind::Cbz | FixKind::Cbnz) { continue; }
+        let Ok(i) = p.map.binary_search_by_key(&f.target, |&(x, _)| x) else { continue };
+        let dist = (p.map[i].1 as i64) - (f.at as i64 * 4 + 4);
+        if dist.abs() >= (1 << 19) - 256 {
+            far.push(f.src);
         }
     }
-    // The source address is needed, not the target. Since PassResult's map
-    // maps src→off, invert: find the source whose payload offset == f.at*4.
-    let mut real = Vec::new();
-    for f in p.fixups.iter() {
-        if matches!(f.kind, FixKind::Bcond | FixKind::Cbz | FixKind::Cbnz) {
-            if let Ok(i) = p.map.binary_search_by_key(&f.target, |&(x, _)| x) {
-                let dst = p.map[i].1 as i64;
-                let here = (f.at as i64) * 4 + 4;
-                if (dst - here).abs() >= (1 << 19) - 64 {
-                    if let Some(&(src, _)) = p.map.iter().find(|&&(_, off)| off == (f.at as u32) * 4) {
-                        real.push(src);
-                    }
-                }
-            }
-        }
-    }
-    let _ = far;
-    real.sort_unstable();
-    real.dedup();
-    real
+    far.sort_unstable();
+    far.dedup();
+    far
 }
 
 /// Resolve branch fixups (B/BL ±128 MiB; conditionals must be near — the

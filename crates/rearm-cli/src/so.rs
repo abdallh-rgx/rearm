@@ -103,3 +103,21 @@ pub fn cmd_verify_so(args: &[String]) -> Result<(), String> {
     if counterexamples > 0 { std::process::exit(1); }
     Ok(())
 }
+
+/// `rearm payload <in.so> [out.bin]` — build the v2 execution payload.
+pub fn cmd_payload(args: &[String]) -> Result<(), String> {
+    if args.is_empty() { return Err("usage: rearm payload <in.so> [out.bin]".into()); }
+    let data = std::fs::read(&args[0]).map_err(|e| format!("{}: {}", args[0], e))?;
+    let elf = Elf32::parse(data)?;
+    let t0 = std::time::Instant::now();
+    let p = rearm_elf::payload::build_payload(&elf)?;
+    let out_path = args.get(1).cloned().unwrap_or_else(|| format!("{}.payload", args[0]));
+    std::fs::write(&out_path, &p.bytes).map_err(|e| format!("{}: {}", out_path, e))?;
+    println!("payload: {} -> {} ({} bytes) in {:.1}s", args[0], out_path, p.bytes.len(), t0.elapsed().as_secs_f32());
+    println!("soname={} needed={} imports={} exports={} (jni {})", p.soname, p.needed.len(), p.imports.len(), p.exports.len(),
+        p.exports.iter().filter(|e| e.is_jni).count());
+    println!("map_off={:#x} map_count={} reloc_off={:#x} reloc_count={} got64={:#x} shadow={:#x} tls_relocs={}",
+        p.map_off, p.map_count, p.reloc_off, p.reloc_count, p.got64_off, p.shadow_off, p.tls_relocs);
+    println!("{:#?}", p.stats);
+    Ok(())
+}

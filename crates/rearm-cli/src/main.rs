@@ -25,6 +25,7 @@ fn main() {
         "verify-t32" => cmd_verify_t32(&args[2..]),
         "so" => so::cmd_so(&args[2..]),
         "verify-so" => so::cmd_verify_so(&args[2..]),
+        "payload" => so::cmd_payload(&args[2..]),
         "coverage" => cmd_coverage(&args[2..]),
         "bench" => cmd_bench(&args[2..]),
         _ => {
