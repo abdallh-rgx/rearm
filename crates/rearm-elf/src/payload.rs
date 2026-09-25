@@ -252,7 +252,7 @@ fn translate_pass(elf: &Elf32, dm: &DynMeta, farset: &[u32]) -> Result<PassResul
                     Ok(rearm_core::a32::ins::Ins::Unsupported { .. }) => {
                         stats.undefined_enc += 0;
                         UNSUPENC.with(|m| {
-                            let e = m.entry((w >> 28, (w >> 20) & 0xFF)).or_insert(0);
+                            let e = m.borrow_mut().entry((w >> 28, (w >> 20) & 0xFF)).or_insert(0);
                             *e += 1;
                         });
                         stats.note_unsupported("EncUnsupported");
