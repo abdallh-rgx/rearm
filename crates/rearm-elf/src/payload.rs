@@ -261,9 +261,8 @@ fn translate_pass(elf: &Elf32, dm: &DynMeta, farset: &[u32]) -> Result<PassResul
                     }
                     _ => {
                         stats.unsupported += 1;
-                        if std::env::var_os("REARM_DBG").is_some() {
-                            eprintln!("UNSUP A32 @{:#x}: {:?}", addr, ins);
-                        }
+                        let d = format!("{:?}", ins);
+                        stats.note_unsupported(d.split(['{', ' ']).next().unwrap_or("?"));
                         map.push((addr, (out.len() as u32) * 4));
                         out.e(TRAP);
                     }
@@ -343,9 +342,8 @@ fn translate_pass(elf: &Elf32, dm: &DynMeta, farset: &[u32]) -> Result<PassResul
                         }
                         _ => {
                             stats.unsupported += 1;
-                            if std::env::var_os("REARM_DBG").is_some() {
-                                eprintln!("UNSUP T32 @{:#x}: {:?}", addr, tins.ins);
-                            }
+                            let d = format!("{:?}", tins.ins);
+                            stats.note_unsupported(d.split(['{', ' ']).next().unwrap_or("?"));
                             map.push((addr, (out.len() as u32) * 4));
                             out.e(TRAP);
                         }
@@ -424,19 +422,25 @@ pub fn build_payload(elf: &Elf32) -> Result<Payload, String> {
     // ---- iterate passes until the far-branch set is stable ----
     let mut farset: Vec<u32> = Vec::new();
     let mut result = None;
-    for _iter in 0..6 {
+    for _iter in 0..8 {
         let t0 = std::time::Instant::now();
         let p = translate_pass(elf, &dm, &farset)?;
-        eprintln!("[rearm] pass {} done in {:.1}s: {} words, {} map entries, farset {} -> {}",
-            _iter, t0.elapsed().as_secs_f32(), p.out.len(), p.map.len(), farset.len(), compute_farset(&p).len());
         let new_far = compute_farset(&p);
-        if new_far == farset {
+        eprintln!("[rearm] pass {} done in {:.1}s: {} words, {} map entries, farset {} + new {}",
+            _iter, t0.elapsed().as_secs_f32(), p.out.len(), p.map.len(), farset.len(), new_far.len());
+        // monotone union: expansion only — converges, never oscillates
+        let mut merged = farset.clone();
+        merged.extend_from_slice(&new_far);
+        merged.sort_unstable();
+        merged.dedup();
+        if merged.len() == farset.len() {
             result = Some(p);
             break;
         }
-        farset = new_far;
+        farset = merged;
     }
     let mut p = result.unwrap_or_else(|| translate_pass(elf, &dm, &farset).unwrap());
+    p.stats.print_unsupported_histogram();
 
     // ---- resolve fixups ----
     resolve_fixups(&mut p);
