@@ -425,7 +425,10 @@ pub fn build_payload(elf: &Elf32) -> Result<Payload, String> {
     let mut farset: Vec<u32> = Vec::new();
     let mut result = None;
     for _iter in 0..6 {
+        let t0 = std::time::Instant::now();
         let p = translate_pass(elf, &dm, &farset)?;
+        eprintln!("[rearm] pass {} done in {:.1}s: {} words, {} map entries, farset {} -> {}",
+            _iter, t0.elapsed().as_secs_f32(), p.out.len(), p.map.len(), farset.len(), compute_farset(&p).len());
         let new_far = compute_farset(&p);
         if new_far == farset {
             result = Some(p);
