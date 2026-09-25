@@ -36,6 +36,20 @@ impl A64 {
     /// byte offset of the next emitted instruction
     pub fn pc(&self) -> i32 { (self.buf.len() * 4) as i32 }
 
+    /// ADRP Rd, label — imm21 is the SIGNED page delta (target_page - here_page)
+    /// in 4 KiB units. Encoding: 1 immlo(2) 10000 immhi(19) Rd.
+    pub fn adrp(&mut self, rd: XR, imm21: i32) {
+        let v = (imm21 as u32) & 0x1F_FFFF;
+        self.e(0x9000_0000 | ((v & 3) << 29) | ((v >> 2) << 5) | rd as u32);
+    }
+    /// LDR/STR register offset with UXTW option (e.g. ldrb wt, [xn, wm]):
+    /// size 111 0 00 opc 0 Rm 001 S 10 Rn Rt (option=001 UXTW, S=0).
+    pub fn ldst_reg_uxtw(&mut self, size: u8, opc: u8, rm: XR, rn: XR, rt: XR) {
+        self.e(((size as u32) << 30) | (0x38 << 24) | ((opc as u32) << 22)
+            | ((rm as u32) << 16) | (1 << 13) | (1 << 11)
+            | (rn as u32) << 5 | rt as u32);
+    }
+
     // ==================== branches ====================
     pub fn b(&mut self, off: i32) -> Result<(), EncErr> {
         if off & 3 != 0 || !(-134_217_728..=134_217_724).contains(&off) {

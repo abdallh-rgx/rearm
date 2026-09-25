@@ -33,7 +33,13 @@ fn x(r: R) -> XR { r as XR }
 
 /// Materialize the A32 PC value (instruction address + 8) into `dst`.
 fn load_pc(out: &mut A64, dst: XR, pc: u32) {
-    load_imm32(out, dst, pc.wrapping_add(8));
+    let v = pc.wrapping_add(8);
+    if crate::translate::bias::bias_on() {
+        // execution: PC reads see the shadow image (runtime 32-bit world)
+        crate::translate::bias::bias_src(out, dst, v);
+    } else {
+        load_imm32(out, dst, v);
+    }
 }
 
 /// CSET wd, cond  (== CSINC wd, wzr, wzr, ¬cond)
@@ -605,7 +611,7 @@ pub fn translate_a32(ins: &Ins, pc: u32, out: &mut A64) -> Result<bool, Translat
             let scale = match size { Size::B8 => 0u8, Size::H16 => 1, _ => 2 };
             let a_size = match size { Size::B8 => 0u8, Size::H16 => 1, Size::W32 => 2, _ => 3 };
             let _ = (index, wback);
-            let base = emit_memaddr_scaled(out, *rn, *rm, *imm, *add, scale);
+            let base = emit_memaddr_scaled(out, *rn, *rm, *imm, *add, scale, pc);
             if *store {
                 out.ldst_uimm(a_size, 0, 0, base, x(*rt));
             } else {
@@ -635,14 +641,23 @@ pub fn translate_a32(ins: &Ins, pc: u32, out: &mut A64) -> Result<bool, Translat
             let total = (4 * n) as u16;
             let (_pre, inc) = mode.pu();
             let step: u32 = 4;
+            let mut pc_in_list = false;
             if *load {
                 for (i, &r) in list.0.iter().enumerate() {
-                    if r == 15 { continue; } // PC in list: not modeled (control flow)
                     let off = (i as u32) * step;
                     let base = if off == 0 { x(*rn) } else {
                         out.add_imm(true, x(*rn), 16, off as u16);
                         16
                     };
+                    if r == 15 {
+                        // POP {pc} / LDM {pc}: load the return address and
+                        // branch to it AFTER the register writes (the value
+                        // is already an A64-world address: LR materialization,
+                        // loader-remapped relocs, thunked ADR — all world-correct).
+                        out.ldst_uimm(2, 1, 0, base, 15);
+                        pc_in_list = true;
+                        continue;
+                    }
                     out.ldst_uimm(2, 1, 0, base, x(r));
                 }
             } else {
@@ -659,11 +674,28 @@ pub fn translate_a32(ins: &Ins, pc: u32, out: &mut A64) -> Result<bool, Translat
                 if inc { out.addsub_imm(true, 0, false, total, false, x(*rn), x(*rn)); }
                 else { out.addsub_imm(true, 1, false, total, false, x(*rn), x(*rn)); }
             }
+            if pc_in_list { out.br(15); }
         }
 
         // ======== branches ========
         Ins::B { cond, off } => { out.bcond(*cond, *off)?; }
-        Ins::Bl { off } => { let _ = pc; out.bl(*off)?; }
+        Ins::Bl { off } => {
+            // A32 BL: LR = addr + 4 (the next instruction's address).
+            if crate::translate::bias::bias_on() {
+                let next = (out.len() * 4 + 4) as u32; // adrp(+add) then bl → return word
+                let lo = crate::translate::bias::shadow_off().wrapping_add(pc.wrapping_add(4));
+                let _ = next;
+                // LR fast path: the payload offset of the A64 word right after
+                // the bl — computed against the *code* layout below.
+                crate::translate::bias::bias_lr_bl(out, *off, 0)?;
+                let _ = lo;
+            } else {
+                // const/verify mode: callers of the ELF driver patch targets;
+                // Z3 models LR abstractly.
+            }
+            let _ = pc;
+            out.bl(*off)?;
+        }
         Ins::Bx { rm } => { out.br(x(*rm)); }
         Ins::BlxReg { rm } => { out.blr(x(*rm)); }
         Ins::Svc { imm: _ } => { out.svc(0); }
@@ -800,7 +832,32 @@ fn emit_memaddr(out: &mut A64, rn: R, rm: Option<R>, imm: i32) -> XR {
     16
 }
 
-fn emit_memaddr_scaled(out: &mut A64, rn: R, rm: Option<R>, imm: i32, add: bool, scale: u8) -> XR {
+fn emit_memaddr_scaled(out: &mut A64, rn: R, rm: Option<R>, imm: i32, add: bool, scale: u8, pc: u32) -> XR {
+    // PC base (A32 literal loads / PC-relative addressing): x15 reads as
+    // pc+8; in bias mode the shadow-image address is used instead.
+    if rn == 15 {
+        load_pc(out, 17, pc);
+        if let Some(rm) = rm {
+            if scale > 0 {
+                out.lsl_imm(true, x(rm), 18, scale);
+                out.addsub_ext(true, if add { 0 } else { 1 }, false, 18, 0, 0, 17, 16);
+            } else {
+                out.addsub_ext(true, if add { 0 } else { 1 }, false, x(rm), 2, 0, 17, 16);
+            }
+            return 16;
+        }
+        let v = (imm as i64) << scale;
+        if v >= 0 && v <= 4095 {
+            out.add_imm(true, 17, 16, v as u16);
+        } else if v < 0 && -v <= 4095 {
+            out.sub_imm(true, 17, 16, (-v) as u16);
+        } else {
+            load_imm64(out, 18, v.unsigned_abs());
+            if v >= 0 { out.addsub_reg(true, 0, false, 0, 0, 17, 18, 16); }
+            else { out.addsub_reg(true, 1, false, 0, 0, 17, 18, 16); }
+        }
+        return 16;
+    }
     let base = x(rn);
     if let Some(rm) = rm {
         if scale > 0 {
