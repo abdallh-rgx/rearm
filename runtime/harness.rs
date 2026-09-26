@@ -57,6 +57,16 @@ fn main() {
                 unsafe { *(bias as *mut u8).add(r.off as usize).cast::<u64>() = addr; }
                 resolved.push(name);
             }
+            257 | 258 => { // R_AARCH64_ABS64 | ABS32: symbol address + addend
+                let name = so.sym_name(r.sym as usize);
+                let addr = resolve(name);
+                if addr == 0 {
+                    eprintln!("[harness] WARNING: unresolved ABS64: {}", name);
+                    continue;
+                }
+                unsafe { *(bias as *mut u8).add(r.off as usize).cast::<u64>() = addr + r.addend as u64; }
+                resolved.push(name);
+            }
             _ => {}
         }
     }
@@ -68,6 +78,7 @@ fn main() {
         let n = len / 8;
         for i in 0..n {
             let f = unsafe { *(bias as *const u8).add(off as usize).cast::<u64>().add(i as usize) };
+            eprintln!("[harness] init[{i}] = {:#x}", f);
             if f != 0 {
                 eprintln!("[harness] running init[{:#x}] …", f);
                 unsafe { std::mem::transmute::<u64, extern "C" fn()>(f)(); }

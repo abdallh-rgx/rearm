@@ -59,7 +59,7 @@ const ARENA_BASE: u64 = 0xC000_0000;
 const ARENA_SIZE: u64 = 0x4000_0000;
 const STACK_SIZE: u64 = 1 << 20; // 1 MiB per thread
 const BRIDGE_BASE: u64 = 0xBF00_0000;
-const BRIDGE_MAX: u64 = 0x1000_0000; // 16 MiB of bridge stubs
+const BRIDGE_MAX: u64 = 0x0100_0000; // 16 MiB of bridge stubs (up to the arena)
 
 static ARENA_NEXT: AtomicU64 = AtomicU64::new(ARENA_BASE + 0x10_000);
 static BRIDGE_NEXT: AtomicU64 = AtomicU64::new(0);
@@ -240,7 +240,7 @@ fn mmap_exactly(addr: u64, len: u64, prot: i32) -> Option<u64> {
              MAP_PRIVATE | MAP_ANONYMOUS | MAP_NORESERVE | MAP_FIXED_NOREPLACE,
              -1, 0)
     };
-    if r == MAP_FAILED { None } else { Some(r as u64) }
+    if r == MAP_FAILED || r as u64 != addr { None } else { Some(r as u64) }
 }
 
 fn die(msg: &[u8]) -> ! {
