@@ -122,6 +122,11 @@ pub extern "C" fn rearm_rt_init() {
     let w = h.window as u64;
     unsafe { payload_base_slot = c; } // bridges read this during step 3
 
+    // ---- 0. reserve the low arena (stacks + guest heap) ----
+    if mmap_exactly(ARENA_BASE, ARENA_SIZE, PROT_READ | PROT_WRITE).is_none() {
+        die(b"rearm: arena mmap failed\n");
+    }
+
     // ---- 1. payload (translated code) at C ----
     let pre_shadow = h.shadow_off as u64;
     if mmap_exactly(c, pre_shadow, PROT_READ | PROT_WRITE | PROT_EXEC).is_none() {

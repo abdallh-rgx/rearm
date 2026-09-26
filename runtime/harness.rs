@@ -63,12 +63,13 @@ fn main() {
     println!("[harness] {} relocations applied ({} imports resolved)", so.relas.len(), resolved.len());
 
     // ---- .init_array ----
+    eprintln!("[harness] init_array = {:?}", so.init_array);
     if let Some((off, len)) = so.init_array {
         let n = len / 8;
         for i in 0..n {
             let f = unsafe { *(bias as *const u8).add(off as usize).cast::<u64>().add(i as usize) };
             if f != 0 {
-                println!("[harness] running init[{:#x}] …", f);
+                eprintln!("[harness] running init[{:#x}] …", f);
                 unsafe { std::mem::transmute::<u64, extern "C" fn()>(f)(); }
             }
         }
