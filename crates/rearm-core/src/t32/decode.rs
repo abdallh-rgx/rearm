@@ -237,8 +237,8 @@ fn decode_t16_misc(w: u32) -> Result<Ins, DecodeErr> {
             if bt(w, 0) { aif |= 1; } // F
             Ok(Ins::Cps { enable, aif, change_mode: false, mode: 0 })
         }
-        // 1011 x001xxxxx: CBZ (bit11=0) / CBNZ (bit11=1)
-        _ if bb(w, 10, 8) == 0b001 => {
+        // 1011 x0i1xxxxx: CBZ (bit11=0) / CBNZ (bit11=1) — bit9 = i (offset bit 5)
+        _ if (bb(w, 10, 8) & 0b101) == 0b001 => {
             let i = bb(w, 9, 9) as i32;
             let imm5 = bb(w, 7, 3) as i32;
             let rn = bb(w, 2, 0) as u8;
@@ -280,7 +280,7 @@ fn decode_t16_misc(w: u32) -> Result<Ins, DecodeErr> {
         // 1011 1110: BKPT
         _ if bb(w, 11, 8) == 0b1110 => Ok(Ins::Bkpt { imm: imm8 as u16 }),
         // 1011 1111: hints / IT
-        _ => {
+        _ if bb(w, 11, 8) == 0b1111 => {
             let first_cond = bb(w, 7, 4) as u8;
             let mask = bb(w, 3, 0) as u8;
             if mask == 0 {
@@ -297,6 +297,8 @@ fn decode_t16_misc(w: u32) -> Result<Ins, DecodeErr> {
                 Ok(Ins::It { first_cond: Cond::from_bits(first_cond), mask })
             }
         }
+        // unknown 1011-space: treat as data (the sweep stops the path)
+        _ => Err(DecodeErr(w)),
     }
 }
 
