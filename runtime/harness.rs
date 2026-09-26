@@ -182,23 +182,28 @@ extern "C" fn segv_ctx_handler(_sig: i32, _info: usize, ctx: usize) {
 extern "C" fn trap_ctx_handler(_sig: i32, _info: usize, ctx: usize) {
     // ultra-robust raw write first (no formatting/alloc) so we know we got here
     unsafe { raw_write(b"[TRAP] handler entered\n"); }
-    // aarch64 ucontext: mcontext at +0xE8: regs[0..30], sp, pc, pstate
     let uc = ctx as *const u64;
-    unsafe {
-        let x0 = *uc.add((0xE8 + 0*8) / 8);
-        let x8 = *uc.add((0xE8 + 8*8) / 8);
-        let x13 = *uc.add((0xE8 + 13*8) / 8);
-        let x14 = *uc.add((0xE8 + 14*8) / 8);
-        let x15 = *uc.add((0xE8 + 15*8) / 8);
-        let x16 = *uc.add((0xE8 + 16*8) / 8);
-        let x17 = *uc.add((0xE8 + 17*8) / 8);
-        let x28 = *uc.add((0xE8 + 28*8) / 8);
-        let sp = *uc.add((0xE8 + 31*8) / 8);
-        let pc = *uc.add((0xE8 + 32*8) / 8);
-        eprintln!("[TRAP-CTX] pc={:#x} x0={:#x} x8={:#x}", pc, x0, x8);
-        eprintln!("[TRAP-CTX] x13={:#x} x14={:#x} x15={:#x} x16={:#x} x17={:#x} x28={:#x} sp={:#x}",
-            x13, x14, x15, x16, x17, x28, sp);
+    // dump 0x00..0x1D0 of the ucontext as hex — locate the register file by eye
+    let mut buf = [0u8; 16 * 3 * 12];
+    let mut p = 0usize;
+    let b = |d: &mut [u8], o: usize, c: u8| { d[o] = c; };
+    for i in 0..58u32 {
+        let v = unsafe { *uc.add(i as usize) };
+        // write "XXXX_XXXX_XXXX_XXXX " without any formatting machinery
+        let mut sh = 60u32;
+        for _ in 0..16 {
+            let nib = ((v >> sh) as u8) & 0xF;
+            let ch = if nib < 10 { b'0' + nib } else { b'a' + nib - 10 };
+            b(&mut buf, p, ch);
+            p += 1;
+            sh = sh.saturating_sub(4);
+        }
+        b(&mut buf, p, b' ');
+        p += 1;
+        if (i & 3) == 3 { b(&mut buf, p, b'\n'); p += 1; }
     }
+    unsafe { raw_write(&buf[..p]); }
+    unsafe { raw_write(b"\n"); }
     std::process::exit(77);
 }
 
@@ -214,12 +219,43 @@ unsafe fn raw_write(b: &[u8]) {
 }
 
 
+// musl (aarch64) user-struct sigaction: handler, sa_mask(128), flags, restorer
+#[repr(C)]
+struct MSigAction {
+    handler: u64,
+    mask: [u64; 16],   // sigset_t = 128 bytes
+    flags: i32,
+    _pad: u32,
+    restorer: u64,
+}
+
+extern "C" {
+    fn sigaction(sig: i32, act: *const MSigAction, old: *mut MSigAction) -> i32;
+}
+
 fn install_segv_debug() {
-    // NOTE: the kernel/sigreturn trampoline ALWAYS passes (sig, siginfo*, ucontext*)
-    // in x0/x1/x2 — plain signal() with a 3-arg handler reads the ucontext fine
-    // (raw rt_sigaction goes through qemu's struct translation and hits EINVAL).
-    unsafe { signal(5, trap_ctx_handler as usize); } // SIGTRAP
-    unsafe { signal(11, segv_ctx_handler as usize); } // SIGSEGV
+    // qemu only passes (sig, info, ctx) when SA_SIGINFO is installed; plain
+    // signal() leaves x1/x2 garbage. musl's sigaction() does the right
+    // syscall (its internal kernel-struct conversion passes qemu cleanly).
+    unsafe {
+        let sa = Box::into_raw(Box::new(MSigAction {
+            handler: trap_ctx_handler as usize as u64,
+            mask: [0; 16],
+            flags: 0x4 | 0x10000000, // SA_SIGINFO | SA_RESTART
+            _pad: 0,
+            restorer: 0,
+        }));
+        let r = sigaction(5, &*sa, core::ptr::null_mut());
+        let sa2 = Box::into_raw(Box::new(MSigAction {
+            handler: segv_ctx_handler as usize as u64,
+            mask: [0; 16],
+            flags: 0x4 | 0x10000000,
+            _pad: 0,
+            restorer: 0,
+        }));
+        let r2 = sigaction(11, &*sa2, core::ptr::null_mut());
+        eprintln!("[harness] sigaction(SIGTRAP)={} sigaction(SIGSEGV)={}", r, r2);
+    }
 }
 
 unsafe extern "C" fn sig_restorer() {
