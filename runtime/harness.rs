@@ -217,40 +217,11 @@ unsafe fn read_ins(p: *const u32) -> u32 {
 }
 
 fn install_segv_debug() {
-    unsafe {
-        // SIGTRAP with SA_SIGINFO (ucontext in arg3)
-        let sa = Box::into_raw(Box::new(KSigAction {
-            handler: trap_ctx_handler as usize as u64,
-            flags: 0x04000004, // SA_RESTORER (aarch64) | SA_SIGINFO
-            restorer: sig_restorer as usize as u64,
-            mask: 0,
-        }));
-        let r: i64;
-        core::arch::asm!(
-            "svc #0",
-            in("x8") 134u64, in("x0") 5u64, in("x1") sa, in("x2") 0u64, in("x3") 0u64,
-            in("x4") 8u64, lateout("x0") r,
-        );
-        let _ = r;
-    }
+    // NOTE: the kernel/sigreturn trampoline ALWAYS passes (sig, siginfo*, ucontext*)
+    // in x0/x1/x2 — plain signal() with a 3-arg handler reads the ucontext fine
+    // (raw rt_sigaction goes through qemu's struct translation and hits EINVAL).
+    unsafe { signal(5, trap_ctx_handler as usize); } // SIGTRAP
     unsafe { signal(11, segv_ctx_handler as usize); } // SIGSEGV
-
-    unsafe {
-        let sa = Box::into_raw(Box::new(KSigAction {
-            handler: segv_handler as usize as u64,
-            flags: 0x04000004, // SA_RESTORER (aarch64) | SA_SIGINFO
-            restorer: sig_restorer as usize as u64,
-            mask: 0,
-        }));
-        // rt_sigaction(133, SIGSEGV=11, act, NULL, 8)
-        let r: i64;
-        core::arch::asm!(
-            "svc #0",
-            in("x8") 134u64, in("x0") 11u64, in("x1") sa, in("x2") 0u64, in("x3") 0u64,
-            in("x4") 8u64, lateout("x0") r,
-        );
-        let _ = r;
-    }
 }
 
 unsafe extern "C" fn sig_restorer() {
