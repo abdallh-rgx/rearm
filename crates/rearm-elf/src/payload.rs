@@ -724,7 +724,7 @@ pub fn build_payload(elf: &Elf32, window: u32, code_base: u32) -> Result<Payload
     bytes.extend_from_slice(&p.out.bytes());
     bytes.resize(map_off as usize, 0);
     bytes.extend_from_slice(&map_count.to_le_bytes());
-    for (src, off) in p.map.iter() {
+    for (src, off, _p) in p.map.iter() {
         bytes.extend_from_slice(&src.to_le_bytes());
         bytes.extend_from_slice(&off.to_le_bytes());
     }
@@ -771,7 +771,7 @@ pub fn build_payload(elf: &Elf32, window: u32, code_base: u32) -> Result<Payload
     for s in dm.dynsyms.iter() {
         if s.is_undef || !s.is_func || s.value == 0 { continue; }
         let want = window.wrapping_add(s.value & !1);
-        if let Ok(i) = p.map.binary_search_by_key(&want, |(x, _)| *x) {
+        if let Ok(i) = p.map.binary_search_by_key(&want, |e| e.0) {
             exports.push(PExport {
                 name: s.name.clone(),
                 payload_off: p.map[i].1,
@@ -812,7 +812,7 @@ fn compute_farset(p: &PassResult) -> Vec<u32> {
     let mut far: Vec<u32> = Vec::new();
     for f in p.fixups.iter() {
         if !matches!(f.kind, FixKind::Bcond | FixKind::Cbz | FixKind::Cbnz) { continue; }
-        let Ok(i) = p.map.binary_search_by_key(&f.target, |&(x, _)| x) else { continue };
+        let Ok(i) = p.map.binary_search_by_key(&f.target, |e| e.0) else { continue };
         let dist = (p.map[i].1 as i64) - (f.at as i64 * 4 + 4);
         if dist.abs() >= (1 << 19) - 256 {
             far.push(f.src);
@@ -828,7 +828,7 @@ fn compute_farset(p: &PassResult) -> Vec<u32> {
 fn resolve_fixups(p: &mut PassResult) {
     let fixups = std::mem::take(&mut p.fixups);
     for f in fixups.iter() {
-        let Ok(i) = p.map.binary_search_by_key(&f.target, |&(x, _)| x) else {
+        let Ok(i) = p.map.binary_search_by_key(&f.target, |e| e.0) else {
             p.stats.branches_unresolved += 1;
             if std::env::var_os("REARM_DBG").is_some() {
                 eprintln!("UNRES @{:#x} kind={:?} -> {:#x}", f.src, f.kind, f.target);
