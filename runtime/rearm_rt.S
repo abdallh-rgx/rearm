@@ -1,12 +1,30 @@
 // rearm runtime v2.1 — payload-resident thunk + adapters + return glue.
 // See payload.rs for the header layout and memory model.
+//
+// RETURN CONVENTION (v2.1.1):
+//   Guest entry (trampoline or call_guest) pushes a 256-byte frame on the
+//   REAL stack: [F+0]=x29 [F+8]=x30 [F+16..88]=x19..x28 [F+96..]=args, and
+//   stores F at [x13+16] of the fake guest frame ([x13]=glue, [x13+8]=real
+//   return address). The guest returns via bx lr / pop {..,pc} with the
+//   PC value = the glue's low address → thunk miss → br x15 → glue, which
+//   restores the caller's callee-saved state from F and pops it. This keeps
+//   AAPCS64 intact across the guest (the guest owns x0-x15,x20,x21,x28).
 
     .text
     .globl rearm_return_glue
     .type rearm_return_glue, %function
 rearm_return_glue:
-    ldr  x16, [x13, #8]
-    br   x16
+    // x13 = the guest entry-time ARM stack (balanced by the returning guest)
+    ldr  x16, [x13, #16]          // F — real-stack frame base
+    ldr  x17, [x13, #8]           // real return address (caller's x30)
+    ldp  x27, x28, [x16, #80]
+    ldp  x25, x26, [x16, #64]
+    ldp  x23, x24, [x16, #48]
+    ldp  x21, x22, [x16, #32]
+    ldp  x19, x20, [x16, #16]
+    ldp  x29, x30, [x16]
+    add  sp, x16, #256             // pop the trampoline/call_guest frame
+    br   x17
     .size rearm_return_glue, . - rearm_return_glue
 
     .globl rearm_thunk
@@ -32,7 +50,7 @@ rearm_thunk:
 .Lbs:
     cmp  x9, x10
     b.hi miss
-    add  w17, w9, w10
+    add  w17, w9, x10
     lsr  w17, w17, #1             // mid
     add  x18, x16, w17, uxtw #3
     ldr  w19, [x18]               // pair.src

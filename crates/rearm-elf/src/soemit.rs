@@ -194,11 +194,14 @@ pub fn gen_trampoline_s(soname: &str, p: &Payload) -> String {
     mov x1, x30\n\
     bl rearm_rt_enter\n\
     mov x16, x0\n\
-    add x17, x28, #128\n\
+    add x17, x28, #{glue}\n\
     str x17, [x16]\n\
     str x30, [x16, #8]\n\
+    str sp, [x16, #16]\n\
     mov x13, x16\n\
     mov x14, x17\n\
+    mov x20, xzr\n\
+    mov x21, xzr\n\
     movz w17, #{lo}\n\
     movk w17, #{hi}, lsl 16\n\
     add x17, x28, w17, uxtw\n\
@@ -210,15 +213,10 @@ pub fn gen_trampoline_s(soname: &str, p: &Payload) -> String {
     ldp d2, d3, [sp, #176]\n\
     ldp d4, d5, [sp, #192]\n\
     ldp d6, d7, [sp, #208]\n\
-    ldp x27, x28, [sp, #80]\n\
-    ldp x25, x26, [sp, #64]\n\
-    ldp x23, x24, [sp, #48]\n\
-    ldp x21, x22, [sp, #32]\n\
-    ldp x19, x20, [sp, #16]\n\
-    ldp x29, x30, [sp], #256\n\
     br x17\n\
 .size {sym}, . - {sym}\n\n",
             sym = sym, lo = off & 0xFFFF, hi = (off >> 16) & 0xFFFF,
+            glue = p.glue_off as i32,
         ));
     }
     // the payload base slot — defined HERE so trampoline references stay

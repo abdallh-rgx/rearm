@@ -129,6 +129,10 @@ struct PassResult {
     local_plt: Vec<(u32, u32)>,
     /// payload offset of rearm_plt_adapter (rt blob symbol)
     adapter_off: u32,
+    /// payload offset of rearm_return_glue
+    glue_off: u32,
+    /// payload offset of rearm_thunk
+    thunk_off: u32,
 }
 
 /// One full translation pass. `farset` = source addresses of conditional
@@ -147,7 +151,7 @@ fn translate_pass(elf: &Elf32, dm: &DynMeta, farset: &[u32], window: u32) -> Res
     // ---- header space (32 words, patched by the driver) ----
     for _ in 0..32 { out.e(0); }
 
-    // ---- runtime blob (glue @64, thunk @72, adapters) ----
+    // ---- runtime blob (glue, thunk, adapters — symbol-driven offsets) ----
     let rt_obj = Obj64::parse(include_bytes!("../../../runtime/rearm_rt.o"))
         .map_err(|e| format!("rearm_rt.o: {e}"))?;
     let rt = rt_obj.sections.iter().find(|s| s.name == ".text")
@@ -155,12 +159,16 @@ fn translate_pass(elf: &Elf32, dm: &DynMeta, farset: &[u32], window: u32) -> Res
     for w in 0..(rt.bytes.len() / 4) {
         out.e(u32::from_le_bytes([rt.bytes[w * 4], rt.bytes[w * 4 + 1], rt.bytes[w * 4 + 2], rt.bytes[w * 4 + 3]]));
     }
-    let thunk_off = 128 + 8; // glue (2 words) precedes the thunk
+    let rt_sym = |name: &str| -> Result<u32, String> {
+        rt_obj.symbols.iter()
+            .find(|s| s.name == name && s.typ == 2)
+            .map(|s| 128 + s.value as u32)
+            .ok_or_else(|| format!("rearm_rt.o: no {name} symbol"))
+    };
+    let glue_off = rt_sym("rearm_return_glue")?;
+    let thunk_off = rt_sym("rearm_thunk")?;
     bias::THUNK.store(thunk_off, std::sync::atomic::Ordering::Relaxed);
-    let adapter_off = rt_obj.symbols.iter()
-        .find(|s| s.name == "rearm_plt_adapter" && s.typ == 2)
-        .map(|s| 128 + s.value as u32)
-        .ok_or("rearm_rt.o: no rearm_plt_adapter symbol")? as i32;
+    let adapter_off = rt_sym("rearm_plt_adapter")? as i32;
 
     // ---- imports: JUMP_SLOT + CALL/JUMP24 + GOT-referenced undefined syms ----
     let mut imports: Vec<String> = Vec::new();
@@ -624,7 +632,7 @@ fn translate_pass(elf: &Elf32, dm: &DynMeta, farset: &[u32], window: u32) -> Res
     map.dedup_by_key(|e| e.0);
     fixups.sort_unstable_by_key(|f| f.target);
     stats.a64_words = out.len();
-    Ok(PassResult { out, map, fixups, stats, plt_adrp_fixups: Vec::new(), imports, local_plt, adapter_off: adapter_off as u32 })
+    Ok(PassResult { out, map, fixups, stats, plt_adrp_fixups: Vec::new(), imports, local_plt, adapter_off: adapter_off as u32, glue_off, thunk_off })
 }
 
 // register helper for Ins::Cbz (rn is a plain u8 register number)
