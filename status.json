@@ -1,9 +1,17 @@
 {
   "project": "rearm",
   "description": "A32/T32 (armeabi-v7a) \u2194 A64 (arm64) disassembler / assembler / recompiler with Z3 formal equivalence verification",
-  "updated": "2026-09-26T18:40:00Z",
-  "commits": 25,
+  "updated": "2026-09-26T20:45:00Z",
+  "commits": 26,
   "metrics": {
+    "runtime_self_contained": {
+      "outlined_atomics_helpers": 96,
+      "families": "cas/swp/ldadd/ldclr/ldeor/ldset \u00d7 {1,2,4,8} \u00d7 {relax,acq,rel,acq_rel}",
+      "impl": "runtime/atomics_rt.S \u2014 LL/SC (ARMv8.0+), compiler-rt semantics, hidden symbols",
+      "linked_into": "every emitted .so (soemit step 3a)",
+      "post_link_guard": "undefined __aarch64_* dynsyms \u2192 hard error",
+      "regression_test": "tests/soemit_atomics.rs (synthetic fixture, 31/31 green)"
+    },
     "realworld_instructions_total": 70215,
     "realworld_instructions_translated": 70215,
     "realworld_coverage_pct": 100.0,

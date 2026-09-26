@@ -280,6 +280,15 @@ pub fn build_so(
     std::fs::write(&lo, include_bytes!("../../../runtime/loader.o"))
         .map_err(|e| e.to_string())?;
 
+    // 3a. outlined-atomics runtime (embedded). loader.o's Rust atomics
+    // (fetch_add/swap/compare_exchange) are lowered by LLVM to calls into
+    // the compiler-rt __aarch64_{cas,swp,ldadd,ldclr,ldeor,ldset} family,
+    // which no Android system library exports — without these the emitted
+    // .so fails dlopen with "cannot locate symbol __aarch64_cas8_relax".
+    let ao = dir.join("atomics_rt.o");
+    std::fs::write(&ao, include_bytes!("../../../runtime/atomics_rt.o"))
+        .map_err(|e| e.to_string())?;
+
     // 3b. stub shared libs: give lld DT_NEEDED targets it can link against.
     // The real resolution happens at runtime (dlsym) / on the device.
     let stubdir = dir.join("stubs");
@@ -329,7 +338,7 @@ pub fn build_so(
     cmd.arg("--no-as-needed");
     cmd.arg("-Bsymbolic");
     cmd.arg("-z").arg("now");
-    cmd.arg(&lo).arg(&to).arg(&po);
+    cmd.arg(&lo).arg(&ao).arg(&to).arg(&po);
     for sp in stub_paths.iter() {
         cmd.arg(sp);
     }
@@ -337,5 +346,84 @@ pub fn build_so(
     if !out.status.success() {
         return Err(format!("rust-lld failed:\n{}", String::from_utf8_lossy(&out.stderr)));
     }
+
+    // 5. post-link guard: the output must not carry any unresolved
+    // outlined-atomics helper — that is the exact on-device dlopen failure
+    // class this runtime exists to prevent.
+    if let Ok(buf) = std::fs::read(out_path) {
+        if let Some(sym) = undefined_aarch64_helpers(&buf).first() {
+            return Err(format!(
+                "emitted .so still references outlined-atomics helper `{sym}` \
+                 (expected atomics_rt.o to resolve it)"));
+        }
+    }
     Ok(p)
+}
+
+/// Scan an emitted ELF64 .so's `.dynsym` for UNDEFINED symbols of the
+/// outlined-atomics family (`__aarch64_{cas,swp,ldadd,ldclr,ldeor,ldset}` —
+/// the compiler-rt helpers LLVM emits for atomics on non-LSE armv8 targets).
+/// Returns every offender's name. Also used by the integration test
+/// `tests/soemit_atomics.rs` to re-verify the final artifact.
+pub fn undefined_aarch64_helpers(buf: &[u8]) -> Vec<String> {
+    let mut bad = Vec::new();
+    if buf.len() < 64 || &buf[0..4] != b"\x7fELF" || buf[4] != 2 {
+        return bad; // not ELF64 — let other validation handle it
+    }
+    let rd16 = |o: usize| u16::from_le_bytes([buf[o], buf[o + 1]]);
+    let rd32 = |o: usize| u32::from_le_bytes([buf[o], buf[o + 1], buf[o + 2], buf[o + 3]]);
+    let rd64 = |o: usize| {
+        u64::from_le_bytes([buf[o], buf[o + 1], buf[o + 2], buf[o + 3],
+                            buf[o + 4], buf[o + 5], buf[o + 6], buf[o + 7]])
+    };
+    let shoff = rd64(0x28) as usize;
+    let shentsize = rd16(0x3a) as usize;
+    let shnum = rd16(0x3c) as usize;
+    if shoff == 0 || shentsize < 64 || shoff + shnum * shentsize > buf.len() {
+        return bad;
+    }
+    for i in 0..shnum {
+        let sh = shoff + i * shentsize;
+        if rd32(sh + 4) != 11 {
+            continue; // SHT_DYNSYM = 11
+        }
+        let entsize = rd64(sh + 0x38) as usize;
+        let size = rd64(sh + 0x20) as usize;
+        let count = if entsize == 0 { 0 } else { size / entsize };
+        let off = rd64(sh + 0x18) as usize;
+        let link = rd32(sh + 0x28) as usize; // associated strtab section index
+        if link >= shnum {
+            continue;
+        }
+        let stroff = shoff + link * shentsize;
+        let strdata = rd64(stroff + 0x18) as usize;
+        let strsize = rd64(stroff + 0x20) as usize;
+        if entsize != 24 || off + size > buf.len()
+            || strdata + strsize > buf.len() {
+            continue;
+        }
+        for j in 0..count {
+            let e = off + j * entsize;
+            if rd16(e + 6) != 0 {
+                continue; // defined
+            }
+            let nameoff = strdata + rd32(e) as usize;
+            if nameoff >= buf.len() {
+                continue;
+            }
+            let end = buf[nameoff..].iter().position(|&b| b == 0)
+                .map(|p| nameoff + p)
+                .unwrap_or(buf.len());
+            let name = String::from_utf8_lossy(&buf[nameoff..end]).into_owned();
+            if name.starts_with("__aarch64_cas")
+                || name.starts_with("__aarch64_swp")
+                || name.starts_with("__aarch64_ldadd")
+                || name.starts_with("__aarch64_ldclr")
+                || name.starts_with("__aarch64_ldeor")
+                || name.starts_with("__aarch64_ldset") {
+                bad.push(name);
+            }
+        }
+    }
+    bad
 }
