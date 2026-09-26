@@ -418,7 +418,7 @@ fn translate_pass(elf: &Elf32, dm: &DynMeta, farset: &[u32], window: u32) -> Res
                         out.bcond(c.invert(), 8).map_err(|_| "bcond".to_string())?; // skip the next word
                         let at = out.len();
                         out.e(0); // b placeholder
-                        let base = if len == 4 { t32_pc_aligned(a) } else { a.wrapping_add(4) };
+                        let base = a.wrapping_add(4);
                         fixups.push(Fixup { at, kind: FixKind::B, target: reb(base.wrapping_add(*off as u32)), src: a });
                         stats.translated += 1;
                         map.push((reb(a), (start as u32) * 4, if degraded {0} else {1}));
@@ -477,9 +477,13 @@ fn translate_pass(elf: &Elf32, dm: &DynMeta, farset: &[u32], window: u32) -> Res
                                 let target = t32_branch_target(a, len, *off);
                                 seed(&mut queue, target & !1, thumb);
                             }
-                            Ins::Bl { off } | Ins::Blx { off } => {
-                                let target = (a.wrapping_add(4) & !3u32).wrapping_add(*off as u32);
+                            Ins::Bl { off } => {
+                                let target = a.wrapping_add(4).wrapping_add(*off as u32);
                                 seed(&mut queue, target & !1, thumb);
+                            }
+                            Ins::Blx { off } => {
+                                let target = (a.wrapping_add(4) & !3u32).wrapping_add(*off as u32);
+                                seed(&mut queue, target & !1, !thumb);
                             }
                             Ins::Cbz { off, .. } => {
                                 let target = a.wrapping_add(4).wrapping_add(*off as u32);
@@ -661,24 +665,27 @@ fn branch_too_long(ins: &Ins) -> bool {
 }
 
 /// T32 branch target (source-relative), same base rules as record_branch_t32.
-fn t32_branch_target(addr: u32, len: u32, off: i32) -> u32 {
-    let base = if len == 4 { (addr.wrapping_add(4)) & !3u32 } else { addr.wrapping_add(4) };
-    base.wrapping_add(off as u32)
+fn t32_branch_target(addr: u32, _len: u32, off: i32) -> u32 {
+    // T32 B/B.W/BL: base = instr+4 UNALIGNED (only BLX aligns).
+    addr.wrapping_add(4).wrapping_add(off as u32)
 }
 
 /// Record branch fixups (T32). `reb` rebases source addresses to the window.
 fn record_branch_t32(ins: &Ins, addr: u32, len: u32, fix: &mut Vec<Fixup>, at: usize, end: usize, reb: impl Fn(u32) -> u32) {
     match ins {
         Ins::B { cond, off } => {
-            let base = if len == 4 { (addr.wrapping_add(4)) & !3u32 } else { addr.wrapping_add(4) };
             fix.push(Fixup {
                 at,
                 kind: if *cond == Cond::Al { FixKind::B } else { FixKind::Bcond },
-                target: reb(base.wrapping_add(*off as u32)),
+                target: reb(addr.wrapping_add(4).wrapping_add(*off as u32)),
                 src: addr,
             });
         }
-        Ins::Bl { off } | Ins::Blx { off } => {
+        Ins::Bl { off } => {
+            fix.push(Fixup { at: end - 1, kind: FixKind::Bl, target: reb(addr.wrapping_add(4).wrapping_add(*off as u32)), src: addr });
+        }
+        Ins::Blx { off } => {
+            // mode switch: target = Align(instr+4, 4) + off (ARM state)
             fix.push(Fixup { at: end - 1, kind: FixKind::Bl, target: reb((addr.wrapping_add(4) & !3u32).wrapping_add(*off as u32)), src: addr });
         }
         Ins::Cbz { nz, rn: _, off } => {
