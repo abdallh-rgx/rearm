@@ -174,18 +174,19 @@ extern "C" fn segv_handler(_sig: i32, info: *mut u8, ctx: *mut u8) {
 }
 
 extern "C" fn segv_ctx_handler(_sig: i32, _info: usize, ctx: usize) {
-    // qemu aarch64 rt_sigframe ucontext: mcontext (regs) at +0xC0
+    // qemu aarch64 rt_sigframe ucontext: mcontext (regs) at +0xB8
     let uc = ctx as *const u64;
     unsafe {
-        let x13 = *uc.add((0xC0 + 13*8) / 8);
-        let x15 = *uc.add((0xC0 + 15*8) / 8);
-        let x16 = *uc.add((0xC0 + 16*8) / 8);
-        let x17 = *uc.add((0xC0 + 17*8) / 8);
-        let x28 = *uc.add((0xC0 + 28*8) / 8);
-        let sp = *uc.add((0xC0 + 31*8) / 8);
-        let pc = *uc.add((0xC0 + 32*8) / 8);
-        eprintln!("[SEGV-CTX] pc={:#x} x13={:#x} x15={:#x} x16={:#x} x17={:#x} x28={:#x} sp={:#x}",
-            pc, x13, x15, x16, x17, x28, sp);
+        let x13 = *uc.add((0xB8 + 13*8) / 8);
+        let x14 = *uc.add((0xB8 + 14*8) / 8);
+        let x15 = *uc.add((0xB8 + 15*8) / 8);
+        let x16 = *uc.add((0xB8 + 16*8) / 8);
+        let x17 = *uc.add((0xB8 + 17*8) / 8);
+        let x28 = *uc.add((0xB8 + 28*8) / 8);
+        let sp = *uc.add((0xB8 + 31*8) / 8);
+        let pc = *uc.add((0xB8 + 32*8) / 8);
+        eprintln!("[SEGV-CTX] pc={:#x} x13={:#x} x14={:#x} x15={:#x} x16={:#x} x17={:#x} x28={:#x} sp={:#x}",
+            pc, x13, x14, x15, x16, x17, x28, sp);
     }
     std::process::exit(66);
 }
