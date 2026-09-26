@@ -18,21 +18,29 @@ fn main() {
     let so = So::parse(&data);
     println!("[harness] {} loaded: {} segments, {} dynsyms", args[1], so.segs.len(), so.syms.len());
 
-    // ---- map segments ----
+    // ---- map segments (page-align vaddr/offset like a real loader) ----
     let bias = 0x7000_0000_0000u64;
     for s in so.segs.iter() {
-        let addr = bias + s.vaddr;
-        let len = (s.memsz + 0xFFF) & !0xFFF;
+        let lo = s.vaddr & !0xFFF;
+        let hi = (s.vaddr + s.memsz + 0xFFF) & !0xFFF;
+        let addr = bias + lo;
+        let len = hi - lo;
         let r = sys_mmap(addr, len, 7, 0x8022, -1, 0); // RWX PRIVATE ANON FIXED
         if r != addr { panic!("mmap seg @ {:#x} failed ({:#x})", addr, r); }
         unsafe {
-            std::ptr::copy_nonoverlapping(data.as_ptr().add(s.off as usize), addr as *mut u8, s.filesz as usize);
-            std::ptr::write_bytes((addr + s.filesz) as *mut u8, 0, (s.memsz - s.filesz) as usize);
+            std::ptr::copy_nonoverlapping(data.as_ptr().add(s.off as usize), (bias + s.vaddr) as *mut u8, s.filesz as usize);
+            std::ptr::write_bytes((bias + s.vaddr + s.filesz) as *mut u8, 0, (s.memsz - s.filesz) as usize);
         }
     }
 
     // ---- dynamic relocations ----
     let mut resolved: Vec<&str> = Vec::new();
+    let resolve = |name: &str| -> u64 {
+        // 1. symbols defined in this .so (preemptible-global self references)
+        if let Some(v) = so.find_sym(name) { return bias + v; }
+        // 2. harness-provided
+        resolve_foreign(name) as u64
+    };
     for r in so.relas.iter() {
         match r.typ {
             1027 => { // R_AARCH64_RELATIVE
@@ -40,7 +48,7 @@ fn main() {
             }
             1025 | 1026 => { // GLOB_DAT | JUMP_SLOT
                 let name = so.sym_name(r.sym as usize);
-                let addr = resolve_foreign(name) as u64;
+                let addr = resolve(name);
                 if addr == 0 {
                     if name.starts_with("_rearm_stub") { continue; }
                     eprintln!("[harness] WARNING: unresolved import: {}", name);
@@ -172,6 +180,9 @@ impl<'a> So<'a> {
                 let tag = rd64(p);
                 let val = rd64(p + 8);
                 if tag == 0 { break; }
+                if std::env::var_os("HARNESS_DBG").is_some() {
+                    eprintln!("[dbg] DT {} = {:#x}", tag, val);
+                }
                 if tag == 25 { init_array = Some((val, 0)); }
                 if tag == 27 { if let Some(x) = init_array.as_mut() { x.1 = val; } }
                 p += 16;
@@ -200,10 +211,11 @@ impl<'a> So<'a> {
 
 // ============================ foreign resolution ============================
 
-unsafe extern "C" {
+extern "C" {
     fn mmap(addr: u64, len: u64, prot: i32, flags: i32, fd: i32, off: u64) -> i64;
 }
 
+#[allow(improper_ctypes_definitions)]
 extern "C" {
     fn memcpy(d: *mut u8, s: *const u8, n: u64) -> *mut u8;
     fn memset(d: *mut u8, c: i32, n: u64) -> *mut u8;
@@ -288,6 +300,15 @@ extern "C" fn fake_mprotect(_a: u64, _l: u64, _p: i32) -> i32 { 0 }
 extern "C" fn fake_munmap(_a: u64, _l: u64) -> i32 { 0 }
 extern "C" fn fake_log(_prio: i32, _tag: *const u8, _fmt: *const u8) -> i32 { 0 }
 
+#[allow(improper_ctypes_definitions)]
+extern "C" {
+    fn __aarch64_cas8_relax(a: u64, b: *mut u8, c: *mut u8) -> *mut u8;
+    fn __aarch64_swp4_acq_rel(a: u32, b: *mut u8) -> u32;
+    fn __aarch64_swp4_relax(a: u32, b: *mut u8) -> u32;
+    fn __aarch64_ldadd8_relax(a: u8, b: *mut u8) -> u8;
+    fn __aarch64_ldadd4_relax(a: u32, b: *mut u8) -> u32;
+}
+
 fn resolve_foreign(name: &str) -> *mut u8 {
     match name {
         "mmap" => mmap as *mut u8,
@@ -295,6 +316,15 @@ fn resolve_foreign(name: &str) -> *mut u8 {
         "pthread_key_create" => fake_pthread_key_create as *mut u8,
         "pthread_getspecific" => fake_pthread_getspecific as *mut u8,
         "pthread_setspecific" => fake_pthread_setspecific as *mut u8,
+        "memcpy" | "__memcpy_chk" | "__memcpy" => memcpy as *mut u8,
+        "memset" | "__memset" | "__memset_chk" => memset as *mut u8,
+        "strlen" | "__strlen" => strlen as *mut u8,
+        "strcmp" | "__strcmp" => strcmp as *mut u8,
+        "__aarch64_cas8_relax" => __aarch64_cas8_relax as *mut u8,
+        "__aarch64_swp4_acq_rel" => __aarch64_swp4_acq_rel as *mut u8,
+        "__aarch64_swp4_relax" => __aarch64_swp4_relax as *mut u8,
+        "__aarch64_ldadd8_relax" => __aarch64_ldadd8_relax as *mut u8,
+        "__aarch64_ldadd4_relax" => __aarch64_ldadd4_relax as *mut u8,
         _ => {
             eprintln!("[harness] resolve_foreign: MISS {}", name);
             std::ptr::null_mut()
