@@ -875,6 +875,11 @@ fn resolve_fixups(p: &mut PassResult) {
             p.stats.branches_unresolved += 1;
             continue;
         }
+        if off_bytes.abs() <= 8 && std::env::var_os("REARM_DBG3").is_some() {
+            eprintln!("[dbg3] SHORT-BRANCH kind={:?} src={:#x} target={:#x} dst={:#x} at={} entries_for_target={}",
+                f.kind, f.src, f.target, dst, f.at,
+                p.map.iter().filter(|e| e.0 == f.target).count());
+        }
         let new = match f.kind {
             FixKind::B => 0b000101 << 26 | (((off_bytes >> 2) as u32) & 0x03FF_FFFF),
             FixKind::Bl => 0b100101 << 26 | (((off_bytes >> 2) as u32) & 0x03FF_FFFF),
