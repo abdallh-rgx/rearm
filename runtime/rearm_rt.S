@@ -25,6 +25,13 @@
 //   56: u32 glue_off      (= offset of rearm_return_glue)
 //   60: u32 window        (guest-image window base W, absolute low)
 
+    .globl rearm_return_glue
+    .type rearm_return_glue, %function
+rearm_return_glue:
+    ldr  x16, [x13, #8]
+    br   x16
+    .size rearm_return_glue, . - rearm_return_glue
+
     .text
     .globl rearm_thunk
     .type rearm_thunk, %function
@@ -71,22 +78,6 @@ rearm_thunk:
     b    rearm_foreign_adapter
     .size rearm_thunk, . - rearm_thunk
 
-// ==================== return glue ====================
-// Trampolines install this as the guest LR (x14) and place the original
-// A64 return address at [x13+8]. Guest functions return through it with a
-// balanced ARM stack (x13 back at the fake frame).
-    .globl rearm_return_glue
-    .type rearm_return_glue, %function
-rearm_return_glue:
-    ldr  x16, [x13, #8]
-    br   x16
-    .size rearm_return_glue, . - rearm_return_glue
-
-// ==================== PLT / foreign adapter ====================
-// Entry A (PLT stub):  w15 = import index; return to x30.
-// Entry B (thunk):      x16 = foreign target, w15 = 1; return to x14.
-// Saves every ARM-live register, marshals stack args 5-8 (ARM [x13]) into
-// x4-x7 (A64 arg regs), calls the target, restores, splits 64-bit returns.
     .globl rearm_plt_adapter
     .type rearm_plt_adapter, %function
 rearm_plt_adapter:
