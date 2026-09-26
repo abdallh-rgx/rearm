@@ -97,7 +97,8 @@ pub fn emit_payload_obj(p: &Payload) -> Vec<u8> {
     buf.extend_from_slice(&0u64.to_le_bytes());     // shoff (patch)
     buf.extend_from_slice(&0u32.to_le_bytes());     // flags
     buf.extend_from_slice(&64u16.to_le_bytes());    // ehsize
-    buf.extend_from_slice(&0u16.to_le_bytes());     // phentsize/phnum
+    buf.extend_from_slice(&0u16.to_le_bytes());     // phentsize
+    buf.extend_from_slice(&0u16.to_le_bytes());     // phnum
     buf.extend_from_slice(&64u16.to_le_bytes());    // shentsize
     buf.extend_from_slice(&5u16.to_le_bytes());     // shnum
     buf.extend_from_slice(&4u16.to_le_bytes());     // shstrndx
@@ -105,6 +106,7 @@ pub fn emit_payload_obj(p: &Payload) -> Vec<u8> {
 
     let rodata_off = buf.len();
     buf.extend_from_slice(data);
+    while buf.len() % 8 != 0 { buf.push(0); }
     let sym_off = buf.len();
     // null symbol + payload_blob
     let mut sym: Vec<u8> = vec![0u8; 24];
@@ -114,6 +116,7 @@ pub fn emit_payload_obj(p: &Payload) -> Vec<u8> {
     sym[20] = 0x11; // STB_GLOBAL | STT_OBJECT
     sym[21] = 1;    // shndx = .rodata
     buf.extend_from_slice(&sym);
+    while buf.len() % 8 != 0 { buf.push(0); }
     let str_off = buf.len();
     buf.extend_from_slice(&strtab);
     let shstr_off = buf.len();
@@ -134,7 +137,19 @@ pub fn emit_payload_obj(p: &Payload) -> Vec<u8> {
     };
     buf.extend_from_slice(&[0u8; 64]); // null section
     push_sh(&mut buf, n_rodata as u32, 1, rodata_off as u64, data.len() as u64, 0, 0);
-    push_sh(&mut buf, n_symtab as u32, 2, sym_off as u64, 48, 3, 24);
+    // symtab: sh_link = strtab (3), sh_info = first non-local symbol (1)
+    let mut sh: Vec<u8> = Vec::with_capacity(64);
+    sh.extend_from_slice(&(n_symtab as u32).to_le_bytes());
+    sh.extend_from_slice(&2u32.to_le_bytes());
+    sh.extend_from_slice(&0u64.to_le_bytes());
+    sh.extend_from_slice(&0u64.to_le_bytes());
+    sh.extend_from_slice(&(sym_off as u64).to_le_bytes());
+    sh.extend_from_slice(&48u64.to_le_bytes());
+    sh.extend_from_slice(&3u32.to_le_bytes());
+    sh.extend_from_slice(&1u32.to_le_bytes());
+    sh.extend_from_slice(&8u64.to_le_bytes());
+    sh.extend_from_slice(&24u64.to_le_bytes());
+    buf.extend_from_slice(&sh);
     push_sh(&mut buf, n_strtab as u32, 3, str_off as u64, strtab.len() as u64, 0, 0);
     push_sh(&mut buf, n_shstrtab as u32, 3, shstr_off as u64, shstrtab.len() as u64, 0, 0);
     buf[shoff_pos..shoff_pos + 8].copy_from_slice(&shoff.to_le_bytes());
@@ -244,17 +259,58 @@ pub fn build_so(
     std::fs::write(&lo, include_bytes!("../../../runtime/loader.o"))
         .map_err(|e| e.to_string())?;
 
+    // 3b. stub shared libs: give lld DT_NEEDED targets it can link against.
+    // The real resolution happens at runtime (dlsym) / on the device.
+    let stubdir = dir.join("stubs");
+    std::fs::create_dir_all(&stubdir).map_err(|e| e.to_string())?;
+    let mut stub_names: Vec<String> = p.needed.clone();
+    if !stub_names.iter().any(|n| n == "libc.so") {
+        stub_names.push("libc.so".into());
+    }
+    let mut stub_paths = Vec::new();
+    for n in stub_names.iter() {
+        let sp = stubdir.join(n);
+        if !sp.exists() {
+            let mut asm = format!(".globl _rearm_stub\n_rearm_stub:\nret\n");
+            if n == "libc.so" {
+                // loader.o's undefined symbols live in libc
+                for sym in ["mmap", "dlsym", "pthread_key_create",
+                            "pthread_getspecific", "pthread_setspecific"] {
+                    asm.push_str(&format!(".globl {sym}\n{sym}:\nret\n"));
+                }
+            }
+            let so = stubdir.join(format!("{}.S", n));
+            std::fs::write(&so, asm).map_err(|e| e.to_string())?;
+            let obj = stubdir.join(format!("{}.o", n));
+            let out = Command::new(&tools.llvm_mc)
+                .args(["--triple=aarch64-linux-gnu", "--filetype=obj", "-o"])
+                .arg(&obj).arg(&so).output()
+                .map_err(|e| format!("llvm-mc spawn: {e}"))?;
+            if !out.status.success() {
+                return Err(format!("llvm-mc stub: {}", String::from_utf8_lossy(&out.stderr)));
+            }
+            let out = Command::new(&tools.ld_lld)
+                .args(["-flavor", "gnu", "-shared", "--soname", n, "-o"]).arg(&sp).arg(&obj)
+                .output().map_err(|e| format!("rust-lld stub spawn: {e}"))?;
+            if !out.status.success() {
+                return Err(format!("rust-lld stub: {}", String::from_utf8_lossy(&out.stderr)));
+            }
+        }
+        stub_paths.push(sp);
+    }
+
     // 4. link
     let mut cmd = Command::new(&tools.ld_lld);
     cmd.args(["-flavor", "gnu", "-shared", "-o", out_path]);
     if !p.soname.is_empty() {
         cmd.arg(format!("--soname={}", p.soname));
     }
-    for n in p.needed.iter() {
-        cmd.arg(format!("-needed={n}"));
-    }
+    cmd.arg("--no-as-needed");
     cmd.arg("-z").arg("now");
     cmd.arg(&lo).arg(&to).arg(&po);
+    for sp in stub_paths.iter() {
+        cmd.arg(sp);
+    }
     let out = cmd.output().map_err(|e| format!("rust-lld spawn: {e}"))?;
     if !out.status.success() {
         return Err(format!("rust-lld failed:\n{}", String::from_utf8_lossy(&out.stderr)));
