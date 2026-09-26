@@ -17,15 +17,16 @@ use std::sync::atomic::{AtomicBool, AtomicU32, Ordering};
 
 /// `BIAS` — payload (execution) mode switch. `false` = const/verify mode.
 pub static BIAS: AtomicBool = AtomicBool::new(false);
-/// Payload offset of the shadow-image base (source vaddr 0), in bytes.
-pub static SHADOW: AtomicU32 = AtomicU32::new(0);
+/// Guest-image window base W (absolute low-32 address where the source
+/// image is mapped at runtime). All guest-space values are W + relative.
+pub static W: AtomicU32 = AtomicU32::new(0);
 /// Payload offset of the runtime code-map thunk entry, in bytes.
 pub static THUNK: AtomicU32 = AtomicU32::new(0);
 
 #[inline]
 pub fn bias_on() -> bool { BIAS.load(Ordering::Relaxed) }
 #[inline]
-pub fn shadow_off() -> u32 { SHADOW.load(Ordering::Relaxed) }
+pub fn window() -> u32 { W.load(Ordering::Relaxed) }
 #[inline]
 pub fn thunk_off() -> u32 { THUNK.load(Ordering::Relaxed) }
 
@@ -44,15 +45,23 @@ pub fn bias_addr(out: &mut A64, dst: XR, payload_off: u32) {
     }
 }
 
-/// `Xd = base + SHADOW_OFF + src_vaddr` — address of a source-space location
-/// (literal pools, jump tables, PC reads) inside the shadow image.
+/// `Xd = W + src_vaddr` — address of a source-space location (literal pools,
+/// jump tables, PC reads) as an absolute low-world constant. The guest
+/// image lives below 4 GB at a build-time window, so this is a plain
+/// `movz/movk` — no base register, no adrp range limits, position-free.
 pub fn bias_src(out: &mut A64, dst: XR, src: u32) {
-    bias_addr(out, dst, shadow_off().wrapping_add(src));
+    let v = window().wrapping_add(src);
+    if v < 0x10000 {
+        out.movz(true, 0, v as u16, dst);
+    } else {
+        out.movz(true, 0, (v >> 16) as u16, dst);
+        out.movk(true, 1, (v & 0xFFFF) as u16, dst);
+    }
 }
 
-/// `LDR Wrt, [base + SHADOW_OFF + src]` — load a (possibly relocated) word
-/// from the shadow image, e.g. a literal-pool entry. In const mode falls back
-/// to nothing (the caller folds the constant instead).
+/// `LDR Wrt, [W + src]` — load a (possibly relocated) word from the guest
+/// image, e.g. a literal-pool entry. In const mode falls back to nothing
+/// (the caller folds the constant instead).
 #[inline]
 pub fn bias_ldr_word(out: &mut A64, rt: XR, src: u32) {
     bias_src(out, 16, src);

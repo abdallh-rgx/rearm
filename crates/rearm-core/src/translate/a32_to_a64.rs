@@ -710,7 +710,15 @@ pub fn translate_a32(ins: &Ins, pc: u32, out: &mut A64) -> Result<bool, Translat
                 if inc { out.addsub_imm(true, 0, false, total, false, x(*rn), x(*rn)); }
                 else { out.addsub_imm(true, 1, false, total, false, x(*rn), x(*rn)); }
             }
-            if pc_in_list { out.br(15); }
+            if pc_in_list {
+                if crate::translate::bias::bias_on() {
+                    // The popped value may be a pushed LR (payload addr), a
+                    // bridge stub, or a guest-space function pointer — the
+                    // thunk maps all of them (misses pass through).
+                    crate::translate::bias::emit_thunk_call(out);
+                }
+                out.br(15);
+            }
         }
 
         // ======== branches ========
@@ -732,7 +740,23 @@ pub fn translate_a32(ins: &Ins, pc: u32, out: &mut A64) -> Result<bool, Translat
             let _ = pc;
             out.bl(branch_off_or_zero(*off))?;
         }
-        Ins::Bx { rm } => { out.br(x(*rm)); }
+        Ins::Bx { rm } => {
+            if crate::translate::bias::bias_on() {
+                // LR is always a payload/bridge address (BL materialization,
+                // trampoline glue) — branch directly. Any other register
+                // holds a guest-space or foreign target: map it through the
+                // runtime thunk first (foreign targets get the adapter).
+                if *rm == 14 {
+                    out.br(x(*rm));
+                } else {
+                    out.orrimm_mov(*rm, 15);
+                    crate::translate::bias::emit_thunk_call(out);
+                    out.br(15);
+                }
+            } else {
+                out.br(x(*rm));
+            }
+        }
         Ins::BlxReg { rm } => {
             // A32 BLX (reg): LR = addr + 4 (no thumb bit from ARM state).
             // Const/verify mode keeps the v1 contract (reference models LR
@@ -745,8 +769,12 @@ pub fn translate_a32(ins: &Ins, pc: u32, out: &mut A64) -> Result<bool, Translat
                 } else {
                     crate::translate::bias::bias_addr(out, 14, t2);
                 }
+                out.orrimm_mov(*rm, 15);
+                crate::translate::bias::emit_thunk_call(out);
+                out.br(15);
+            } else {
+                out.blr(x(*rm));
             }
-            out.blr(x(*rm));
         }
         Ins::Svc { imm: _ } => { out.svc(0); }
         Ins::Bkpt { imm } => { out.e(0xD420_0000 | (((*imm as u32) & 0xFFFF) << 5)); }
