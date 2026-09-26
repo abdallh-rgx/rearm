@@ -664,7 +664,11 @@ pub fn translate_a32(ins: &Ins, pc: u32, out: &mut A64) -> Result<bool, Translat
                 LdmMode::Db => -(4 * n as i32),
             };
             let start_base: XR = if start_delta == 0 {
-                x(*rn)
+                // snapshot Rn into x16 FIRST — the per-slot addresses below
+                // must use the ORIGINAL base even when Rn is in the list
+                // (and even when later loads overwrite it).
+                out.add_imm(true, x(*rn), 16, 0); // mov x16, x(rn)
+                16
             } else if start_delta > 0 && start_delta <= 4095 {
                 out.add_imm(true, x(*rn), 16, start_delta as u16);
                 16
@@ -681,9 +685,11 @@ pub fn translate_a32(ins: &Ins, pc: u32, out: &mut A64) -> Result<bool, Translat
             if *load {
                 for (i, &r) in list.0.iter().enumerate() {
                     let off = (i as u32) * step;
+                    // x17 = x16 + off  (ABSOLUTE from the snapshotted base —
+                    // x16 stays intact so offsets never accumulate)
                     let base = if off == 0 { start_base } else {
-                        out.add_imm(true, start_base, 16, off as u16);
-                        16
+                        out.add_imm(true, start_base, 17, off as u16);
+                        17
                     };
                     if r == 15 {
                         // POP {pc} / LDM {pc}: load the return address and
@@ -700,8 +706,8 @@ pub fn translate_a32(ins: &Ins, pc: u32, out: &mut A64) -> Result<bool, Translat
                 for (i, &r) in list.0.iter().enumerate() {
                     let off = (i as u32) * step;
                     let base = if off == 0 { start_base } else {
-                        out.add_imm(true, start_base, 16, off as u16);
-                        16
+                        out.add_imm(true, start_base, 17, off as u16);
+                        17
                     };
                     out.ldst_uimm(2, 0, 0, base, x(r));
                 }
