@@ -40,11 +40,13 @@ rearm_return_glue:
 // Preserves everything except x15 and the x16..x19 scratches.
 rearm_thunk:
     // invariant: x28 must point at the payload header ("REAR" + count)
+    movz w19, #0x4152
+    movk w19, #0x5241, lsl 16
     ldr  w17, [x28]
-    cmp  w17, #0x52414552
-    b.ne 199f
+    cmp  w17, w19
+    b.ne .Lbadhdr
     ldr  w17, [x28, #12]
-    cbz  w17, 199f
+    cbz  w17, .Lbadhdr
     lsr  x17, x15, #32
     cbnz x17, .Lforeign           // foreign A64 address: calling adapter
     stp  x9, x10, [sp, #-16]!
@@ -128,3 +130,5 @@ rearm_foreign_adapter:
     br   x14                       // foreign: return to the ARM LR
 1:  ret                            // PLT: return to the translated caller
     .size rearm_plt_adapter, . - rearm_plt_adapter
+.Lbadhdr:
+    brk  #0xBEEF
