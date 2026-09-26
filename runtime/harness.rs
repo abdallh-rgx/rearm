@@ -14,6 +14,7 @@ fn main() {
         std::process::exit(2);
     }
     let data = fs::read(&args[1]).expect("read .so");
+    install_segv_debug();
 
     let so = So::parse(&data);
     println!("[harness] {} loaded: {} segments, {} dynsyms", args[1], so.segs.len(), so.syms.len());
@@ -104,6 +105,55 @@ fn main() {
         std::process::exit(0);
     }
     std::process::exit(1);
+}
+
+
+// ============================ SIGSEGV PC debug ============================
+
+#[repr(C)]
+struct KSigAction {
+    handler: u64,
+    flags: u64,
+    restorer: u64,
+    mask: u64,
+}
+
+extern "C" fn segv_handler(_sig: i32, info: *mut u8, ctx: *mut u8) {
+    let fault = unsafe { *(ctx as *const u64).add(0x28 / 8) };      // uc_mcontext.fault_address? (regs start 0xE8)
+    let pc = unsafe { *(ctx as *const u64).add(0x110 / 8) };        // uc_mcontext.pc
+    let sp = unsafe { *(ctx as *const u64).add(0x108 / 8) };
+    let fault2 = unsafe { *(info as *const u64).add(2) };           // siginfo.si_addr
+    eprintln!("[SIGSEGV] pc={:#x} fault={:#x} si_addr={:#x} sp={:#x}", pc, fault, fault2, sp);
+    std::process::exit(9);
+}
+
+fn install_segv_debug() {
+    unsafe {
+        let sa = Box::into_raw(Box::new(KSigAction {
+            handler: segv_handler as usize as u64,
+            flags: 0x10000004, // SA_RESTORER | SA_SIGINFO
+            restorer: sig_restorer as usize as u64,
+            mask: 0,
+        }));
+        // rt_sigaction(133, SIGSEGV=11, act, NULL, 8)
+        let r: i64;
+        core::arch::asm!(
+            "svc #0",
+            in("x8") 134u64, in("x0") 11u64, in("x1") sa, in("x2") 0u64, in("x3") 0u64,
+            in("x4") 8u64, lateout("x0") r,
+        );
+        let _ = r;
+    }
+}
+
+unsafe extern "C" fn sig_restorer() {
+    unsafe {
+        core::arch::asm!(
+            "mov x8, #139",
+            "svc #0",
+            options(noreturn)
+        );
+    }
 }
 
 // ============================ ELF .so parsing ============================
