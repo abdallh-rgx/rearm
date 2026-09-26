@@ -187,6 +187,15 @@ extern "C" fn segv_ctx_handler(_sig: i32, _info: usize, ctx: usize) {
         let pc = *uc.add((0xB8 + 32*8) / 8);
         eprintln!("[SEGV-CTX] pc={:#x} x13={:#x} x14={:#x} x15={:#x} x16={:#x} x17={:#x} x28={:#x} sp={:#x}",
             pc, x13, x14, x15, x16, x17, x28, sp);
+        // dump the guest stack frame area [x13-0x30, x13+0x20]
+        let mut line = String::new();
+        for i in 0..20u32 {
+            let addr = x13 - 0x30 + (i as u64) * 4;
+            let v = std::ptr::read_volatile(addr as *const u32);
+            line.push_str(&format!(" {:09x}={:08x}", addr, v));
+            if i % 5 == 4 { eprintln!("[stack]{}", line); line.clear(); }
+        }
+        if !line.is_empty() { eprintln!("[stack]{}", line); }
     }
     std::process::exit(66);
 }
