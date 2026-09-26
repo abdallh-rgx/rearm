@@ -457,7 +457,7 @@ fn translate_pass(elf: &Elf32, dm: &DynMeta, farset: &[u32], window: u32) -> Res
                 match translate_t32(&tins.ins, a, &mut out, cond) {
                     Ok(true) => {
                         stats.translated += 1;
-                        let at = if it.is_some() { start + 1 } else { start };
+                        let at = if cond.is_some() { start + 1 } else { start };
                         record_branch_t32(&tins.ins, a, len, &mut fixups, at, out.len(), reb);
                         // seed branch targets so taken paths get translated
                         match &tins.ins {
