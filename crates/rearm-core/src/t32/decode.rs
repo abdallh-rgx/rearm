@@ -710,11 +710,12 @@ fn decode_f8(w: u32) -> Result<Ins, DecodeErr> {
     if rt == 15 && load {
         return decode_pl(w);
     }
-    // LDR literal: Rn=15 + word + unsigned → imm12 ×4 (BYTES; sign from U).
+    // LDR literal: Rn=15 + word + unsigned → imm12 is a RAW byte offset
+    // (multiple of 4 — NOT size-scaled; only the register-offset form scales).
     if rn == 15 && size == Size::W32 && !signed {
         let imm12 = bb(hw2, 11, 0) as i32;
         let imm = if u { imm12 } else { -imm12 };
-        return Ok(ld(false, Size::W32, false, rt, 15, imm * 4));
+        return Ok(ld(false, Size::W32, false, rt, 15, imm));
     }
     let scale = match size { Size::B8 => 0i32, Size::H16 => 1, _ => 2 };
     if u {
