@@ -194,10 +194,10 @@ pub fn gen_trampoline_s(soname: &str, p: &Payload) -> String {
     mov x1, x30\n\
     bl rearm_rt_enter\n\
     mov x16, x0\n\
-    add x17, x28, #{glue}\n\
-    str x17, [x16]\n\
-    ldr x17, [sp, #8]\n\
-    str x17, [x16, #8]\n\
+    str x4, [x16]\n\
+    str x5, [x16, #4]\n\
+    str x6, [x16, #8]\n\
+    str x7, [x16, #0xc]\n\
     mov x15, sp\n\
     str x15, [x16, #16]\n\
     mov x13, x16\n\

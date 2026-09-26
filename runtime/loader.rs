@@ -342,10 +342,9 @@ pub extern "C" fn rearm_rt_enter(x13_in: u64, _x30: u64) -> u64 {
 /// thunk). Used for DT_INIT / INIT_ARRAY.
 ///
 /// Frame protocol (must mirror rearm_return_glue + the trampolines):
-///   [x13]   = glue (low address — thunk miss → br x15 lands here)
-///   [x13+8] = real return address ("2:"), restored by the glue
-///   [x13+16]= REAL-stack frame base F (256 B callee-save frame, popped by
-///              the glue: [F]=x29 [F+8]=x30 [F+16..88]=x19..x28)
+///   [x13+0..0xC]  = stack args 5-8 (none for init calls — zeroed)
+///   [x13+0x10]    = REAL-stack frame base F (256 B callee-save frame,
+///                   popped by the glue; [F+8] = the return address)
 /// The guest's LR (x14) = glue so bx-lr / pop {..,pc} returns via the glue.
 fn call_guest(guest_addr: u64, c: u64, h: &Hdr) {
     unsafe {
@@ -359,15 +358,17 @@ fn call_guest(guest_addr: u64, c: u64, h: &Hdr) {
             "stp x23, x24, [sp, #48]",
             "stp x25, x26, [sp, #64]",
             "stp x27, x28, [sp, #80]",
+            "adr x17, 2f",
+            "str x17, [sp, #8]",           // [F+8] = return to "2:"
             "mov x28, {c}",
             "mov x13, {sp}",
-            "mov x15, {ga}",
-            "mov x17, {glue}",
-            "str x17, [x13]",
-            "adr x17, 2f",
-            "str x17, [x13, #8]",
+            "str xzr, [x13]",
+            "str xzr, [x13, #4]",
+            "str xzr, [x13, #8]",
+            "str xzr, [x13, #12]",
             "mov x17, sp",
-            "str x17, [x13, #16]",
+            "str x17, [x13, #16]",         // [x13+0x10] = F
+            "mov x15, {ga}",
             "mov x14, {glue}",
             "blr {thunk}",
             "br x15",
