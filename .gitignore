@@ -7,3 +7,7 @@ test-data/turnstile-loop.log
 test-data/loop.pid
 
 *.deb
+# large binary artifacts (GitHub 100MB limit)
+out/
+pubg-apk/
+pubg-apk/convert-logs/*.log

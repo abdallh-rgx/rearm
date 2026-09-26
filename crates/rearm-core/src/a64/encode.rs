@@ -478,6 +478,54 @@ impl A64 {
     pub fn mrs_nzcv(&mut self, rt: XR) { self.e(0xD53B_4200 | rt as u32); }
     /// MSR NZCV, Xt — LLVM-verified: msr nzcv,x16 = 0xd51b4210. Rt at bits(4:0).
     pub fn msr_nzcv(&mut self, rt: XR) { self.e(0xD51B_4200 | rt as u32); }
+    /// MRS Xt, FPSR — LLVM-verified: mrs x0, fpsr = 0xd53b4420.
+    pub fn mrs_fpsr(&mut self, rt: XR) { self.e(0xD53B_4400 | 0x20 | rt as u32); }
+    /// MSR FPSR, Xt — LLVM-verified: msr fpsr, x0 = 0xd51b4420.
+    pub fn msr_fpsr(&mut self, rt: XR) { self.e(0xD51B_4400 | 0x20 | rt as u32); }
+    /// MRS Xt, FPCR — LLVM-verified: mrs x0, fpcr = 0xd53b4400.
+    pub fn mrs_fpcr(&mut self, rt: XR) { self.e(0xD53B_4400 | rt as u32); }
+    /// MSR FPCR, Xt — LLVM-verified: msr fpcr, x0 = 0xd51b4400.
+    pub fn msr_fpcr(&mut self, rt: XR) { self.e(0xD51B_4400 | rt as u32); }
+
+    // ==================== FP conversions (LLVM-verified) ====================
+    /// FCVT Sd, Dn — fcvt s0, d1 = 0x1e624020.
+    pub fn fcvt_s_from_d(&mut self, rn: XR, rd: XR) {
+        self.e(0x1E624000 | ((rn as u32) << 5) | rd as u32);
+    }
+    /// FCVT Dd, Sn — fcvt d0, s1 = 0x1e22c020.
+    pub fn fcvt_d_from_s(&mut self, rn: XR, rd: XR) {
+        self.e(0x1E22C000 | ((rn as u32) << 5) | rd as u32);
+    }
+    /// FRINTI Sd, Sn (round per FPCR rounding mode) — frinti s0, s1 = 0x1e27c020.
+    pub fn frinti_s(&mut self, rn: XR, rd: XR) {
+        self.e(0x1E27C000 | ((rn as u32) << 5) | rd as u32);
+    }
+    /// FRINTI Dd, Dn — frinti d0, d1 = 0x1e67c020.
+    pub fn frinti_d(&mut self, rn: XR, rd: XR) {
+        self.e(0x1E67C000 | ((rn as u32) << 5) | rd as u32);
+    }
+
+    // ==================== fixed-point conversions (LLVM-verified) ====================
+    // scvtf s0,w0,#4 = 0x1e02f000; scvtf d0,x0,#16 = 0x9e42c000;
+    // ucvtf s0,w0,#4 = 0x1e03f000; fcvtzs w0,s0,#2 = 0x1e18f800;
+    // fcvtzu w0,s0,#2 = 0x1e19f800; fcvtzs x0,d0,#8 = 0x9e58e000.
+    // scale = 64 - fbits (6 bits at 15:10); sf at 31; ty at 22.
+    fn fp_fix(&mut self, base: u32, sf: bool, dbl: bool, scale: u32, rn: XR, rd: XR) {
+        self.e(base | ((sf as u32) << 31) | ((dbl as u32) << 22)
+            | ((scale & 0x3F) << 10) | ((rn as u32) << 5) | rd as u32);
+    }
+    pub fn scvtf_fixed(&mut self, dbl: bool, fbits: u8, rn: XR, rd: XR) {
+        self.fp_fix(0x1E020000, dbl, dbl, 64 - fbits as u32, rn, rd);
+    }
+    pub fn ucvtf_fixed(&mut self, dbl: bool, fbits: u8, rn: XR, rd: XR) {
+        self.fp_fix(0x1E030000, dbl, dbl, 64 - fbits as u32, rn, rd);
+    }
+    pub fn fcvtzs_fixed(&mut self, dbl: bool, fbits: u8, rn: XR, rd: XR) {
+        self.fp_fix(0x1E180000, dbl, dbl, 64 - fbits as u32, rn, rd);
+    }
+    pub fn fcvtzu_fixed(&mut self, dbl: bool, fbits: u8, rn: XR, rd: XR) {
+        self.fp_fix(0x1E190000, dbl, dbl, 64 - fbits as u32, rn, rd);
+    }
     /// PRFM (immediate): prfop 0=PLDL1KEEP 8=PLIL1KEEP; imm12 scaled by 8.
     /// LLVM-verified: prfm pldl1keep,[x1] = 0xf9800020; plil1keep,[x1,#8] = 0xf9800428.
     pub fn prfm(&mut self, prfop: u8, imm12: u16, rn: XR) {

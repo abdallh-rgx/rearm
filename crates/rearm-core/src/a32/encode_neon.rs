@@ -20,6 +20,50 @@ fn imm7_left(esize: u32, amt: u8) -> u32 { esize + amt as u32 }
 
 pub fn encode_neon(ins: &Ins) -> Option<u32> {
     match ins {
+        Ins::Neon { op, dt, q, d, n, m, imm, index } if *index != 0 => {
+            // by-element re-encoding (index+1 stored in `index`)
+            let idx = index - 1;
+            let sz = sz_of(*dt);
+            if !matches!(sz, 1 | 2) { return None; }
+            let (u_bit, opc) = match (op, dt) {
+                (NeonOp::Mla, Dt::I16) => (false, 0x0u32),
+                (NeonOp::Mla, Dt::I32) => (false, 0x0),
+                (NeonOp::Mls, Dt::I16) => (false, 0x4),
+                (NeonOp::Mls, Dt::I32) => (false, 0x4),
+                (NeonOp::Mul, Dt::I16) => (false, 0x8),
+                (NeonOp::Mul, Dt::I32) => (false, 0x8),
+                (NeonOp::Mul, Dt::F32) => (false, 0x9),
+                (NeonOp::Mla, Dt::F32) => (false, 0x0),
+                (NeonOp::Mls, Dt::F32) => (false, 0x4),
+                (NeonOp::QdmulH, Dt::S16) => (true, 0xC),
+                (NeonOp::QdmulH, Dt::S32) => (true, 0xC),
+                (NeonOp::Qrdmulh, Dt::S16) => (true, 0xD),
+                (NeonOp::Qrdmulh, Dt::S32) => (true, 0xD),
+                _ => return None,
+            };
+            let _ = u_bit;
+            let d4 = ((d >> 4) & 1) as u32; let vd = (d & 0xF) as u32;
+            let n5 = *n as u32; let vm = (*m & if sz == 1 { 0x7 } else { 0x1F }) as u32;
+            let (idx_hi, idx_lo) = if sz == 1 { (((idx as u32 >> 1) & 1) << 5, (idx as u32 & 1) << 3) } else { ((idx as u32 & 1) << 5, 0) };
+            // b24 = Q, b23 = 1, b6 = 1; f32 keeps opc from the table (0/4/8 with b8=0)
+            let fopc = match (op, dt) {
+                (NeonOp::Mla, Dt::F32) => 0x1u32,
+                (NeonOp::Mls, Dt::F32) => 0x5,
+                (NeonOp::Mul, Dt::F32) => 0x9,
+                _ => opc,
+            };
+            Some(0xF280_0000
+                | ((*q as u32) << 24)
+                | (d4 << 22)
+                | (sz << 20)
+                | ((n5 & 0xF) << 16)
+                | ((n5 >> 4) << 7)
+                | (vd << 12)
+                | (fopc << 8)
+                | (1 << 6)
+                | idx_hi | idx_lo
+                | vm)
+        }
         Ins::Neon { op, dt, q, d, n, m, imm, index: _ } => encode_one(op, *dt, *q, *d, *n, *m, *imm),
         Ins::VmovImm { kind, imm, q, d } => encode_vmov_imm(*kind, *imm, *q, *d),
         Ins::VdupScalar { dt, q, d, m, index } => {

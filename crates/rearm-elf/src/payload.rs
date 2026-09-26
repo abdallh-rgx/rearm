@@ -270,6 +270,27 @@ fn translate_pass(elf: &Elf32, dm: &DynMeta, farset: &[u32], window: u32) -> Res
     }
     anchors.sort_unstable();
     anchors.dedup_by_key(|(a, _)| *a);
+    // ---- .ARM.exidx anchors: prel31 function starts. The prel31 target
+    // keeps the Thumb bit — use it as the mode. dynsym entries win on
+    // conflicts (added first, dedup keeps them). ----
+    if let Some(exidx) = elf.section(".ARM.exidx") {
+        let base = exidx.addr;
+        let n = (exidx.size / 8) as usize;
+        for i in 0..n {
+            let o = exidx.off + i * 8;
+            if o + 4 > elf.data.len() { break; }
+            let w0 = u32::from_le_bytes([elf.data[o], elf.data[o+1], elf.data[o+2], elf.data[o+3]]);
+            let rel = ((w0 << 1) as i32) >> 1; // prel31 sign-extend
+            let f = base.wrapping_add((i as u32) * 8).wrapping_add(rel as u32);
+            let thumb = f & 1 == 1;
+            let f = f & !1;
+            if in_exec(f) && anchors.binary_search_by_key(&f, |(x, _)| *x).is_err() {
+                anchors.push((f, thumb));
+            }
+        }
+    }
+    anchors.sort_unstable();
+    anchors.dedup_by_key(|(a, _)| *a);
     let mode_at = |a: u32| -> bool {
         match anchors.binary_search_by_key(&a, |(x, _)| *x) {
             Ok(i) => anchors[i].1,
@@ -360,8 +381,9 @@ fn translate_pass(elf: &Elf32, dm: &DynMeta, farset: &[u32], window: u32) -> Res
 
                 // ---- terminal / special forms ----
                 match &tins.ins {
-                    Ins::Unsupported { .. } => {
+                    Ins::Unsupported { group } => {
                         stats.unsupported += 1;
+                        stats.note_unsupported(&format!("DEC-t32 {}", group));
                         map.push((reb(a), (out.len() as u32) * 4, if degraded {0} else {1}));
                         out.e(TRAP);
                         visited.insert(a);
@@ -419,7 +441,9 @@ fn translate_pass(elf: &Elf32, dm: &DynMeta, farset: &[u32], window: u32) -> Res
                         let at = out.len();
                         out.e(0); // b placeholder
                         let base = a.wrapping_add(4);
-                        fixups.push(Fixup { at, kind: FixKind::B, target: reb(base.wrapping_add(*off as u32)), src: a });
+                        let target = base.wrapping_add(*off as u32);
+                        fixups.push(Fixup { at, kind: FixKind::B, target: reb(target), src: a });
+                        seed(&mut queue, target & !1, true);
                         stats.translated += 1;
                         map.push((reb(a), (start as u32) * 4, if degraded {0} else {1}));
                         visited.insert(a);
@@ -438,6 +462,7 @@ fn translate_pass(elf: &Elf32, dm: &DynMeta, farset: &[u32], window: u32) -> Res
                             target: reb(target),
                             src: a,
                         });
+                        seed(&mut queue, target & !1, true);
                         stats.translated += 1;
                         map.push((reb(a), (start as u32) * 4, if degraded {0} else {1}));
                         visited.insert(a);
@@ -535,17 +560,15 @@ fn translate_pass(elf: &Elf32, dm: &DynMeta, farset: &[u32], window: u32) -> Res
             };
             stats.a32_ins += 1;
             let start = out.len();
-            match &ins {
-                Ins::Unsupported { .. } => {
-                    stats.unsupported += 1;
-                    map.push((reb(a), (out.len() as u32) * 4, 1));
-                    out.e(TRAP);
-                    visited.insert(a);
-                    degraded = true;
-                    a += 4;
-                    continue;
-                }
-                _ => {}
+            if let Ins::Unsupported { group } = &ins {
+                // A32 words that fail to decode are data-in-text or Thumb code
+                // misread as ARM (e.g. `coproc`/`coproc-ldst` — impossible in
+                // ARMv7 user code). Continuing would poison the visited set
+                // and block later correct-mode runs from translating these
+                // addresses, so STOP the run here.
+                stats.unsupported += 1;
+                stats.note_unsupported(&format!("DEC-a32 {}", group));
+                break;
             }
 
             // far conditional (A32 B.cond)
@@ -556,6 +579,7 @@ fn translate_pass(elf: &Elf32, dm: &DynMeta, farset: &[u32], window: u32) -> Res
                     out.e(0);
                     let target = a.wrapping_add(8).wrapping_add(*off as u32);
                     fixups.push(Fixup { at, kind: FixKind::B, target: reb(target), src: a });
+                    seed(&mut queue, target & !1, false);
                     stats.translated += 1;
                     map.push((reb(a), (start as u32) * 4, if degraded {0} else {1}));
                     visited.insert(a);
@@ -576,23 +600,72 @@ fn translate_pass(elf: &Elf32, dm: &DynMeta, farset: &[u32], window: u32) -> Res
                 if in_exec(target & !1) { seed(&mut queue, target & !1, mode_at(target & !1)); }
             }
 
-            match rearm_core::translate::a32_to_a64::translate_a32(&ins, a, &mut out) {
-                Ok(true) => {
-                    stats.translated += 1;
-                    record_branch_a32(&ins, a, &mut fixups, start, reb);
-                    match &ins {
-                        Ins::B { off, .. } | Ins::Bl { off } => {
-                            let target = a.wrapping_add(8).wrapping_add(*off as u32);
-                            seed(&mut queue, target & !1, false);
+            // A32 conditional non-branch instructions: the decoder's IR does
+            // not carry the cond field (only B does), so guard-bracket them:
+            //   b.<inv> skip ; <translation> ; skip:
+            // If the condition fails, nothing executes and flags stay put —
+            // exactly the A32 predication semantics.
+            let raw_cond_bits = (w >> 28) as u8;
+            let guard_cond: Option<Cond> = if raw_cond_bits != 0xE && raw_cond_bits != 0xF
+                && !matches!(ins, Ins::B { .. } | Ins::Bl { .. } | Ins::Blx { .. }
+                    | Ins::Bx { .. } | Ins::Svc { .. } | Ins::Setend { .. }
+                    | Ins::Cps { .. } | Ins::Barriers { .. } | Ins::Clrex) {
+                Some(Cond::from_bits(raw_cond_bits))
+            } else { None };
+
+            match guard_cond {
+                Some(gc) => {
+                    let gat = out.len();
+                    out.bcond(gc.invert(), 8).map_err(|e| e.0.to_string())?; // patched below
+                    match rearm_core::translate::a32_to_a64::translate_a32(&ins, a, &mut out) {
+                        Ok(true) => {
+                            let body_words = out.len() - gat - 1;
+                            // patch the guard: skip body (+1 word for the bcond itself)
+                            let off_bits = (((body_words as u32) + 1) & 0x7FFFF) << 5;
+                            out.buf[gat] = (out.buf[gat] & 0xFF00001F) | off_bits;
+                            stats.translated += 1;
+                            map.push((reb(a), (gat as u32) * 4, if degraded {0} else {1}));
+                            visited.insert(a);
                         }
-                        _ => {}
+                        r => {
+                            out.buf.truncate(gat); // drop the guard
+                            match r {
+                                Ok(true) => unreachable!(),
+                                Ok(false) => { stats.unsupported += 1; stats.note_unsupported(format!("{:?}", ins).split('{').next().unwrap_or("?")); out.e(TRAP); degraded = true; }
+                                Err(e) => { stats.unsupported += 1; stats.note_unsupported(&format!("ERR {} @ a32", e.0)); out.e(TRAP); degraded = true; }
+                            }
+                            map.push((reb(a), (start as u32) * 4, if degraded {0} else {1}));
+                            visited.insert(a);
+                        }
                     }
+                    // conditional DP/LD/ST never branches: no seeds needed
                 }
-                Ok(false) => { stats.unsupported += 1; stats.note_unsupported(format!("{:?}", ins).split('{').next().unwrap_or("?")); out.e(TRAP); degraded = true; }
-                Err(e) => { stats.unsupported += 1; stats.note_unsupported(&format!("ERR {} @ a32", e.0)); out.e(TRAP); degraded = true; }
+                None => {
+                    match rearm_core::translate::a32_to_a64::translate_a32(&ins, a, &mut out) {
+                        Ok(true) => {
+                            stats.translated += 1;
+                            record_branch_a32(&ins, a, &mut fixups, start, reb);
+                            match &ins {
+                                Ins::B { off, .. } | Ins::Bl { off } => {
+                                    let target = a.wrapping_add(8).wrapping_add(*off as u32);
+                                    seed(&mut queue, target & !1, false);
+                                }
+                                // A32 BLX imm: ARM → Thumb switch (target is a Thumb
+                                // function entry) — must seed with thumb=true.
+                                Ins::Blx { off } => {
+                                    let target = (a.wrapping_add(8) & !3u32).wrapping_add(*off as u32);
+                                    seed(&mut queue, target & !1, true);
+                                }
+                                _ => {}
+                            }
+                        }
+                        Ok(false) => { stats.unsupported += 1; stats.note_unsupported(format!("{:?}", ins).split('{').next().unwrap_or("?")); out.e(TRAP); degraded = true; }
+                        Err(e) => { stats.unsupported += 1; stats.note_unsupported(&format!("ERR {} @ a32", e.0)); out.e(TRAP); degraded = true; }
+                    }
+                    map.push((reb(a), (start as u32) * 4, if degraded {0} else {1}));
+                    visited.insert(a);
+                }
             }
-            map.push((reb(a), (start as u32) * 4, if degraded {0} else {1}));
-            visited.insert(a);
 
             let stop = match &ins {
                 Ins::B { cond: Cond::Al, .. } => true,
@@ -702,7 +775,11 @@ fn record_branch_t32(ins: &Ins, addr: u32, len: u32, fix: &mut Vec<Fixup>, at: u
 
 fn record_branch_a32(ins: &Ins, addr: u32, fix: &mut Vec<Fixup>, start: usize, reb: impl Fn(u32) -> u32) {
     match ins {
-        Ins::B { off, .. } => fix.push(Fixup { at: start, kind: FixKind::B, target: reb(addr.wrapping_add(8).wrapping_add(*off as u32)), src: addr }),
+        // B.cond must be patched as a *conditional* branch (FixKind::Bcond
+        // keeps the cond field and lets compute_farset route far ones through
+        // the 2-word veneer form on the next pass).
+        Ins::B { cond: Cond::Al, off } => fix.push(Fixup { at: start, kind: FixKind::B, target: reb(addr.wrapping_add(8).wrapping_add(*off as u32)), src: addr }),
+        Ins::B { off, .. } => fix.push(Fixup { at: start, kind: FixKind::Bcond, target: reb(addr.wrapping_add(8).wrapping_add(*off as u32)), src: addr }),
         Ins::Bl { off } => fix.push(Fixup { at: start, kind: FixKind::Bl, target: reb(addr.wrapping_add(8).wrapping_add(*off as u32)), src: addr }),
         _ => {}
     }

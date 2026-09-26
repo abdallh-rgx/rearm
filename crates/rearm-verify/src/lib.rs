@@ -65,8 +65,11 @@ fn run_z3(smt: &str) -> Result<bool, String> {
 
 #[derive(Clone)]
 struct St {
-    /// 22 64-bit SMT exprs: 0..14 mapped regs, 15..19 scratch, 20 = Q, 21 = GE.
+    /// 24 64-bit SMT exprs: 0..14 mapped regs, 15..19 scratch, 20 = Q, 21 = GE,
+    /// 22 = FP-flags shadow (VCMP→MRS nzcv→x22; VMRS restores it), 23 = free.
     x: Vec<String>,
+    /// 32 FP/vector registers (BV64 bit patterns) — A32 D0..D31 == A64 V0..V31.
+    vr: Vec<String>,
     n: String, z: String, c: String, v: String,
     /// T32 mode: PC reads as addr+4 (A32: addr+8).
     t32: bool,
@@ -78,20 +81,23 @@ impl St {
         for i in 15..20 { x.push(format!("s{}", i)); }
         x.push("((_ zero_extend 32) QF)".into());
         x.push("((_ zero_extend 32) GF)".into());
-        St { x, n: "N".into(), z: "Z".into(), c: "C".into(), v: "V".into(), t32: false }
+        x.push("((_ zero_extend 32) FPF)".into()); // x22: FP-flags shadow
+        x.push("s23".into());
+        let vr = (0..32).map(|i| format!("v{}", i)).collect();
+        St { x, vr, n: "N".into(), z: "Z".into(), c: "C".into(), v: "V".into(), t32: false }
     }
 }
 
 fn w(st: &St, r: usize) -> String {
     if r == 31 { "#x00000000".into() }
-    else if r < 22 { format!("((_ extract 31 0) {})", st.x[r]) }
+    else if r < 24 { format!("((_ extract 31 0) {})", st.x[r]) }
     else { "#x00000000".into() }
 }
 fn setw(st: &mut St, r: usize, e32: String) {
-    if r <= 21 { st.x[r] = format!("((_ zero_extend 32) {})", e32); }
+    if r <= 23 { st.x[r] = format!("((_ zero_extend 32) {})", e32); }
 }
 fn setx(st: &mut St, r: usize, e64: String) {
-    if r <= 21 { st.x[r] = e64; }
+    if r <= 23 { st.x[r] = e64; }
 }
 fn ext(e: &str, hi: u32, lo: u32) -> String { format!("((_ extract {} {}) {})", hi, lo, e) }
 /// rotate_right by literal k (0 → identity)
@@ -212,6 +218,8 @@ fn build_smt(ins: &Ins, pc: u32, a64: &A64, t32: bool) -> Result<String, String>
     for i in 0..15u8 { s.push_str(&format!("(declare-const x{} (_ BitVec 64))\n", i)); }
     for i in 15..20u8 { s.push_str(&format!("(declare-const s{} (_ BitVec 64))\n", i)); }
     s.push_str("(declare-const QF (_ BitVec 32))\n(declare-const GF (_ BitVec 32))\n");
+    s.push_str("(declare-const FPF (_ BitVec 32))\n");
+    for i in 0..32u8 { s.push_str(&format!("(declare-const v{} (_ BitVec 64))\n", i)); }
     s.push_str("(declare-const N (_ BitVec 1)) (declare-const Z (_ BitVec 1)) (declare-const C (_ BitVec 1)) (declare-const V (_ BitVec 1))\n");
     s.push_str("(assert (not (and ");
     s.push_str(&conj.join(" "));

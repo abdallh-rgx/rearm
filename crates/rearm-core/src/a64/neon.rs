@@ -252,19 +252,16 @@ pub fn n_for_right(esize: u32, amount: u32) -> Option<u8> {
 
 /// by-element: 0Q U 0 11111 L sz M1 Vm opc(14:12) H(11) 0 Rn Rd
 pub fn enc_byelem(q: bool, u: bool, sz: u32, l: bool, opc: u8, rm: VR, index: u8, rn: VR, rd: VR) -> u32 {
+    let _ = l;
     let m = (rm >> 4) & 1;
     let vm = rm & 0xF;
-    // index splits: sz 00 → H(11)=index>>1, L(21)=index&1
-    //              sz 01 → H=index>>2, L=bit1? (16-bit: L=bit0, H=bits2:1)
-    //              sz 10 → H=bit0 only
-    let (h, l_bit) = match sz {
-        0 => ((index >> 1) & 1, index & 1),
-        1 => ((index >> 2) & 1, (index >> 1) & 1 | (index & 1) << 1), // placeholder; fixed per-op
-        _ => (index & 1, 0),
-    };
-    let _ = l_bit;
+    // LLVM-verified index layout (sz 01 and 10):
+    //   H = bit11 = index>>1, L = bit21 = index&1; M = bit20 = Vm[4].
+    // (mla v0.2s,v1.2s,v2.s[1] = 2fa20020; mul v0.4h,v1.4h,v2.h[3] = 0f728020)
+    let h = (index >> 1) & 1;
+    let l_bit = index & 1;
     ((q as u32) << 30) | ((u as u32) << 29) | 0x0F000000 | (sz << 22)
-        | (((l || (sz == 1 && (index & 2 != 0))) as u32) << 21) | ((m as u32) << 20)
+        | ((l_bit as u32) << 21) | ((m as u32) << 20)
         | ((vm as u32) << 16) | ((opc as u32) << 12) | ((h as u32) << 11)
         | ((rn as u32) << 5) | rd as u32
 }
@@ -285,12 +282,12 @@ pub fn enc_dup_elem(q: bool, dt: Dt, rn: VR, index: u8, rd: VR) -> u32 {
 }
 
 /// MOVI/MVNI/ORR/BIC (immediate): 0Q U 0 11110 abc cmode(15:12) 01 defgh Rd.
-/// For our use: simple byte-splat (cmode 1110), 16-bit (1010), 32-bit one-bit (0000-1101
-/// shifts handled by caller via cmode), 64-bit (1110 with Q).
+/// LLVM-verified: movi v5.4s,#1 = 0x4f000425 → abc@18:16, cmode@15:12,
+/// fixed 01@11:10, defgh@9:5, Rd@4:0.
 pub fn enc_movi(q: bool, neg: bool, abc: u8, cmode: u8, defgh: u8, rd: VR) -> u32 {
     ((q as u32) << 30) | ((neg as u32) << 29) | 0x0F000000
         | (((abc & 7) as u32) << 16) | ((cmode & 0xF) as u32) << 12 | (1 << 10)
-        | ((defgh & 0x1F) as u32) | rd as u32
+        | (((defgh & 0x1F) as u32) << 5) | rd as u32
 }
 
 /// AdvSIMD load/store multiple structures. LLVM-verified:

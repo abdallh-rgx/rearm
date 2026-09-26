@@ -15,6 +15,7 @@
 use crate::common::*;
 use crate::a32::ins::*;
 use crate::a64::encode::{A64, XR, EncErr};
+use crate::a64::neon as a64n;
 
 #[derive(Debug)]
 pub struct TranslateErr(pub String);
@@ -522,9 +523,14 @@ pub fn translate_a32(ins: &Ins, pc: u32, out: &mut A64) -> Result<bool, Translat
         }
         Ins::VfpCmp { d, m, dbl, e } => {
             out.fcmp(*dbl, *e, *m as XR, *d as XR);
+            // A32 FPSCR flags are SEPARATE from APSR; A64 FPSR.NZCV == NZCV.
+            // Save the FP flags to the x22 shadow so later integer flag
+            // writers cannot clobber them before a VMRS.
+            out.mrs_nzcv(22);
         }
         Ins::VfpCmpz { d, dbl, e } => {
             out.fcmpz(*dbl, *e, *d as XR);
+            out.mrs_nzcv(22);
         }
         Ins::VfpMulAcc { form, d, n, m, dbl } => {
             use crate::a32::ins::VfpMulAcc;
@@ -544,11 +550,148 @@ pub fn translate_a32(ins: &Ins, pc: u32, out: &mut A64) -> Result<bool, Translat
             if *to_fp { out.fmov_from_gpr32(*rt as XR, *sn as XR); }
             else { out.fmov_to_gpr32(*sn as XR, *rt as XR); }
         }
-        Ins::Vcvt { form, d, m, round: _ } => {
-            // Vcvt between f32 and f64 or f32↔int
-            // For now handle the common int↔float cases
-            let _ = (form, d, m);
-            return Ok(false); // TODO: conversion encoding work
+        // VMOV.{F64,S32,U32} Dd, Rt, Rt2 / VMOV Rt, Rt2, Dm — 2×GPR ↔ D
+        Ins::VMovCoreD { rt, rt2, dm, to_fp } => {
+            if *to_fp {
+                // w16 = rt; bfi w16[63:32] = rt2; fmov d_dm, x16
+                out.logic_reg(false, 1, false, false, 0, 31, x(*rt), 16); // mov w16, w_rt
+                out.bfi(true, x(*rt2), 16, 32, 32);
+                out.fmov_from_gpr64(16, *dm as XR);
+            } else {
+                out.fmov_to_gpr64(*dm as XR, 16);      // x16 = d_dm
+                out.logic_reg(false, 1, false, false, 0, 31, 16, x(*rt)); // mov w_rt, w16
+                out.lsr_imm(true, 16, 16, 32);
+                out.logic_reg(false, 1, false, false, 0, 31, 16, x(*rt2)); // mov w_rt2, w16
+            }
+        }
+        // VMRS: read FPSCR (flags from the x22 shadow written by VCMP).
+        Ins::VMrs { rt, to_apsr, sys } => {
+            match sys {
+                VfpSys::Fpscr => {
+                    if *to_apsr || rt == &Some(15) {
+                        // VMRS APSR_nzcv, FPSCR: NZCV ← FP-flags shadow
+                        out.msr_nzcv(22);
+                    } else if let Some(r) = rt {
+                        // VMRS r, FPSCR (approximation: NZCV shadow; Q at 27)
+                        out.logic_reg(false, 1, false, false, 0, 31, 22, x(*r)); // mov w_rt, w22
+                        out.bfi(false, 20, x(*r), 27, 1); // Q ← x20 bit0 → rt[27]
+                    } else { return Ok(false); }
+                }
+                _ => return Ok(false),
+            }
+        }
+        // VMSR FPSCR, rt: FP-flags shadow ← rt; control bits → FPCR.
+        Ins::Vmsr { sys, rt } => {
+            match sys {
+                VfpSys::Fpscr => {
+                    out.logic_reg(true, 1, false, false, 0, 31, x(*rt), 22); // mov x22, x_rt
+                    out.msr_fpcr(x(*rt));
+                    out.ubfx(false, x(*rt), 20, 27, 1); // Q ← rt[27]
+                }
+                _ => return Ok(false),
+            }
+        }
+        // VCVT register forms (int↔fp, f32↔f64)
+        Ins::Vcvt { form, d, m, round } => {
+            match form {
+                VcvtForm::ToS32 { src } => {
+                    let (s_dbl, s_reg) = (*src == 64, *m as XR);
+                    if matches!(round, Some(4)) {
+                        // VCVTR: round per FPSCR RMode → FRINTI then FCVTZS
+                        if s_dbl { out.frinti_d(s_reg, 0); out.fcvtzs(true, false, 0, x(*d)); }
+                        else { out.frinti_s(s_reg, 0); out.fcvtzs(false, false, 0, x(*d)); }
+                    } else {
+                        // VCVT (non-R): truncate toward zero
+                        out.fcvtzs(s_dbl, false, s_reg, x(*d));
+                    }
+                }
+                VcvtForm::ToU32 { src } => {
+                    let (s_dbl, s_reg) = (*src == 64, *m as XR);
+                    if matches!(round, Some(4)) {
+                        if s_dbl { out.frinti_d(s_reg, 0); out.fcvtzu(true, false, 0, x(*d)); }
+                        else { out.frinti_s(s_reg, 0); out.fcvtzu(false, false, 0, x(*d)); }
+                    } else {
+                        out.fcvtzu(s_dbl, false, s_reg, x(*d));
+                    }
+                }
+                VcvtForm::FromS32 { dst } => {
+                    let d_dbl = *dst == 64;
+                    out.scvtf(d_dbl, false, x(*m), *d as XR);
+                }
+                VcvtForm::FromU32 { dst } => {
+                    let d_dbl = *dst == 64;
+                    out.ucvtf(d_dbl, false, x(*m), *d as XR);
+                }
+                VcvtForm::F32F64 => { out.fcvt_s_from_d(*m as XR, *d as XR); }
+                VcvtForm::F64F32 => { out.fcvt_d_from_s(*m as XR, *d as XR); }
+                VcvtForm::F16F32 | VcvtForm::F32F16 => return Ok(false), // fp16 forms: rare
+            }
+        }
+        // VCVT fixed-point ↔ FP
+        Ins::VcvtImm { to_fp, unsigned, dbl, fbits, d, m } => {
+            let fb = (*fbits).clamp(1, if *dbl { 64 } else { 32 });
+            if *to_fp {
+                if *unsigned { out.ucvtf_fixed(*dbl, fb, x(*m), *d as XR); }
+                else { out.scvtf_fixed(*dbl, fb, x(*m), *d as XR); }
+            } else {
+                if *unsigned { out.fcvtzu_fixed(*dbl, fb, *d as XR, x(*m)); }
+                else { out.fcvtzs_fixed(*dbl, fb, *d as XR, x(*m)); }
+            }
+        }
+        // VMOV immediate (scalar VFP + vector NEON). Q-form vector
+        // immediates split over the Dk → Vk[63:0] layout (two D writes).
+        Ins::VmovImm { kind, imm, q, d } => {
+            match kind {
+                NeonImmKind::F32 => {
+                    let imm8 = (*imm & 0xFF) as u8;
+                    let abc = (imm8 >> 5) & 7;
+                    let defgh = imm8 & 0x1F;
+                    if *q {
+                        out.e(a64n::enc_movi(false, false, abc, 0xF, defgh, *d));
+                        out.e(a64n::enc_movi(false, false, abc, 0xF, defgh, (*d + 1) & 31));
+                    } else {
+                        out.fmov_f32_imm(imm8, *d as XR);
+                    }
+                }
+                NeonImmKind::F64 => {
+                    out.fmov_f64_imm((*imm & 0xFF) as u8, *d as XR);
+                }
+                NeonImmKind::F32N => {
+                    // VMVN.F32 / negative vector imm: MVNI cmode 1111
+                    let imm8 = (*imm & 0xFF) as u8;
+                    let abc = (imm8 >> 5) & 7;
+                    let defgh = imm8 & 0x1F;
+                    if *q {
+                        out.e(a64n::enc_movi(false, true, abc, 0xF, defgh, *d));
+                        out.e(a64n::enc_movi(false, true, abc, 0xF, defgh, (*d + 1) & 31));
+                    } else {
+                        out.e(a64n::enc_movi(false, true, abc, 0xF, defgh, *d));
+                    }
+                }
+                NeonImmKind::I8 | NeonImmKind::I16 | NeonImmKind::I32 => {
+                    // GPR-materialize + DUP (always encodable, exact)
+                    let v = *imm & 0xFFFF_FFFF;
+                    let (w, esz) = match kind {
+                        NeonImmKind::I8 => (v & 0xFF, 8),
+                        NeonImmKind::I16 => (v & 0xFFFF, 16),
+                        _ => (v, 32),
+                    };
+                    if w >> 16 == 0 { out.movz(false, 0, w as u16, 16); }
+                    else { out.movz(false, 1, (w >> 16) as u16, 16); out.movk(false, 1, (w & 0xFFFF) as u16, 16); }
+                    let dt = match esz { 8 => Dt::I8, 16 => Dt::I16, _ => Dt::I32 };
+                    out.e(a64n::enc_dup_gpr(false, dt, 16, *d));
+                    if *q { out.e(a64n::enc_dup_gpr(false, dt, 16, (*d + 1) & 31)); }
+                }
+                NeonImmKind::I64 => {
+                    // A32 vmov.i64 (D-form): 64-bit one-byte splat in a D reg
+                    let v = *imm;
+                    out.movz(false, 0, (v & 0xFFFF) as u16, 16);
+                    out.movk(false, 1, ((v >> 16) & 0xFFFF) as u16, 16);
+                    out.movk(true, 2, ((v >> 32) & 0xFFFF) as u16, 16);
+                    out.movk(true, 3, ((v >> 48) & 0xFFFF) as u16, 16);
+                    out.e(a64n::enc_dup_gpr(false, Dt::I64, 16, *d));
+                }
+            }
         }
         Ins::Vsel { op, d, n, m, dbl } => {
             let _ = (op, d, n, m, dbl);
@@ -782,7 +925,12 @@ pub fn translate_a32(ins: &Ins, pc: u32, out: &mut A64) -> Result<bool, Translat
         }
 
         // ======== branches ========
-        Ins::B { cond, off } => { out.bcond(*cond, branch_off_or_zero(*off))?; }
+        // B.cond: always emit a near placeholder (0) — the driver patches the
+        // real A64 displacement afterwards (possibly via the far veneer form
+        // `b.<inv> +8 ; b target`). Passing the raw A32 offset here would
+        // exceed the A64 b.cond ±1 MiB window for large A32 branches.
+        Ins::B { cond: Cond::Al, off } => { out.b(branch_off_or_zero(*off))?; }
+        Ins::B { cond, .. } => { out.bcond(*cond, 0)?; }
         Ins::Bl { off } | Ins::Blx { off } => {
             // A32 BL/BLX (imm): LR = addr + 4 (the next instruction — BLX
             // imm has no thumb bit from ARM state). Execution mode:
@@ -1854,7 +2002,6 @@ fn write_ge(out: &mut A64, src: XR, lane16: bool) -> Result<(), TranslateErr> {
 // ============================ NEON translation ============================
 
 use crate::a32::ins::NeonOp;
-use crate::a64::neon as a64n;
 
 fn translate_neon(
     out: &mut A64, op: NeonOp, dt: Dt, q: bool, d: VIdx, n: VIdx, m: VIdx,
@@ -1867,6 +2014,53 @@ fn translate_neon(
     let dform = !q && matches!(dt, Dt::I64 | Dt::S64 | Dt::U64 | Dt::F64);
     macro_rules! fix3 { ($w:expr) => { if dform { $w | (1 << 28) | (1 << 30) } else { $w } } }
     macro_rules! e { ($w:expr) => { out.e($w) } }
+
+    // ======== Q-form split under the Dk → Vk[63:0] register layout ========
+    // A32 Q registers are D-pairs; we map every A32 Dk to the LOW half of A64
+    // Vk (scalar VFP + D-form ops all agree on this). A Q-form elementwise
+    // instruction is therefore TWO D-form instructions on (d,n,m) and
+    // (d+1,n+1,m+1). By-element sources keep the SAME m and index (the A32
+    // index selects an element within the 64-bit Dm).
+    if q {
+        match op {
+            // Q-intrinsic semantics (pairwise-across / long / wide / 2-output):
+            // handled by their dedicated arms below.
+            AddP | MaxP | MinP | AddLp | AddALp | MaxAcross | MinAcross
+            | Zip | Unzip | Trn | MulP | AddL | SubL | AddW | SubW | AddHn | SubHn
+            | RAddHn | RSubHn | MulL | MlaL | MlsL | Qdmlal | Qdmlsl | QdmulL
+            | MovL | Shll | Shrn | Rshrn | Qshrn | Qrshrn | Qshrun | Qrshrun => {}
+            _ => {
+                let keep_m = _index != 0; // by-element: same element source
+                let m2 = if keep_m { m } else { m.wrapping_add(1) & 31 };
+                translate_neon(out, op, dt, false, d, n, m, imm, _index)?;
+                return translate_neon(out, op, dt, false,
+                    d.wrapping_add(1) & 31, n.wrapping_add(1) & 31, m2, imm, _index);
+            }
+        }
+    }
+
+    // ======== by-element (index+1 != 0 marks it) ========
+    if _index != 0 {
+        let idx = _index - 1;
+        let (ub, opc, szb) = match (op, dt) {
+            (Mla, Dt::I16) => (true, 0x0u8, 1u32),
+            (Mla, Dt::I32) => (true, 0x0, 2),
+            (Mls, Dt::I16) => (true, 0x4, 1),
+            (Mls, Dt::I32) => (true, 0x4, 2),
+            (Mul, Dt::I16) => (false, 0x8, 1),
+            (Mul, Dt::I32) => (false, 0x8, 2),
+            (QdmulH, Dt::S16) => (false, 0xC, 1),
+            (QdmulH, Dt::S32) => (false, 0xC, 2),
+            (Qrdmulh, Dt::S16) => (false, 0xD, 1),
+            (Qrdmulh, Dt::S32) => (false, 0xD, 2),
+            (Mla, Dt::F32) => (false, 0x1, 2),
+            (Mls, Dt::F32) => (false, 0x5, 2),
+            (Mul, Dt::F32) => (false, 0x9, 2),
+            _ => return Err(TranslateErr("by-element op/dt".into())),
+        };
+        e!(a64n::enc_byelem(q, ub, szb, false, opc, m, idx, n, d));
+        return Ok(());
+    }
 
     let sz = a64n::sz_code(dt);
 

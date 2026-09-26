@@ -163,6 +163,52 @@ pub fn decode_neon_data(word: u32) -> Result<Ins, DecodeErr> {
     if sz != 3 {
         let vn = ((b7 as u32) << 4 | f19_16) as VIdx;
         if !op4 {
+            // ---- by-element space: b6 = 1, bit4 = 0 (3-different has b6=0).
+            // Layout (LLVM-verified: vmla.i32 q0,q2,d4[1] = f3a40064,
+            // vmla.i16 q0,q1,d2[3] = f392006a, vmul.i32 q0,q1,d10[1] = f3a2086a):
+            //   b24 = Q, b22 = D, sz(21:20), Vn(19:16), Vd(15:12), opc(11:8),
+            //   low byte: b7=0, b6=1, index&Vm per datatype:
+            //   .i32/.f32: index = b5; Vm = bits(4:0)
+            //   .i16:      index = (b5, b3); Vm = bits(2:0)
+            if bit(word, 6) {
+                if sz == 0 || sz == 3 { return Ok(Ins::Unsupported { group: "neon-byelem" }); }
+                use NeonOp::*;
+                let qe = u; // b24 is the Q flag in this space
+                let (dt, index, vm5): (Dt, u8, VIdx) = match sz {
+                    1 => ( // .i16
+                        Dt::I16,
+                        ((bit(word, 5) as u8) << 1) | bit(word, 3) as u8,
+                        (word & 0x7) as VIdx,
+                    ),
+                    _ => { // sz=2: .i32 / .f32 (op table distinguishes)
+                        (Dt::I32, bit(word, 5) as u8, (word & 0x1F) as VIdx)
+                    }
+                };
+                let op = match (sz, opc) {
+                    (1, 0x0) => Mla,     // vmla.i16
+                    (1, 0x4) => Mls,     // vmls.i16
+                    (1, 0x8) => Mul,     // vmul.i16
+                    (1, 0xC) => QdmulH,  // vqdmulh.s16
+                    (1, 0xD) => Qrdmulh, // vqrdmulh.s16
+                    (2, 0x0) => Mla,     // vmla.i32
+                    (2, 0x4) => Mls,     // vmls.i32
+                    (2, 0x8) => Mul,     // vmul.i32
+                    (2, 0xC) => QdmulH,  // vqdmulh.s32
+                    (2, 0xD) => Qrdmulh, // vqrdmulh.s32
+                    (2, 0x1) => Mla,     // vmla.f32 (dt fixed below)
+                    (2, 0x5) => Mls,     // vmls.f32
+                    (2, 0x9) => Mul,     // vmul.f32
+                    _ => return Ok(Ins::Unsupported { group: "neon-byelem" }),
+                };
+                let dt = if matches!(op, QdmulH | Qrdmulh) {
+                    if sz == 1 { Dt::S16 } else { Dt::S32 }
+                } else if (sz == 2) && matches!(opc, 0x1 | 0x5 | 0x9) {
+                    Dt::F32
+                } else { dt };
+                // index+1 marks by-element (0 = register form)
+                return Ok(Ins::Neon { op, dt, q: qe, d: vd, n: vn, m: vm5, imm: 0, index: index + 1 });
+            }
+            // 3-different (widening)
             // 3-different (widening)
             use NeonOp::*;
             let op = match (u, opc) {

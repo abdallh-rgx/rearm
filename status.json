@@ -1,7 +1,7 @@
 {
   "project": "rearm",
   "description": "A32/T32 (armeabi-v7a) \u2194 A64 (arm64) disassembler / assembler / recompiler with Z3 formal equivalence verification",
-  "updated": "2026-09-24T22:40:00Z",
+  "updated": "2026-09-26T18:40:00Z",
   "commits": 25,
   "metrics": {
     "realworld_instructions_total": 70215,
@@ -103,6 +103,60 @@
         "T32 BFI decode panicked on UNPREDICTABLE msb<lsb (data-in-text)",
         "T32 SSAT/USAT sat_imm field read 6 bits instead of 5/4 (data-in-text width overflow)"
       ]
+    },
+    "tp_protection": {
+      "discovered": "libUE4.so .text/.rodata encrypted with per-byte XOR 0xDE (Tencent TP at rest)",
+      "recovered": "static XOR key via statistical analysis (E/F-cond frequency, push-prologue cribs, BL-target verification)",
+      "proof": "94.6% of 119,233 exidx function starts decode to classic STMFD prologues; .rodata decodes to clean UTF-16LE UE4 strings",
+      "tool": "tools/tp_decrypt.py"
+    },
+    "libue4_decrypted": {
+      "t32_ins": 27952,
+      "a32_ins": 6147738,
+      "translated": 6154104,
+      "unsupported": 21586,
+      "coverage_pct": 99.65,
+      "a64_words": 13685867,
+      "functions": 128856,
+      "branches_resolved": 888443,
+      "branches_unresolved": 1034
     }
+  },
+  "bugs_fixed_this_session": [
+    "A32 conditional non-branch instructions (addeq/ldrne/...) were translated unconditionally \u2014 added b.<inv> guard-bracket veneer (T32-style) in the payload sweep",
+    "A32 B.cond fixups were patched as unconditional B, destroying the condition \u2014 now FixKind::Bcond (bit-exact cond preserved)",
+    "A32 B.cond >1MiB: translate emitted bcond with raw A32 offset -> \"b.cond range\" errors \u2014 now always placeholder + farset veneer",
+    "FPSCR flag lifetime: vcmp wrote A64 NZCV directly (any integer S-op would clobber before vmrs) \u2014 added x22 FP-flags shadow (mrs x22, nzcv after fcmp; msr nzcv, x22 on vmrs)",
+    "NEON Q-form ops emitted single A64 128-bit ops under the Dk->Vk[63:0] layout \u2014 WRONG (high halves garbage); now split into two D-form ops on (d,n,m)/(d+1,n+1,m+1)",
+    "by-element space (vmla/vmul/vqdmulh q,q,d[x]) was entirely MISDECODED as 3-different ops (AddL/AbsDiff garbage); implemented the b23=1/b6=1/b4=0 by-element decode + A64 by-element encoding (LLVM-verified bit-exact)",
+    "enc_movi defgh field was at bits(4:0) colliding with Rd \u2014 fixed to bits(9:5) (LLVM-verified)",
+    "enc_byelem index bits were wrong (sz=1 placeholder) \u2014 rewrote with LLVM-verified H/L layout",
+    "VmovImm Q-forms wrote only the low D register \u2014 now split over Dk/Dk+1",
+    "VMSR/VMRS full FPSCR: control bits now mirrored to FPCR (AHP/DN/FZ/RMode bit-aligned); Q via x20",
+    "exidx anchors added: 119k prel31 function starts seeded (mode from thumb bit)",
+    "A32 BLX imm now seeds thumb targets (mode switch)",
+    "sweep stops on undecodable words instead of poisoning the visited set (mode bleed-through fix)",
+    "VCVT/VCVT fixed-point, VMRS/VMSR, VMOV.I8/I16/I32/I64/F32/F64, VMVN, VMOV (core<->dreg pair) implemented (LLVM-verified encodings)"
+  ],
+  "verification": {
+    "z3_corpus": "177 PROVEN 1:1, 0 counterexamples",
+    "z3_pubg_sample": "193 PROVEN 1:1, 0 counterexamples (400-sample)",
+    "golden_roundtrip": "6/6 test suites PASS",
+    "by_element_encodings": "LLVM-verified byte-exact"
+  },
+  "apk_output": {
+    "file": "out/pubg-0.12.0-arm64-signed.apk",
+    "size": 246098998,
+    "libs": "18 arm64-v8a (all converted)",
+    "signatures": "v1 JAR + v2 APK Signature Scheme (both verified PASS)",
+    "signing_key": "O=rearm, CN=rearm (RSA-4096, SHA-256)"
+  },
+  "gofile_upload": {
+    "download_page": "https://gofile.io/d/OfWJTBXG",
+    "file": "pubg-0.12.0-arm64-signed.apk",
+    "size": 246195941,
+    "md5": "c65e50a85e43fd5033f4fe0db9701bf6",
+    "server": "store3",
+    "status": "ok"
   }
 }
