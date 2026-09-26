@@ -73,9 +73,9 @@ pub fn emit_payload_obj(p: &Payload) -> Vec<u8> {
     let data = &p.bytes;
     let shstrtab: &[u8] = b"\0.rodata\0.symtab\0.strtab\0.shstrtab\0";
     let n_rodata = 1usize;
-    let n_symtab = 8usize;
-    let n_strtab = 16usize;
-    let n_shstrtab = 23usize;
+    let n_symtab = 9usize;
+    let n_strtab = 17usize;
+    let n_shstrtab = 25usize;
 
     let mut strtab: Vec<u8> = vec![0];
     let payload_blob_name = strtab.len() as u32;
@@ -109,12 +109,13 @@ pub fn emit_payload_obj(p: &Payload) -> Vec<u8> {
     while buf.len() % 8 != 0 { buf.push(0); }
     let sym_off = buf.len();
     // null symbol + payload_blob
-    let mut sym: Vec<u8> = vec![0u8; 24];
-    sym[0..4].copy_from_slice(&payload_blob_name.to_le_bytes());
-    sym[8..16].copy_from_slice(&0u64.to_le_bytes()); // value 0 (ET_REL)
-    sym[16..20].copy_from_slice(&(data.len() as u32).to_le_bytes());
-    sym[20] = 0x11; // STB_GLOBAL | STT_OBJECT
-    sym[21] = 1;    // shndx = .rodata
+    let mut sym: Vec<u8> = vec![0u8; 48];
+    let e = &mut sym[24..];
+    e[0..4].copy_from_slice(&payload_blob_name.to_le_bytes());
+    e[8..16].copy_from_slice(&0u64.to_le_bytes()); // value 0 (ET_REL)
+    e[16..20].copy_from_slice(&(data.len() as u32).to_le_bytes());
+    e[20] = 0x11; // STB_GLOBAL | STT_OBJECT
+    e[21] = 1;    // shndx = .rodata
     buf.extend_from_slice(&sym);
     while buf.len() % 8 != 0 { buf.push(0); }
     let str_off = buf.len();
