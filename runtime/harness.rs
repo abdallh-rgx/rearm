@@ -87,6 +87,15 @@ fn main() {
         }
     }
 
+    // ---- probe: payload_base_slot after init ----
+    {
+        let v: u64 = unsafe { std::ptr::read_volatile((bias + 0x77b28) as *const u64) };
+        let a: u64 = unsafe { std::ptr::read_volatile((bias + 0x77b20) as *const u64) };
+        let ia: u64 = unsafe { std::ptr::read_volatile((bias + 0x678f0) as *const u64) };
+        let c: u32 = unsafe { std::ptr::read_volatile(0x4000_0000 as *const u32) };
+        eprintln!("[probe] slot[0x77b28]={:#x} data0[0x77b20]={:#x} initarr[0x678f0]={:#x} [C]={:#x}", v, a, ia, c);
+    }
+
     // ---- first: adler32 (pure, small — bisection point) ----
     {
         let adler32 = so.find_sym("adler32").expect("adler32 export");
