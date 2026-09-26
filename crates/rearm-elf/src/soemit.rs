@@ -167,7 +167,6 @@ fn sanitize(name: &str) -> String {
 pub fn gen_trampoline_s(soname: &str, p: &Payload) -> String {
     let mut s = String::with_capacity(64 * 1024);
     s.push_str("// rearm-generated trampolines (per-export entry stubs)\n");
-    s.push_str(".hidden payload_base_slot\n");
     s.push_str(".hidden rearm_rt_enter\n");
     s.push_str(".text\n");
     for e in p.exports.iter() {
@@ -212,6 +211,14 @@ pub fn gen_trampoline_s(soname: &str, p: &Payload) -> String {
             sym = sym, lo = off & 0xFFFF, hi = (off >> 16) & 0xFFFF,
         ));
     }
+    // the payload base slot — defined HERE so trampoline references stay
+    // local (direct adrp+ldr, no GOT indirection)
+    s.push_str(".data\n");
+    s.push_str(".hidden payload_base_slot\n");
+    s.push_str(".globl payload_base_slot\n");
+    s.push_str(".p2align 3\n");
+    s.push_str("payload_base_slot:\n");
+    s.push_str(".xword 0\n");
     // init_array: run the loader at dlopen
     s.push_str(".section .init_array,\"aw\"\n");
     s.push_str(".xword rearm_rt_init\n");

@@ -45,11 +45,10 @@ const MAP_FAILED: i64 = -1;
 
 extern "C" {
     static payload_blob: u8; // payload byte 0 (length via header)
+    // .data slot the trampolines read the payload base from (defined in the
+    // generated trampolines object — keeps the reference GOT-free).
+    static mut payload_base_slot: u64;
 }
-
-// .data slot the trampolines read the payload base from.
-#[no_mangle]
-pub static mut payload_base_slot: u64 = 0;
 
 // ============================ low arena ============================
 // [ARENA_BASE, 4 GiB): per-thread ARM stacks + guest-visible heap.
