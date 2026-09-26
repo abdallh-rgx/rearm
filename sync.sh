@@ -9,6 +9,7 @@ export GIT_COMMITTER_NAME="rearm-autosync"
 export GIT_COMMITTER_EMAIL="autosync@rearm.local"
 
 do_sync() {
+  rm -f .git/index.lock 2>/dev/null || true
   local tag="wip: auto-sync checkpoint $(date -u +%Y-%m-%dT%H:%M:%SZ)"
   git add -A >/dev/null 2>&1
   if ! git diff --cached --quiet 2>/dev/null || [ "$(git ls-files --others --exclude-standard | head -1)" != "" ]; then
