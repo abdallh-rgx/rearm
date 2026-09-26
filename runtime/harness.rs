@@ -178,10 +178,11 @@ extern "C" fn segv_handler(_sig: i32, info: *mut u8, ctx: *mut u8) {
     std::process::exit(9);
 }
 
-extern "C" fn segv_ctx_handler(_sig: i32, _info: usize, ctx: usize) {
+extern "C" fn segv_ctx_handler(_sig: i32, info: usize, ctx: usize) {
     // qemu aarch64 rt_sigframe ucontext: mcontext (regs) at +0xB8
     let uc = ctx as *const u64;
     unsafe {
+        let si_addr = *(info as *const u64).add(2); // siginfo.si_addr
         let x13 = *uc.add((0xB8 + 13*8) / 8);
         let x14 = *uc.add((0xB8 + 14*8) / 8);
         let x15 = *uc.add((0xB8 + 15*8) / 8);
@@ -190,8 +191,8 @@ extern "C" fn segv_ctx_handler(_sig: i32, _info: usize, ctx: usize) {
         let x28 = *uc.add((0xB8 + 28*8) / 8);
         let sp = *uc.add((0xB8 + 31*8) / 8);
         let pc = *uc.add((0xB8 + 32*8) / 8);
-        eprintln!("[SEGV-CTX] pc={:#x} x13={:#x} x14={:#x} x15={:#x} x16={:#x} x17={:#x} x28={:#x} sp={:#x}",
-            pc, x13, x14, x15, x16, x17, x28, sp);
+        eprintln!("[SEGV-CTX] pc={:#x} si_addr={:#x} x13={:#x} x14={:#x} x15={:#x} x16={:#x} x17={:#x} x28={:#x} sp={:#x}",
+            pc, si_addr, x13, x14, x15, x16, x17, x28, sp);
         // dump the guest stack frame area [x13-0x30, x13+0x20]
         // (only when x13 looks like a low-world pointer — the handler must not fault)
         let mut line = String::new();
