@@ -180,6 +180,8 @@ extern "C" fn segv_ctx_handler(_sig: i32, _info: usize, ctx: usize) {
 }
 
 extern "C" fn trap_ctx_handler(_sig: i32, _info: usize, ctx: usize) {
+    // ultra-robust raw write first (no formatting/alloc) so we know we got here
+    unsafe { raw_write(b"[TRAP] handler entered\n"); }
     // aarch64 ucontext: mcontext at +0xE8: regs[0..30], sp, pc, pstate
     let uc = ctx as *const u64;
     unsafe {
@@ -193,28 +195,24 @@ extern "C" fn trap_ctx_handler(_sig: i32, _info: usize, ctx: usize) {
         let x28 = *uc.add((0xE8 + 28*8) / 8);
         let sp = *uc.add((0xE8 + 31*8) / 8);
         let pc = *uc.add((0xE8 + 32*8) / 8);
-        // instruction word at pc (read volatile — pc may be unmapped, but
-        // brk sites are always mapped executable)
-        let mut ins: u32 = 0;
-        let pcv = pc as *const u32;
-        if pc >= 0x1000 && pc < 0x7FFF_FFFF_FFFF && (pc & 1) == 0 {
-            // best-effort: only read if page is likely mapped (catch via plain
-            // read — qemu guest, faults here would mask the real trap)
-            ins = read_ins(pcv);
-        }
-        eprintln!("[TRAP-CTX] pc={:#x} ins={:#010x} x0={:#x} x8={:#x}", pc, ins, x0, x8);
+        eprintln!("[TRAP-CTX] pc={:#x} x0={:#x} x8={:#x}", pc, x0, x8);
         eprintln!("[TRAP-CTX] x13={:#x} x14={:#x} x15={:#x} x16={:#x} x17={:#x} x28={:#x} sp={:#x}",
             x13, x14, x15, x16, x17, x28, sp);
     }
     std::process::exit(77);
 }
 
-#[inline(never)]
-unsafe fn read_ins(p: *const u32) -> u32 {
-    // separate fn: keeps the handler robust if p is unmapped (qemu would
-    // SIGSEGV here — acceptable, the PC/regs are already printed)
-    unsafe { std::ptr::read_volatile(p) }
+/// Raw write(2) — safe inside any signal handler (no locks/alloc/format).
+unsafe fn raw_write(b: &[u8]) {
+    unsafe {
+        core::arch::asm!(
+            "svc #0",
+            in("x8") 64u64, in("x0") 2i64, in("x1") b.as_ptr(), in("x2") b.len() as u64,
+            lateout("x0") _,
+        );
+    }
 }
+
 
 fn install_segv_debug() {
     // NOTE: the kernel/sigreturn trampoline ALWAYS passes (sig, siginfo*, ucontext*)
