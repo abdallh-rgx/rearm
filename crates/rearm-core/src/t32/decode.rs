@@ -736,7 +736,8 @@ fn decode_f8(w: u32) -> Result<Ins, DecodeErr> {
     let mode = bb(hw2, 11, 8);
     let imm8 = bb(hw2, 7, 0) as i32;
     let (p, uu, wb, t) = ((mode >> 2) & 1 == 1, (mode >> 1) & 1 == 1, mode & 1 == 1, mode == 0b1110);
-    let imm = if uu { imm8 << scale } else { -(imm8 << scale) }; // BYTES
+    // pre/post-index imm8 is RAW BYTES (unscaled — LLVM: str r0,[r1,#4]! → imm8=4)
+    let imm = if uu { imm8 } else { -imm8 };
     Ok(Ins::Ldst {
         store: !load, size, signed, user: t,
         rt, rn, rm: None, shift: Shift::Lsl,

@@ -685,8 +685,11 @@ fn enc_f8_ldst(store: bool, size: Size, signed: bool, user: bool, rt: u8, rn: u8
     }
 
     // Literal (Rn=PC) handled above; plain positive imm12 (U=1).
+    // imm is BYTES; the imm12 field is in transfer units (size-scaled).
     if index && !wback && add && !user && imm >= 0 {
-        let imm12 = imm as u32;
+        let scale = match size { Size::B8 => 0i32, Size::H16 => 1, _ => 2 };
+        if imm & ((1 << scale) - 1) != 0 { return Err(enc_err("imm12 align")); }
+        let imm12 = (imm >> scale) as u32;
         if imm12 <= 0xFFF {
             return Ok(base | 0x0080_0000 | ((rt as u32) << 12) | imm12);
         }
