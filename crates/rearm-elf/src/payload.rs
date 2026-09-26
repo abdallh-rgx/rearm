@@ -196,6 +196,10 @@ fn translate_pass(elf: &Elf32, dm: &DynMeta, farset: &[u32], window: u32) -> Res
     let plt_stub_base = (64 + rt.bytes.len() as u32) as u32; // byte offset of stub 0
 
     // ---- original PLT entry → stub (map seeds) ----
+    if std::env::var_os("REARM_DBG").is_some() {
+        eprintln!("[dbg] plt_to_got={} got_to_sym={} imports={}", dm.plt_to_got.len(), dm.got_to_sym.len(), imports.len());
+        for (pa, g) in dm.plt_to_got.iter().take(3) { eprintln!("[dbg] plt {:#x} -> got {:#x}", pa, g); }
+    }
     for (plt_addr, got_slot) in dm.plt_to_got.iter() {
         let Some(&(_, sym_idx)) = dm.got_to_sym.iter().find(|(g, _)| g == got_slot) else { continue };
         let Some(sym) = dm.dynsyms.get(sym_idx as usize) else { continue };
