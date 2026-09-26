@@ -142,6 +142,7 @@ fn main() {
             if i % 4 == 3 { println!("[gstack]{}", line); line.clear(); }
         }
     }
+    let _ = std::io::Write::flush(&mut std::io::stdout());
     if rc == 0 {
         let out: Vec<u8> = unsafe { std::slice::from_raw_parts(tbuf as *const u8, out_len as usize) }.to_vec();
         println!("[harness] compressed hex: {:02x?}", &out[..out_len.min(48) as usize]);
@@ -150,8 +151,10 @@ fn main() {
         let mut crc: u32 = 0xFFFFFFFF;
         for b in out.iter() { for k in (0..8).rev() { let bit = (crc ^ ((*b as u32 >> k) & 1)) & 1; crc = (crc >> 1) ^ (0xEDB8_8320u32).wrapping_mul(bit); } }
         println!("[harness] compressed crc32={:#010x} len={}", !crc, out_len);
+        let _ = std::io::Write::flush(&mut std::io::stdout());
         std::process::exit(0);
     }
+    let _ = std::io::Write::flush(&mut std::io::stdout());
     std::process::exit(1);
 }
 
