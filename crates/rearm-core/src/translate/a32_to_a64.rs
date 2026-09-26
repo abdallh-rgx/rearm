@@ -647,10 +647,10 @@ pub fn translate_a32(ins: &Ins, pc: u32, out: &mut A64) -> Result<bool, Translat
                 // wb value into x16 FIRST (rm read pre-access, as ARM specifies)
                 if let Some(rm_v) = rm {
                     if scale > 0 {
-                        out.lsl_imm(true, x(rm_v), 17, scale);
+                        out.lsl_imm(true, x(*rm_v), 17, scale);
                         out.addsub_ext(true, if *add { 0 } else { 1 }, false, 17, 2, 0, x(*rn), 16);
                     } else {
-                        out.addsub_ext(true, if *add { 0 } else { 1 }, false, x(rm_v), 2, 0, x(*rn), 16);
+                        out.addsub_ext(true, if *add { 0 } else { 1 }, false, x(*rm_v), 2, 0, x(*rn), 16);
                     }
                 } else {
                     load_imm64(out, 17, boff.unsigned_abs());
