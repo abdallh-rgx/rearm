@@ -50,7 +50,7 @@ rearm_thunk:
 .Lbs:
     cmp  x9, x10
     b.hi miss
-    add  w17, w9, x10
+    add  w17, w9, w10
     lsr  w17, w17, #1             // mid
     add  x18, x16, w17, uxtw #3
     ldr  w19, [x18]               // pair.src

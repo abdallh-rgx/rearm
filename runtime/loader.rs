@@ -102,6 +102,8 @@ struct Hdr {
     window: u32,
     imports_off: u32,
     imports_len: u32,
+    glue_off: u32,
+    thunk_off: u32,
 }
 
 fn hdr() -> &'static Hdr {
@@ -206,13 +208,13 @@ pub extern "C" fn rearm_rt_init() {
     PTHREAD_KEY.store(key, Ordering::Relaxed);
 
     // ---- 6. DT_INIT / DT_INIT_ARRAY ----
-    if h.init != 0 { call_guest(h.init as u64, c); }
+    if h.init != 0 { call_guest(h.init as u64, c, h); }
     if h.init_array != 0 && h.init_array_sz > 0 {
         for i in 0..(h.init_array_sz / 4) {
             let f = unsafe {
                 ptr::read_volatile((h.init_array as u64 + (i as u64) * 4) as *const u32)
             };
-            if f != 0 { call_guest(f as u64, c); }
+            if f != 0 { call_guest(f as u64, c, h); }
         }
     }
 
@@ -338,13 +340,25 @@ pub extern "C" fn rearm_rt_enter(x13_in: u64, _x30: u64) -> u64 {
 
 /// Call a translated function by GUEST address (mapped through the payload
 /// thunk). Used for DT_INIT / INIT_ARRAY.
-fn call_guest(guest_addr: u64, c: u64) {
+///
+/// Frame protocol (must mirror rearm_return_glue + the trampolines):
+///   [x13]   = glue (low address — thunk miss → br x15 lands here)
+///   [x13+8] = real return address ("2:"), restored by the glue
+///   [x13+16]= REAL-stack frame base F (256 B callee-save frame, popped by
+///              the glue: [F]=x29 [F+8]=x30 [F+16..88]=x19..x28)
+/// The guest's LR (x14) = glue so bx-lr / pop {..,pc} returns via the glue.
+fn call_guest(guest_addr: u64, c: u64, h: &Hdr) {
     unsafe {
-        let thunk = c + 136; // 128 header + 8 glue
-        let glue = c + 128;
+        let thunk = c + h.thunk_off as u64;
+        let glue = c + h.glue_off as u64;
         let sp = rearm_rt_enter(0, 0);
         asm!(
-            "stp x29, x30, [sp, #-32]!",
+            "stp x29, x30, [sp, #-256]!",
+            "stp x19, x20, [sp, #16]",
+            "stp x21, x22, [sp, #32]",
+            "stp x23, x24, [sp, #48]",
+            "stp x25, x26, [sp, #64]",
+            "stp x27, x28, [sp, #80]",
             "mov x28, {c}",
             "mov x13, {sp}",
             "mov x15, {ga}",
@@ -352,15 +366,19 @@ fn call_guest(guest_addr: u64, c: u64) {
             "str x17, [x13]",
             "adr x17, 2f",
             "str x17, [x13, #8]",
+            "mov x17, sp",
+            "str x17, [x13, #16]",
+            "mov x14, {glue}",
             "blr {thunk}",
             "br x15",
             "2:",
-            "ldp x29, x30, [sp], #32",
             c = in(reg) c,
             sp = in(reg) sp,
             ga = in(reg) guest_addr,
             glue = in(reg) glue,
             thunk = in(reg) thunk,
+            out("x0") _, out("x1") _,
+            out("x13") _, out("x15") _, out("x16") _, out("x17") _, out("x28") _,
         );
     }
 }

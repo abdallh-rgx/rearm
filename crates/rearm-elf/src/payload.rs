@@ -82,6 +82,10 @@ pub struct Payload {
     pub needed: Vec<String>,
     pub stats: RewriteStats,
     pub tls_relocs: usize,
+    /// payload offset of rearm_return_glue
+    pub glue_off: u32,
+    /// payload offset of rearm_thunk
+    pub thunk_off: u32,
     /// guest-image window base (absolute low address W)
     pub window: u32,
     /// translated-code window base (absolute low address C)
@@ -608,7 +612,7 @@ fn translate_pass(elf: &Elf32, dm: &DynMeta, farset: &[u32], window: u32) -> Res
         eprintln!("[dbg2] post-sweep: out.len()={} rt_prefix_check={:08x} map[compress2] hits={:?}",
             out.len(), out.buf.get(0x88).copied().unwrap_or(0), hits);
         // count entries with offsets < stub area start
-        let stub_end = 128 + 288 + imports.len() * 12; // bytes
+        let stub_end = 128 + 320 + imports.len() * 12; // bytes
         let bad = map.iter().filter(|(_, o, _)| (*o as usize) < stub_end && (*o as usize) >= 128 + 288).count();
         let inrt = map.iter().filter(|(_, o, _)| (*o as usize) < 128 + 288).count();
         eprintln!("[dbg2] stub_end={} entries-in-stub-range={} entries-in-rt={} total={}", stub_end, bad, inrt, map.len());
@@ -802,6 +806,8 @@ pub fn build_payload(elf: &Elf32, window: u32, code_base: u32) -> Result<Payload
     put(60, window);
     put(64, imports_off);
     put(68, imports_len);
+    put(72, p.glue_off);
+    put(76, p.thunk_off);
     put(124, p_adapter);
 
     // ---- exports ----
@@ -838,6 +844,8 @@ pub fn build_payload(elf: &Elf32, window: u32, code_base: u32) -> Result<Payload
         needed: dm.needed.clone(),
         stats: p.stats,
         tls_relocs: dm.tls_relocs,
+        glue_off: p.glue_off,
+        thunk_off: p.thunk_off,
         window,
         code_base,
     })
