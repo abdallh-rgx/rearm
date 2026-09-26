@@ -63,6 +63,7 @@ rearm_thunk:
     ldp  x9, x10, [sp], #16
     ret
 bsleft:
+    cbz  w17, miss                // mid == 0: no lower half — miss
     sub  w10, w17, #1
     b    .Lbs
 bsright:
