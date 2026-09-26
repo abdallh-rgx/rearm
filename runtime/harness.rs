@@ -87,21 +87,33 @@ fn main() {
         }
     }
 
-    // ---- call compress2 (zlib self-test) ----
-    let src: Vec<u8> = b"Hello rearm! Hello rearm! Hello rearm! Hello rearm! 1234567890".to_vec();
-    let mut dst = vec![0u8; 4096];
-    let mut dstlen: u64 = dst.len() as u64;
+    // ---- call compress2 (zlib self-test) with LOW-WORLD buffers ----
+    let src_bytes: &[u8] = b"Hello rearm! Hello rearm! Hello rearm! Hello rearm! 1234567890";
+    // guest-visible buffers below 4 GiB (translated code does 32-bit pointer math!)
+    let tbuf = sys_mmap(0x9000_0000, 0x10000, 3, 0x8022, -1, 0);
+    if tbuf == 0 { panic!("test buffer mmap failed"); }
+    unsafe {
+        std::ptr::copy_nonoverlapping(src_bytes.as_ptr(), tbuf as *mut u8, src_bytes.len());
+        std::ptr::write_bytes((tbuf + 0x8000) as *mut u8, 0, 0x1000);
+        std::ptr::write_volatile((tbuf + 0x8000) as *mut u64, 0x1000); // dstLen = 4096
+    }
     let compress2 = so.find_sym("compress2").expect("compress2 export");
-    println!("[harness] compress2 @ {:#x} (bias {:#x})", compress2, bias);
+    println!("[harness] compress2 @ {:#x} (bias {:#x}) buffers @ {:#x}", compress2, bias, tbuf);
     let rc = unsafe {
         std::mem::transmute::<u64, extern "C" fn(*mut u8, *mut u64, *const u8, u64, i32) -> i32>(bias + compress2)(
-            dst.as_mut_ptr(), &mut dstlen, src.as_ptr(), src.len() as u64, 6,
+            tbuf as *mut u8, (tbuf + 0x8000) as *mut u64, tbuf as *const u8, src_bytes.len() as u64, 6,
         )
     };
-    println!("[harness] compress2 rc={} out_len={}", rc, dstlen);
+    let out_len = unsafe { std::ptr::read_volatile((tbuf + 0x8000) as *const u64) };
+    println!("[harness] compress2 rc={} out_len={}", rc, out_len);
     if rc == 0 {
-        println!("[harness] compressed hex: {:02x?}", &dst[..(dstlen as usize).min(32)]);
-        // expected via reference: deflate level 6 — verify with Python later
+        let out: Vec<u8> = unsafe { std::slice::from_raw_parts(tbuf as *const u8, out_len as usize) }.to_vec();
+        println!("[harness] compressed hex: {:02x?}", &out[..out_len.min(48) as usize]);
+        // verify against the harness's own deflate (host zlib via musl? not available) —
+        // print a CRC for the python check instead
+        let mut crc: u32 = 0xFFFFFFFF;
+        for b in out.iter() { for k in (0..8).rev() { let bit = (crc ^ ((*b >> k) & 1)) & 1; crc = (crc >> 1) ^ (0xEDB8_8320u32).wrapping_mul(bit); } }
+        println!("[harness] compressed crc32={:#010x} len={}", !crc, out_len);
         std::process::exit(0);
     }
     std::process::exit(1);
@@ -325,11 +337,56 @@ extern "C" fn fake_dlsym(_h: *mut u8, name: *const u8) -> *mut u8 {
         "mprotect" => fake_mprotect as *mut u8,
         "munmap" => fake_munmap as *mut u8,
         "__android_log_print" => fake_log as *mut u8,
+        // ARM EABI helpers
+        "__aeabi_memcpy" | "__aeabi_memcpy4" | "__aeabi_memcpy8" => memcpy as *mut u8,
+        "__aeabi_memclr" | "__aeabi_memclr4" | "__aeabi_memclr8" => memset as *mut u8,
+        "__aeabi_memmove" | "__aeabi_memmove4" | "__aeabi_memmove8" => memcpy as *mut u8,
+        // misc libc
+        "memchr" => memchr_impl as *mut u8,
+        "snprintf" | "vsnprintf" | "sprintf" => fake_snprintf as *mut u8,
+        "strerror" => fake_strerror as *mut u8,
+        "__errno" => fake_errno as *mut u8,
+        "open" | "lseek" | "read" | "close" | "write" => fake_io_stub as *mut u8,
+        "abort" => fake_abort as *mut u8,
+        "__gnu_Unwind_Find_exidx" => fake_find_exidx as *mut u8,
+        "__cxa_atexit" | "atexit" => fake_cxa_atexit as *mut u8,
+        "__cxa_finalize" => fake_cxa_finalize as *mut u8,
+        "__cxa_begin_cleanup" | "__cxa_type_match" | "__cxa_call_unexpected" => fake_cxa_stub as *mut u8,
+        "__stack_chk_fail" => fake_stack_chk_fail as *mut u8,
+        // data symbols
+        "__stack_chk_guard" => std::ptr::addr_of_mut!(STACK_GUARD) as *mut u8,
+        "environ" => 1 as *mut u8,
         _ => {
             eprintln!("[harness] fake_dlsym: MISS {}", n);
             std::ptr::null_mut()
         }
     }
+}
+
+static mut STACK_GUARD: u64 = 0xdead_beef_cafe_1234;
+
+extern "C" fn memchr_impl(p: *const u8, c: i32, n: u64) -> *mut u8 {
+    unsafe {
+        for i in 0..n {
+            if *p.add(i as usize) == c as u8 {
+                return p.add(i as usize) as *mut u8;
+            }
+        }
+    }
+    std::ptr::null_mut()
+}
+extern "C" fn fake_snprintf() -> i32 { 0 }
+extern "C" fn fake_strerror(_e: i32) -> *mut u8 { b"strerror\0".as_ptr() as *mut u8 }
+extern "C" fn fake_errno() -> *mut u8 { static mut E: u32 = 0; unsafe { std::ptr::addr_of_mut!(E) as *mut u8 } }
+extern "C" fn fake_io_stub() -> i64 { -1 }
+extern "C" fn fake_abort() -> ! { std::process::abort() }
+extern "C" fn fake_find_exidx() -> i64 { 0 }
+extern "C" fn fake_cxa_atexit() -> i32 { 0 }
+extern "C" fn fake_cxa_finalize() {}
+extern "C" fn fake_cxa_stub() -> i32 { 0 }
+extern "C" fn fake_stack_chk_fail() -> ! {
+    eprintln!("[harness] *** stack smashing detected (translated code) ***");
+    std::process::exit(99);
 }
 
 // simple bump allocator on a reserved region
