@@ -39,6 +39,12 @@ rearm_return_glue:
 // x15 out: branchable runtime address.
 // Preserves everything except x15 and the x16..x19 scratches.
 rearm_thunk:
+    // invariant: x28 must point at the payload header ("REAR" + count)
+    ldr  w17, [x28]
+    cmp  w17, #0x52414552
+    b.ne 199f
+    ldr  w17, [x28, #12]
+    cbz  w17, 199f
     lsr  x17, x15, #32
     cbnz x17, .Lforeign           // foreign A64 address: calling adapter
     stp  x9, x10, [sp, #-16]!
