@@ -87,13 +87,12 @@ fn main() {
         }
     }
 
-    // ---- probe: payload_base_slot after init ----
+    // ---- probe: payload_base_slot after init (addresses from current .so) ----
     {
-        let v: u64 = unsafe { std::ptr::read_volatile((bias + 0x77b28) as *const u64) };
-        let a: u64 = unsafe { std::ptr::read_volatile((bias + 0x77b20) as *const u64) };
-        let ia: u64 = unsafe { std::ptr::read_volatile((bias + 0x678f0) as *const u64) };
+        let v: u64 = unsafe { std::ptr::read_volatile((bias + 0x77718) as *const u64) };
+        let ia: u64 = unsafe { std::ptr::read_volatile((bias + 0x674e0) as *const u64) };
         let c: u32 = unsafe { std::ptr::read_volatile(0x4000_0000 as *const u32) };
-        eprintln!("[probe] slot[0x77b28]={:#x} data0[0x77b20]={:#x} initarr[0x678f0]={:#x} [C]={:#x}", v, a, ia, c);
+        eprintln!("[probe] slot[0x77718]={:#x} initarr[0x674e0]={:#x} [C]={:#x}", v, ia, c);
     }
 
     // ---- first: adler32 (pure, small — bisection point) ----
@@ -175,15 +174,18 @@ extern "C" fn segv_handler(_sig: i32, info: *mut u8, ctx: *mut u8) {
 }
 
 extern "C" fn segv_ctx_handler(_sig: i32, _info: usize, ctx: usize) {
-    // aarch64 ucontext: mcontext at +0xE8: regs[0..30], sp, pc, pstate
+    // qemu aarch64 rt_sigframe ucontext: mcontext (regs) at +0xC0
     let uc = ctx as *const u64;
     unsafe {
-        let x16 = *uc.add((0xE8 + 16*8) / 8);
-        let x18 = *uc.add((0xE8 + 18*8) / 8);
-        let x28 = *uc.add((0xE8 + 28*8) / 8);
-        let sp = *uc.add((0xE8 + 31*8) / 8);
-        let pc = *uc.add((0xE8 + 32*8) / 8);
-        eprintln!("[SEGV-CTX] pc={:#x} x16={:#x} x18={:#x} x28={:#x} sp={:#x}", pc, x16, x18, x28, sp);
+        let x13 = *uc.add((0xC0 + 13*8) / 8);
+        let x15 = *uc.add((0xC0 + 15*8) / 8);
+        let x16 = *uc.add((0xC0 + 16*8) / 8);
+        let x17 = *uc.add((0xC0 + 17*8) / 8);
+        let x28 = *uc.add((0xC0 + 28*8) / 8);
+        let sp = *uc.add((0xC0 + 31*8) / 8);
+        let pc = *uc.add((0xC0 + 32*8) / 8);
+        eprintln!("[SEGV-CTX] pc={:#x} x13={:#x} x15={:#x} x16={:#x} x17={:#x} x28={:#x} sp={:#x}",
+            pc, x13, x15, x16, x17, x28, sp);
     }
     std::process::exit(66);
 }
