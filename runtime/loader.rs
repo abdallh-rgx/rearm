@@ -116,7 +116,7 @@ pub extern "C" fn rearm_rt_init() {
     if INIT_DONE.swap(1, Ordering::AcqRel) != 0 { return; }
 
     let h = hdr();
-    if &h.magic != b"REARM1\0" { die(b"rearm: bad payload magic\n"); }
+    if h.magic[0..7] != *b"REARM1\0" { die(b"rearm: bad payload magic\n"); }
 
     let c = h.code_base as u64;
     let w = h.window as u64;
@@ -149,7 +149,7 @@ pub extern "C" fn rearm_rt_init() {
     }
 
     // ---- 3. relocations (absolute low 32-bit stores) ----
-    let base = unsafe { ptr::addr_of!(payload_blob) as *const u8 };
+    let base = ptr::addr_of!(payload_blob) as *const u8;
     let n = h.reloc_count as usize;
     for i in 0..n {
         let p = unsafe { base.add(h.reloc_off as usize + i * 12) };
@@ -242,7 +242,7 @@ fn die(msg: &[u8]) -> ! {
     unsafe {
         let _ = write2(2, msg);
     }
-    core::arch::asm!("brk #0xF00D", options(noreturn));
+    unsafe { core::arch::asm!("brk #0xF00D", options(noreturn)); }
 }
 
 unsafe fn write2(fd: i32, b: &[u8]) -> i64 {

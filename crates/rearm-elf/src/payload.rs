@@ -747,6 +747,7 @@ pub fn build_payload(elf: &Elf32, window: u32, code_base: u32) -> Result<Payload
     bytes.extend_from_slice(&shadow_bytes);
 
     // ---- header (128 B) ----
+    let p_adapter = p.adapter_off;
     let hdr = &mut bytes[0..128];
     hdr.copy_from_slice(&[0u8; 128]);
     hdr[0..8].copy_from_slice(b"REARM1\0\0");
@@ -767,7 +768,7 @@ pub fn build_payload(elf: &Elf32, window: u32, code_base: u32) -> Result<Payload
     put(60, window);
     put(64, imports_off);
     put(68, imports_len);
-    put(124, adapter_off);
+    put(124, p_adapter);
 
     // ---- exports ----
     let mut exports = Vec::new();
