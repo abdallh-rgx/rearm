@@ -32,6 +32,8 @@ rearm_return_glue:
     .type rearm_thunk, %function
 rearm_thunk:
     // invariant: x28 must point at the payload header ("REAR" + count>0)
+    // Search key: w15. Pass 1 = as-is (guest-space/payload/bridge values);
+    // pass 2 (raw-space arithmetic wrap): w15 += W, then re-search.
     movz w19, #0x4552
     movk w19, #0x5241, lsl 16
     ldr  w17, [x28]
@@ -41,7 +43,10 @@ rearm_thunk:
     cbz  w17, badhdr2
     lsr  x17, x15, #32
     cbnz x17, .Lforeign
-    stp  x9, x10, [sp, #-16]!
+    stp  x9, x10, [sp, #-32]!
+    str  x15, [sp, #16]           // save the original target
+    str  xzr, [sp, #24]           // pass = 0
+.Lsearch:
     ldr  w9,  [x28, #8]           // map_off
     ldr  w17, [x28, #12]          // map_count
     add  x16, x28, x9
@@ -60,7 +65,7 @@ rearm_thunk:
     b.hi bsright
     ldr  w17, [x18, #4]           // pair.off
     add  x15, x28, w17, uxtw
-    ldp  x9, x10, [sp], #16
+    ldp  x9, x10, [sp], #32
     ret
 bsleft:
     cbz  w17, miss                // mid == 0: no lower half — miss
@@ -70,7 +75,17 @@ bsright:
     add  w9, w17, #1
     b    .Lbs
 miss:
-    ldp  x9, x10, [sp], #16
+    ldr  w17, [sp, #24]
+    cbnz w17, miss_ret            // already tried +W — pass through
+    mov  w17, #1
+    str  w17, [sp, #24]
+    ldr  w17, [x28, #60]          // W (guest-image window base)
+    cbz  w17, miss_ret
+    add  w15, w15, w17            // retry with the W-rebased key
+    b    .Lsearch
+miss_ret:
+    ldr  x15, [sp, #16]           // restore the ORIGINAL target
+    ldp  x9, x10, [sp], #32
     ret
 .Lforeign:
     mov  x16, x15                  // target
