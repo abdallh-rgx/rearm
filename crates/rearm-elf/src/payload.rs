@@ -191,7 +191,7 @@ fn translate_pass(elf: &Elf32, dm: &DynMeta, farset: &[u32], window: u32) -> Res
         out.movz(false, 0, (idx & 0xFFFF) as u16, 15);
         out.movk(false, 1, ((idx >> 16) & 0xFFFF) as u16, 15);
         let here = (out.len() * 4) as i32;
-        out.b(adapter_off - here)?;
+        out.b(adapter_off - here).map_err(|_| "plt b range".to_string())?;
     }
     let plt_stub_base = (64 + rt.bytes.len() as u32) as u32; // byte offset of stub 0
 
@@ -312,7 +312,7 @@ fn translate_pass(elf: &Elf32, dm: &DynMeta, farset: &[u32], window: u32) -> Res
                 if let Ins::It { first_cond, mask } = &tins.ins {
                     it = Some(ItTracker::new(*first_cond, *mask));
                     stats.it_blocks += 1;
-                    map.push((reb(a), out.len()));
+                    map.push((reb(a), out.len() as u32));
                     visited.insert(a);
                     a += len;
                     continue;
@@ -325,7 +325,7 @@ fn translate_pass(elf: &Elf32, dm: &DynMeta, farset: &[u32], window: u32) -> Res
                 match &tins.ins {
                     Ins::Unsupported { .. } => {
                         stats.unsupported += 1;
-                        map.push((reb(a), out.len()));
+                        map.push((reb(a), out.len() as u32));
                         out.e(TRAP);
                         visited.insert(a);
                         a += len;
@@ -364,9 +364,9 @@ fn translate_pass(elf: &Elf32, dm: &DynMeta, farset: &[u32], window: u32) -> Res
                             stats.note_unsupported("tbb/tbh (reg base)");
                         }
                         let _ = rm;
-                        let translated = translate_t32(&tins.ins, a, &mut out, cond)?;
+                        let translated = translate_t32(&tins.ins, a, &mut out, cond).map_err(|e| e.0)?;
                         if translated { stats.translated += 1; }
-                        map.push((reb(a), start));
+                        map.push((reb(a), start as u32));
                         visited.insert(a);
                         a += len;
                         break; // table follows
@@ -378,20 +378,20 @@ fn translate_pass(elf: &Elf32, dm: &DynMeta, farset: &[u32], window: u32) -> Res
                 let far_here = it.is_none() && is_far(a);
                 match (&tins.ins, far_here) {
                     (Ins::B { cond: c, off }, true) if *c != Cond::Al => {
-                        out.bcond(c.invert(), 8)?; // skip the next word
+                        out.bcond(c.invert(), 8).map_err(|_| "bcond".to_string())?; // skip the next word
                         let at = out.len();
                         out.e(0); // b placeholder
                         let base = if len == 4 { t32_pc_aligned(a) } else { a.wrapping_add(4) };
                         fixups.push(Fixup { at, kind: FixKind::B, target: reb(base.wrapping_add(*off as u32)), src: a });
                         stats.translated += 1;
-                        map.push((reb(a), start));
+                        map.push((reb(a), start as u32));
                         visited.insert(a);
                         a += len;
                         continue;
                     }
                     (Ins::Cbz { nz, rn, off }, true) => {
-                        if *nz { out.cbz(false, *rn, 8)?; }
-                        else { out.cbnz(false, *rn, 8)?; }
+                        if *nz { out.cbz(false, *rn, 8).map_err(|_| "cbz".to_string())?; }
+                        else { out.cbnz(false, *rn, 8).map_err(|_| "cbnz".to_string())?; }
                         let at = out.len();
                         out.e(0);
                         let target = a.wrapping_add(4).wrapping_add(*off as u32);
@@ -402,7 +402,7 @@ fn translate_pass(elf: &Elf32, dm: &DynMeta, farset: &[u32], window: u32) -> Res
                             src: a,
                         });
                         stats.translated += 1;
-                        map.push((reb(a), start));
+                        map.push((reb(a), start as u32));
                         visited.insert(a);
                         a += len;
                         continue;
@@ -433,7 +433,7 @@ fn translate_pass(elf: &Elf32, dm: &DynMeta, farset: &[u32], window: u32) -> Res
                     Ok(false) => { stats.unsupported += 1; out.e(TRAP); }
                     Err(_) => { stats.unsupported += 1; out.e(TRAP); }
                 }
-                map.push((reb(a), start));
+                map.push((reb(a), start as u32));
                 visited.insert(a);
 
                 // ---- stop rules ----
@@ -467,7 +467,7 @@ fn translate_pass(elf: &Elf32, dm: &DynMeta, farset: &[u32], window: u32) -> Res
             match &ins {
                 Ins::Unsupported { .. } => {
                     stats.unsupported += 1;
-                    map.push((reb(a), out.len()));
+                    map.push((reb(a), out.len() as u32));
                     out.e(TRAP);
                     visited.insert(a);
                     a += 4;
@@ -479,13 +479,13 @@ fn translate_pass(elf: &Elf32, dm: &DynMeta, farset: &[u32], window: u32) -> Res
             // far conditional (A32 B.cond)
             if let Ins::B { cond: c, off } = &ins {
                 if *c != Cond::Al && is_far(a) {
-                    out.bcond(c.invert(), 8)?;
+                    out.bcond(c.invert(), 8).map_err(|_| "bcond".to_string())?;
                     let at = out.len();
                     out.e(0);
                     let target = a.wrapping_add(8).wrapping_add(*off as u32);
                     fixups.push(Fixup { at, kind: FixKind::B, target: reb(target), src: a });
                     stats.translated += 1;
-                    map.push((reb(a), start));
+                    map.push((reb(a), start as u32));
                     visited.insert(a);
                     a += 4;
                     continue;
@@ -494,8 +494,8 @@ fn translate_pass(elf: &Elf32, dm: &DynMeta, farset: &[u32], window: u32) -> Res
 
             // ADR-like: ADD rd, PC, #imm (rot form)
             if let Ins::DpImm { op: DpOp::Add, rn: 15, imm12, .. } = &ins {
-                let rot = ((imm12 >> 8) & 0xF) * 2;
-                let target = a.wrapping_add(8).wrapping_add((imm12 & 0xFF).rotate_right(rot));
+                let rot = (((*imm12 >> 8) & 0xF) * 2) as u32;
+                let target = a.wrapping_add(8).wrapping_add((*imm12 as u32 & 0xFF).rotate_right(rot));
                 if in_exec(target & !1) { seed(&mut queue, target & !1, mode_at(target & !1)); }
             }
 
@@ -507,7 +507,7 @@ fn translate_pass(elf: &Elf32, dm: &DynMeta, farset: &[u32], window: u32) -> Res
                 Ok(false) => { stats.unsupported += 1; out.e(TRAP); }
                 Err(_) => { stats.unsupported += 1; out.e(TRAP); }
             }
-            map.push((reb(a), start));
+            map.push((reb(a), start as u32));
             visited.insert(a);
 
             let stop = match &ins {
@@ -654,7 +654,7 @@ pub fn build_payload(elf: &Elf32, window: u32, code_base: u32) -> Result<Payload
     let hdr = &mut bytes[0..64];
     hdr.copy_from_slice(&[0u8; 64]);
     hdr[0..8].copy_from_slice(b"REARM1\0\0");
-    let put = |o: usize, v: u32| hdr[o..o + 4].copy_from_slice(&v.to_le_bytes());
+    let mut put = |o: usize, v: u32| hdr[o..o + 4].copy_from_slice(&v.to_le_bytes());
     put(8, map_off);
     put(12, map_count);
     put(16, reloc_off);
@@ -675,7 +675,7 @@ pub fn build_payload(elf: &Elf32, window: u32, code_base: u32) -> Result<Payload
     for s in dm.dynsyms.iter() {
         if s.is_undef || !s.is_func || s.value == 0 { continue; }
         let want = window.wrapping_add(s.value & !1);
-        if let Ok(i) = p.map.binary_search_by_key(&want, |&&(x, _)| x) {
+        if let Ok(i) = p.map.binary_search_by_key(&want, |(x, _)| *x) {
             exports.push(PExport {
                 name: s.name.clone(),
                 payload_off: p.map[i].1,
