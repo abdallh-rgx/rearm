@@ -117,7 +117,9 @@ struct Fixup { at: usize, kind: FixKind, target: u32, src: u32 }
 
 struct PassResult {
     out: A64,
-    map: Vec<(u32, u32)>,
+    /// (guest key, payload off, priority) — priority 1 = trusted (runs that
+    /// have not crossed a TRAP hole), 0 = suspect (post-hole fallthrough).
+    map: Vec<(u32, u32, u8)>,
     fixups: Vec<Fixup>,
     stats: RewriteStats,
     plt_adrp_fixups: Vec<(usize, u32)>, // (word idx, import idx) — legacy, unused
@@ -137,7 +139,7 @@ fn translate_pass(elf: &Elf32, dm: &DynMeta, farset: &[u32], window: u32) -> Res
 
     let mut out = A64::new();
     let mut stats = RewriteStats::default();
-    let mut map: Vec<(u32, u32)> = Vec::new();
+    let mut map: Vec<(u32, u32, u8)> = Vec::new();
     let mut fixups: Vec<Fixup> = Vec::new();
 
     // ---- header space (32 words, patched by the driver) ----
@@ -208,7 +210,7 @@ fn translate_pass(elf: &Elf32, dm: &DynMeta, farset: &[u32], window: u32) -> Res
         let Some(sym) = dm.dynsyms.get(sym_idx as usize) else { continue };
         if sym.is_undef {
             if let Some(pos) = imports.iter().position(|n| *n == sym.name) {
-                map.push((reb(*plt_addr), plt_stub_base + pos as u32 * 12));
+                map.push((reb(*plt_addr), plt_stub_base + pos as u32 * 12, 1));
             }
         } else {
             // locally-defined symbol called through the PLT (interposition):
@@ -305,6 +307,7 @@ fn translate_pass(elf: &Elf32, dm: &DynMeta, farset: &[u32], window: u32) -> Res
         let mut thumb = thumb0;
         let mut a = addr0;
         let mut it: Option<ItTracker> = None;
+        let mut degraded = false; // crossed a TRAP hole: later pushes are suspect
 
         while a + 4 <= sec_end {
             if a != addr0 {
@@ -328,7 +331,7 @@ fn translate_pass(elf: &Elf32, dm: &DynMeta, farset: &[u32], window: u32) -> Res
                 if let Ins::It { first_cond, mask } = &tins.ins {
                     it = Some(ItTracker::new(*first_cond, *mask));
                     stats.it_blocks += 1;
-                    map.push((reb(a), out.len() as u32));
+                    map.push((reb(a), out.len() as u32, if degraded {0} else {1}));
                     visited.insert(a);
                     a += len;
                     continue;
@@ -341,7 +344,7 @@ fn translate_pass(elf: &Elf32, dm: &DynMeta, farset: &[u32], window: u32) -> Res
                 match &tins.ins {
                     Ins::Unsupported { .. } => {
                         stats.unsupported += 1;
-                        map.push((reb(a), out.len() as u32));
+                        map.push((reb(a), out.len() as u32, if degraded {0} else {1}));
                         out.e(TRAP);
                         visited.insert(a);
                         a += len;
@@ -382,7 +385,7 @@ fn translate_pass(elf: &Elf32, dm: &DynMeta, farset: &[u32], window: u32) -> Res
                         let _ = rm;
                         let translated = translate_t32(&tins.ins, a, &mut out, cond).map_err(|e| e.0)?;
                         if translated { stats.translated += 1; }
-                        map.push((reb(a), start as u32));
+                        map.push((reb(a), start as u32, if degraded {0} else {1}));
                         visited.insert(a);
                         a += len;
                         break; // table follows
@@ -400,7 +403,7 @@ fn translate_pass(elf: &Elf32, dm: &DynMeta, farset: &[u32], window: u32) -> Res
                         let base = if len == 4 { t32_pc_aligned(a) } else { a.wrapping_add(4) };
                         fixups.push(Fixup { at, kind: FixKind::B, target: reb(base.wrapping_add(*off as u32)), src: a });
                         stats.translated += 1;
-                        map.push((reb(a), start as u32));
+                        map.push((reb(a), start as u32, if degraded {0} else {1}));
                         visited.insert(a);
                         a += len;
                         continue;
@@ -418,7 +421,7 @@ fn translate_pass(elf: &Elf32, dm: &DynMeta, farset: &[u32], window: u32) -> Res
                             src: a,
                         });
                         stats.translated += 1;
-                        map.push((reb(a), start as u32));
+                        map.push((reb(a), start as u32, if degraded {0} else {1}));
                         visited.insert(a);
                         a += len;
                         continue;
@@ -462,10 +465,10 @@ fn translate_pass(elf: &Elf32, dm: &DynMeta, farset: &[u32], window: u32) -> Res
                             _ => {}
                         }
                     }
-                    Ok(false) => { stats.unsupported += 1; stats.note_unsupported(format!("{:?}", tins.ins).split('{').next().unwrap_or("?")); out.e(TRAP); }
-                    Err(e) => { stats.unsupported += 1; stats.note_unsupported(&format!("ERR {} @ t32", e.0)); out.e(TRAP); }
+                    Ok(false) => { stats.unsupported += 1; stats.note_unsupported(format!("{:?}", tins.ins).split('{').next().unwrap_or("?")); out.e(TRAP); degraded = true; }
+                    Err(e) => { stats.unsupported += 1; stats.note_unsupported(&format!("ERR {} @ t32", e.0)); out.e(TRAP); degraded = true; }
                 }
-                map.push((reb(a), start as u32));
+                map.push((reb(a), start as u32, if degraded {0} else {1}));
                 visited.insert(a);
 
                 // ---- stop rules ----
@@ -501,9 +504,10 @@ fn translate_pass(elf: &Elf32, dm: &DynMeta, farset: &[u32], window: u32) -> Res
             match &ins {
                 Ins::Unsupported { .. } => {
                     stats.unsupported += 1;
-                    map.push((reb(a), out.len() as u32));
+                    map.push((reb(a), out.len() as u32, 1));
                     out.e(TRAP);
                     visited.insert(a);
+                    degraded = true;
                     a += 4;
                     continue;
                 }
@@ -519,7 +523,7 @@ fn translate_pass(elf: &Elf32, dm: &DynMeta, farset: &[u32], window: u32) -> Res
                     let target = a.wrapping_add(8).wrapping_add(*off as u32);
                     fixups.push(Fixup { at, kind: FixKind::B, target: reb(target), src: a });
                     stats.translated += 1;
-                    map.push((reb(a), start as u32));
+                    map.push((reb(a), start as u32, if degraded {0} else {1}));
                     visited.insert(a);
                     a += 4;
                     continue;
@@ -545,10 +549,10 @@ fn translate_pass(elf: &Elf32, dm: &DynMeta, farset: &[u32], window: u32) -> Res
                         _ => {}
                     }
                 }
-                Ok(false) => { stats.unsupported += 1; stats.note_unsupported(format!("{:?}", ins).split('{').next().unwrap_or("?")); out.e(TRAP); }
-                Err(e) => { stats.unsupported += 1; stats.note_unsupported(&format!("ERR {} @ a32", e.0)); out.e(TRAP); }
+                Ok(false) => { stats.unsupported += 1; stats.note_unsupported(format!("{:?}", ins).split('{').next().unwrap_or("?")); out.e(TRAP); degraded = true; }
+                Err(e) => { stats.unsupported += 1; stats.note_unsupported(&format!("ERR {} @ a32", e.0)); out.e(TRAP); degraded = true; }
             }
-            map.push((reb(a), start as u32));
+            map.push((reb(a), start as u32, if degraded {0} else {1}));
             visited.insert(a);
 
             let stop = match &ins {
@@ -574,18 +578,22 @@ fn translate_pass(elf: &Elf32, dm: &DynMeta, farset: &[u32], window: u32) -> Res
     }
 
     stats.functions = anchors.len();
-    map.sort_unstable();
-    map.dedup();
+    // priority-aware dedup: sort by (key asc, priority desc) then keep the
+    // first entry per key — trusted translations win over suspect ones.
+    map.sort_unstable_by(|x, y| x.0.cmp(&y.0).then(y.2.cmp(&x.2)));
+    map.dedup_by_key(|e| e.0);
     // local PLT stubs → translated target functions (map is sorted now)
+    let mut resolved_local = 0usize;
     for (plt_addr, target) in local_plt.iter() {
-        if let Ok(i) = map.binary_search_by_key(&reb(*target), |&(x, _)| x) {
-            map.push((reb(*plt_addr), map[i].1));
+        if let Ok(i) = map.binary_search_by_key(&reb(*target), |e| e.0) {
+            map.push((reb(*plt_addr), map[i].1, 1));
+            resolved_local += 1;
         } else {
             stats.branches_unresolved += 1; // local PLT target not translated
         }
     }
-    map.sort_unstable();
-    map.dedup();
+    map.sort_unstable_by(|x, y| x.0.cmp(&y.0).then(y.2.cmp(&x.2)));
+    map.dedup_by_key(|e| e.0);
     fixups.sort_unstable_by_key(|f| f.target);
     stats.a64_words = out.len();
     Ok(PassResult { out, map, fixups, stats, plt_adrp_fixups: Vec::new(), imports, local_plt })
