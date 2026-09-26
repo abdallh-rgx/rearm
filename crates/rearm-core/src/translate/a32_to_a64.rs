@@ -82,6 +82,12 @@ pub fn translate_a32(ins: &Ins, pc: u32, out: &mut A64) -> Result<bool, Translat
                     translate_regshift(*op, *s, *rn, *rd, *rm, *shift, *rs, pc, out)?
                 }
             }
+            // `add/mov/orr ... pc, ...` (PIC veneer `add pc, r12, pc`): the
+            // result in w15 is a guest-space/PLT target — branch via the thunk.
+            if *rd == 15 && crate::translate::bias::bias_on() {
+                crate::translate::bias::emit_thunk_call(out);
+                out.br(15);
+            }
         }
 
         Ins::Movw { rd, imm16 } => { out.movz(false, 0, *imm16, x(*rd)); }

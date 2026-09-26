@@ -598,11 +598,12 @@ fn translate_pass(elf: &Elf32, dm: &DynMeta, farset: &[u32], window: u32) -> Res
                 }
                 Ins::LdmStm { load: true, list, .. } if list.0.contains(&15) => true,
                 Ins::Svc { .. } => true,
+                // DpReg/DpImm writing PC (e.g. the PIC veneer `add pc, r12, pc`):
+                // translated (result → w15 → thunk → branch); the sweep stops
+                // (dynamic target — its PLT entry is seeded separately).
                 Ins::DpReg { op, s, rd: 15, .. }
                     if !matches!(op, DpOp::Cmp | DpOp::Cmn | DpOp::Tst | DpOp::Teq)
-                        && !(*op == DpOp::Sub && *s) => {
-                    stats.note_unsupported("write to pc (reg)"); true
-                }
+                        && !(*op == DpOp::Sub && *s) => true,
                 _ => false,
             };
             if stop { break; }
