@@ -326,7 +326,9 @@ fn translate_t32_inner(ins: &Ins, addr: u32, out: &mut A64) -> Result<bool, Tran
         }
 
         // ======== everything else: shared A32 semantics ========
-        _ => translate_a32(ins, addr, out),
+        // T32 PC-operand reads see (addr + 4); the shared translator's
+        // load_pc materializes pc + 8, so hand it (addr - 4).
+        _ => translate_a32(ins, addr.wrapping_sub(4), out),
     }
 }
 
