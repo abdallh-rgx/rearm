@@ -212,7 +212,7 @@ pub extern "C" fn rearm_rt_init() {
     if h.init_array != 0 && h.init_array_sz > 0 {
         for i in 0..(h.init_array_sz / 4) {
             let f = unsafe {
-                ptr::read_volatile((w + h.init_array as u64 + (i as u64) * 4) as *const u32)
+                ptr::read_volatile((h.init_array as u64 + (i as u64) * 4) as *const u32)
             };
             if f != 0 { call_guest(f as u64, c); }
         }
