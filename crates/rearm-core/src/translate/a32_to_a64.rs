@@ -749,7 +749,7 @@ pub fn translate_a32(ins: &Ins, pc: u32, out: &mut A64) -> Result<bool, Translat
                 if *rm == 14 {
                     out.br(x(*rm));
                 } else {
-                    out.orrimm_mov(*rm, 15);
+                    out.addsub_reg(true, 0, false, 0, 0, x(*rm), 31, 15); // mov x15, x(rm)
                     crate::translate::bias::emit_thunk_call(out);
                     out.br(15);
                 }
@@ -769,7 +769,7 @@ pub fn translate_a32(ins: &Ins, pc: u32, out: &mut A64) -> Result<bool, Translat
                 } else {
                     crate::translate::bias::bias_addr(out, 14, t2);
                 }
-                out.orrimm_mov(*rm, 15);
+                out.addsub_reg(true, 0, false, 0, 0, x(*rm), 31, 15); // mov x15, x(rm)
                 crate::translate::bias::emit_thunk_call(out);
                 out.br(15);
             } else {
