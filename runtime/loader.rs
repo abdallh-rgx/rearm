@@ -181,7 +181,7 @@ pub extern "C" fn rearm_rt_init() {
     for i in 0..nimp {
         let noff = unsafe { ptr::read_unaligned(name_base.add(4 + i * 4) as *const u32) as usize };
         let name = unsafe {
-            let p = name_base.add(noff);
+            let p = name_base.add(4 + nimp * 4 + noff);
             let mut e = 0usize;
             while *p.add(e) != 0 { e += 1; }
             core::slice::from_raw_parts(p, e)
