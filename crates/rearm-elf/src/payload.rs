@@ -122,6 +122,9 @@ struct PassResult {
     stats: RewriteStats,
     plt_adrp_fixups: Vec<(usize, u32)>, // (word idx, import idx) — legacy, unused
     imports: Vec<String>,
+    /// (source PLT addr, target function vaddr) for locally-defined symbols
+    /// called through the PLT — resolved to translated code after the sweep.
+    local_plt: Vec<(u32, u32)>,
 }
 
 /// One full translation pass. `farset` = source addresses of conditional
@@ -195,16 +198,22 @@ fn translate_pass(elf: &Elf32, dm: &DynMeta, farset: &[u32], window: u32) -> Res
     }
     let plt_stub_base = (64 + rt.bytes.len() as u32) as u32; // byte offset of stub 0
 
-    // ---- original PLT entry → stub (map seeds) ----
+    // ---- original PLT entry → stub / local target ----
     if std::env::var_os("REARM_DBG").is_some() {
         eprintln!("[dbg] plt_to_got={} got_to_sym={} imports={}", dm.plt_to_got.len(), dm.got_to_sym.len(), imports.len());
-        for (pa, g) in dm.plt_to_got.iter().take(3) { eprintln!("[dbg] plt {:#x} -> got {:#x}", pa, g); }
     }
+    let mut local_plt: Vec<(u32, u32)> = Vec::new();
     for (plt_addr, got_slot) in dm.plt_to_got.iter() {
         let Some(&(_, sym_idx)) = dm.got_to_sym.iter().find(|(g, _)| g == got_slot) else { continue };
         let Some(sym) = dm.dynsyms.get(sym_idx as usize) else { continue };
-        if let Some(pos) = imports.iter().position(|n| *n == sym.name) {
-            map.push((reb(*plt_addr), plt_stub_base + pos as u32 * 12));
+        if sym.is_undef {
+            if let Some(pos) = imports.iter().position(|n| *n == sym.name) {
+                map.push((reb(*plt_addr), plt_stub_base + pos as u32 * 12));
+            }
+        } else {
+            // locally-defined symbol called through the PLT (interposition):
+            // resolved to the translated function after the sweep
+            local_plt.push((*plt_addr, sym.value & !1));
         }
     }
 
@@ -564,9 +573,19 @@ fn translate_pass(elf: &Elf32, dm: &DynMeta, farset: &[u32], window: u32) -> Res
     stats.functions = anchors.len();
     map.sort_unstable();
     map.dedup();
+    // local PLT stubs → translated target functions (map is sorted now)
+    for (plt_addr, target) in local_plt.iter() {
+        if let Ok(i) = map.binary_search_by_key(&reb(*target), |&(x, _)| x) {
+            map.push((reb(*plt_addr), map[i].1));
+        } else {
+            stats.branches_unresolved += 1; // local PLT target not translated
+        }
+    }
+    map.sort_unstable();
+    map.dedup();
     fixups.sort_unstable_by_key(|f| f.target);
     stats.a64_words = out.len();
-    Ok(PassResult { out, map, fixups, stats, plt_adrp_fixups: Vec::new(), imports })
+    Ok(PassResult { out, map, fixups, stats, plt_adrp_fixups: Vec::new(), imports, local_plt })
 }
 
 // register helper for Ins::Cbz (rn is a plain u8 register number)
