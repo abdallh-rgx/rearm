@@ -112,10 +112,11 @@ pub fn emit_payload_obj(p: &Payload) -> Vec<u8> {
     let mut sym: Vec<u8> = vec![0u8; 48];
     let e = &mut sym[24..];
     e[0..4].copy_from_slice(&payload_blob_name.to_le_bytes());
+    e[4] = 0x11; // STB_GLOBAL | STT_OBJECT
+    e[5] = 0;    // st_other
+    e[6..8].copy_from_slice(&1u16.to_le_bytes()); // shndx = .rodata
     e[8..16].copy_from_slice(&0u64.to_le_bytes()); // value 0 (ET_REL)
-    e[16..20].copy_from_slice(&(data.len() as u32).to_le_bytes());
-    e[20] = 0x11; // STB_GLOBAL | STT_OBJECT
-    e[21] = 1;    // shndx = .rodata
+    e[16..24].copy_from_slice(&(data.len() as u64).to_le_bytes());
     buf.extend_from_slice(&sym);
     while buf.len() % 8 != 0 { buf.push(0); }
     let str_off = buf.len();
@@ -166,6 +167,8 @@ fn sanitize(name: &str) -> String {
 pub fn gen_trampoline_s(soname: &str, p: &Payload) -> String {
     let mut s = String::with_capacity(64 * 1024);
     s.push_str("// rearm-generated trampolines (per-export entry stubs)\n");
+    s.push_str(".hidden payload_base_slot\n");
+    s.push_str(".hidden rearm_rt_enter\n");
     s.push_str(".text\n");
     for e in p.exports.iter() {
         let sym = sanitize(&e.name);
