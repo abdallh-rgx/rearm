@@ -792,11 +792,19 @@ pub fn translate_a32(ins: &Ins, pc: u32, out: &mut A64) -> Result<bool, Translat
         }
         Ins::Bx { rm } => {
             if crate::translate::bias::bias_on() {
-                // LR is always a payload/bridge address (BL materialization,
-                // trampoline glue) — branch directly. Any other register
-                // holds a guest-space or foreign target: map it through the
-                // runtime thunk first (foreign targets get the adapter).
-                if *rm == 14 {
+                if *rm == 15 {
+                    // `bx pc` (T16 0x4778): switch to ARM at Align(PC,4).
+                    // PC is a CONSTANT (not the stale x15!) — materialize
+                    // W + Align(pc+8, 4) and thunk-map it to the A32 sweep.
+                    let target = (pc.wrapping_add(8)) & !3u32;
+                    crate::translate::bias::bias_src(out, 15, target);
+                    crate::translate::bias::emit_thunk_call(out);
+                    out.br(15);
+                } else if *rm == 14 {
+                    // LR is always a payload/bridge address (BL materialization,
+                    // trampoline glue) — branch directly. Any other register
+                    // holds a guest-space or foreign target: map it through the
+                    // runtime thunk first (foreign targets get the adapter).
                     out.br(x(*rm));
                 } else {
                     out.addsub_reg(true, 0, false, 0, 0, x(*rm), 31, 15); // mov x15, x(rm)

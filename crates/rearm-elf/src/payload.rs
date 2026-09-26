@@ -497,6 +497,11 @@ fn translate_pass(elf: &Elf32, dm: &DynMeta, farset: &[u32], window: u32) -> Res
                 // ---- stop rules ----
                 let stop = match &tins.ins {
                     Ins::B { cond: Cond::Al, .. } => true,
+                    Ins::Bx { rm: 15 } => {
+                        // `bx pc`: switch to ARM at Align(a+4,4) — seed it.
+                        seed(&mut queue, a.wrapping_add(4) & !3u32, false);
+                        true
+                    }
                     Ins::Bx { .. } | Ins::BlxReg { .. } => true,
                     Ins::Blx { off } => { // mode switch: flip and continue
                         let base = (a.wrapping_add(4) & !3u32).wrapping_add(*off as u32);
