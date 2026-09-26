@@ -98,7 +98,8 @@ fn it_guard_bracketing() {
     let cond = (first & 0xF) as u8;
     let off_words = (first >> 5) & 0x7FFFF; // imm19 = byte off / 4
     assert_eq!(cond, Cond::Ne.bits(), "guard must branch on inverted cond");
-    assert_eq!(off_words as usize, out.len() - 1, "guard must skip exactly the body (in words)");
+    // target = the word AFTER the body: imm19 = 1 (the guard itself) + body words
+    assert_eq!(off_words as usize, out.len(), "guard must skip itself + the body (in words)");
     // unguarded: no leading branch
     let mut out2 = A64::new();
     translate_t32(&ins, 0x1000, &mut out2, None).unwrap();
