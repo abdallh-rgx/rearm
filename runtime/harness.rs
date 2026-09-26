@@ -132,6 +132,16 @@ fn main() {
     };
     let out_len = unsafe { std::ptr::read_volatile((tbuf + 0x8000) as *const u64) };
     println!("[harness] compress2 rc={} out_len={}", rc, out_len);
+    // dump the guest stack region for debugging (low arena)
+    {
+        let mut line = String::new();
+        for i in 0..64u32 {
+            let addr = 0xc001_ff00u64 + (i as u64) * 4;
+            let v = unsafe { std::ptr::read_volatile(addr as *const u32) };
+            line.push_str(&format!(" {:09x}={:08x}", addr, v));
+            if i % 4 == 3 { println!("[gstack]{}", line); line.clear(); }
+        }
+    }
     if rc == 0 {
         let out: Vec<u8> = unsafe { std::slice::from_raw_parts(tbuf as *const u8, out_len as usize) }.to_vec();
         println!("[harness] compressed hex: {:02x?}", &out[..out_len.min(48) as usize]);
