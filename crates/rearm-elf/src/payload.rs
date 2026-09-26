@@ -843,7 +843,7 @@ fn compute_farset(p: &PassResult) -> Vec<u32> {
     for f in p.fixups.iter() {
         if !matches!(f.kind, FixKind::Bcond | FixKind::Cbz | FixKind::Cbnz) { continue; }
         let Ok(i) = p.map.binary_search_by_key(&f.target, |e| e.0) else { continue };
-        let dist = (p.map[i].1 as i64) - (f.at as i64 * 4 + 4);
+        let dist = (p.map[i].1 as i64) - (f.at as i64 * 4);
         if dist.abs() >= (1 << 19) - 256 {
             far.push(f.src);
         }
@@ -866,7 +866,7 @@ fn resolve_fixups(p: &mut PassResult) {
             continue;
         };
         let dst = p.map[i].1;
-        let off_bytes = (dst as i64) - (f.at as i64 * 4 + 4);
+        let off_bytes = (dst as i64) - (f.at as i64 * 4); // A64: PC-relative, no +4
         let in_range = match f.kind {
             FixKind::B | FixKind::Bl => off_bytes.abs() < (1 << 27),
             _ => off_bytes.abs() < (1 << 19),

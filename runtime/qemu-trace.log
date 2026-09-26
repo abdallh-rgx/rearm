@@ -11389,7 +11389,7 @@ IN:
 0x400004f4:  2a0c03e2  mov      w2, w12
 0x400004f8:  9000000e  adrp     x14, #0x40000000
 0x400004fc:  911411ce  add      x14, x14, #0x504
-0x40000500:  9400008a  bl       #0x40000728
+0x40000500:  9400008b  bl       #0x4000072c
 
 ----------------
 IN: _RNvNtNtNtNtNtCsiKaSbYLw9fL_3std3sys3pal4unix14stack_overflow3imp14signal_handler
@@ -11488,6 +11488,6 @@ IN:
 0x400004f4:  2a0c03e2  mov      w2, w12
 0x400004f8:  9000000e  adrp     x14, #0x40000000
 0x400004fc:  911411ce  add      x14, x14, #0x504
-0x40000500:  9400008a  bl       #0x40000728
+0x40000500:  9400008b  bl       #0x4000072c
 
 qemu: uncaught target signal 11 (Segmentation fault) - core dumped
