@@ -681,9 +681,10 @@ pub fn translate_a32(ins: &Ins, pc: u32, out: &mut A64) -> Result<bool, Translat
 
         Ins::LdrdStrd { store, rt, rt2, rn, imm, index, add: _, wback } => {
             // LDRD/STRD → LDP/STP Wt1, Wt2 (two 32-bit words, imm7 × 4).
-            // A64 LDP/STP addr modes: 1=signed-offset(no wb) 2=post(wb) 3=pre(wb).
-            // ARM: P=1,W=1 → pre; P=0,W=1 → post; else (incl. P=1,W=0) → offset.
-            let mode: u8 = if *index && *wback { 3 } else if !*index && *wback { 2 } else { 1 };
+            // A64 LDP/STP addr-mode field (bits 24:23): 1=post-index(wb),
+            // 2=signed-offset(no wb), 3=pre-index(wb). ARM: P=1,W=1 → pre;
+            // P=0,W=1 → post; else (incl. P=1,W=0 offset form) → signed offset.
+            let mode: u8 = if *index && *wback { 3 } else if !*index && *wback { 1 } else { 2 };
             let imm7 = (*imm as i16) / 4;
             out.ldpstp(0, !*store, mode, imm7, x(*rt2), x(*rn), x(*rt));
         }
