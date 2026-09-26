@@ -429,6 +429,22 @@ fn translate_pass(elf: &Elf32, dm: &DynMeta, farset: &[u32], window: u32) -> Res
                         stats.translated += 1;
                         let at = if it.is_some() { start + 1 } else { start };
                         record_branch_t32(&tins.ins, a, len, &mut fixups, at, out.len(), reb);
+                        // seed branch targets so taken paths get translated
+                        match &tins.ins {
+                            Ins::B { off, .. } => {
+                                let target = t32_branch_target(a, len, *off);
+                                seed(&mut queue, target & !1, thumb);
+                            }
+                            Ins::Bl { off } | Ins::Blx { off } => {
+                                let target = (a.wrapping_add(4) & !3u32).wrapping_add(*off as u32);
+                                seed(&mut queue, target & !1, thumb);
+                            }
+                            Ins::Cbz { off, .. } => {
+                                let target = a.wrapping_add(4).wrapping_add(*off as u32);
+                                seed(&mut queue, target & !1, thumb);
+                            }
+                            _ => {}
+                        }
                     }
                     Ok(false) => { stats.unsupported += 1; out.e(TRAP); }
                     Err(_) => { stats.unsupported += 1; out.e(TRAP); }
@@ -447,8 +463,10 @@ fn translate_pass(elf: &Elf32, dm: &DynMeta, farset: &[u32], window: u32) -> Res
                     }
                     Ins::LdmStm { load: true, list, .. } if list.0.contains(&15) => true,
                     Ins::Svc { .. } => true,
-                    Ins::DpImmT32 { rd: 15, .. } | Ins::DpImm { rd: 15, .. } | Ins::DpReg { rd: 15, .. } => {
-                        stats.note_unsupported("write to pc"); true
+                    Ins::DpReg { op, s, rd: 15, .. }
+                        if !matches!(op, DpOp::Cmp | DpOp::Cmn | DpOp::Tst | DpOp::Teq)
+                            && !(*op == DpOp::Sub && *s) => {
+                        stats.note_unsupported("write to pc (reg)"); true
                     }
                     _ => false,
                 };
@@ -503,6 +521,13 @@ fn translate_pass(elf: &Elf32, dm: &DynMeta, farset: &[u32], window: u32) -> Res
                 Ok(true) => {
                     stats.translated += 1;
                     record_branch_a32(&ins, a, &mut fixups, start, reb);
+                    match &ins {
+                        Ins::B { off, .. } | Ins::Bl { off } => {
+                            let target = a.wrapping_add(8).wrapping_add(*off as u32);
+                            seed(&mut queue, target & !1, false);
+                        }
+                        _ => {}
+                    }
                 }
                 Ok(false) => { stats.unsupported += 1; out.e(TRAP); }
                 Err(_) => { stats.unsupported += 1; out.e(TRAP); }
@@ -520,8 +545,10 @@ fn translate_pass(elf: &Elf32, dm: &DynMeta, farset: &[u32], window: u32) -> Res
                 }
                 Ins::LdmStm { load: true, list, .. } if list.0.contains(&15) => true,
                 Ins::Svc { .. } => true,
-                Ins::DpImm { rd: 15, .. } | Ins::DpReg { rd: 15, .. } => {
-                    stats.note_unsupported("write to pc"); true
+                Ins::DpReg { op, s, rd: 15, .. }
+                    if !matches!(op, DpOp::Cmp | DpOp::Cmn | DpOp::Tst | DpOp::Teq)
+                        && !(*op == DpOp::Sub && *s) => {
+                    stats.note_unsupported("write to pc (reg)"); true
                 }
                 _ => false,
             };
@@ -539,6 +566,12 @@ fn translate_pass(elf: &Elf32, dm: &DynMeta, farset: &[u32], window: u32) -> Res
 }
 
 // register helper for Ins::Cbz (rn is a plain u8 register number)
+
+/// T32 branch target (source-relative), same base rules as record_branch_t32.
+fn t32_branch_target(addr: u32, len: u32, off: i32) -> u32 {
+    let base = if len == 4 { (addr.wrapping_add(4)) & !3u32 } else { addr.wrapping_add(4) };
+    base.wrapping_add(off as u32)
+}
 
 /// Record branch fixups (T32). `reb` rebases source addresses to the window.
 fn record_branch_t32(ins: &Ins, addr: u32, len: u32, fix: &mut Vec<Fixup>, at: usize, end: usize, reb: impl Fn(u32) -> u32) {
