@@ -333,7 +333,7 @@ fn translate_pass(elf: &Elf32, dm: &DynMeta, farset: &[u32], window: u32) -> Res
                 if let Ins::It { first_cond, mask } = &tins.ins {
                     it = Some(ItTracker::new(*first_cond, *mask));
                     stats.it_blocks += 1;
-                    map.push((reb(a), out.len() as u32, if degraded {0} else {1}));
+                    map.push((reb(a), (out.len() as u32) * 4, if degraded {0} else {1}));
                     visited.insert(a);
                     a += len;
                     continue;
@@ -346,7 +346,7 @@ fn translate_pass(elf: &Elf32, dm: &DynMeta, farset: &[u32], window: u32) -> Res
                 match &tins.ins {
                     Ins::Unsupported { .. } => {
                         stats.unsupported += 1;
-                        map.push((reb(a), out.len() as u32, if degraded {0} else {1}));
+                        map.push((reb(a), (out.len() as u32) * 4, if degraded {0} else {1}));
                         out.e(TRAP);
                         visited.insert(a);
                         a += len;
@@ -387,7 +387,7 @@ fn translate_pass(elf: &Elf32, dm: &DynMeta, farset: &[u32], window: u32) -> Res
                         let _ = rm;
                         let translated = translate_t32(&tins.ins, a, &mut out, cond).map_err(|e| e.0)?;
                         if translated { stats.translated += 1; }
-                        map.push((reb(a), start as u32, if degraded {0} else {1}));
+                        map.push((reb(a), (start as u32) * 4, if degraded {0} else {1}));
                         visited.insert(a);
                         a += len;
                         break; // table follows
@@ -405,7 +405,7 @@ fn translate_pass(elf: &Elf32, dm: &DynMeta, farset: &[u32], window: u32) -> Res
                         let base = if len == 4 { t32_pc_aligned(a) } else { a.wrapping_add(4) };
                         fixups.push(Fixup { at, kind: FixKind::B, target: reb(base.wrapping_add(*off as u32)), src: a });
                         stats.translated += 1;
-                        map.push((reb(a), start as u32, if degraded {0} else {1}));
+                        map.push((reb(a), (start as u32) * 4, if degraded {0} else {1}));
                         visited.insert(a);
                         a += len;
                         continue;
@@ -423,7 +423,7 @@ fn translate_pass(elf: &Elf32, dm: &DynMeta, farset: &[u32], window: u32) -> Res
                             src: a,
                         });
                         stats.translated += 1;
-                        map.push((reb(a), start as u32, if degraded {0} else {1}));
+                        map.push((reb(a), (start as u32) * 4, if degraded {0} else {1}));
                         visited.insert(a);
                         a += len;
                         continue;
@@ -470,7 +470,7 @@ fn translate_pass(elf: &Elf32, dm: &DynMeta, farset: &[u32], window: u32) -> Res
                     Ok(false) => { stats.unsupported += 1; stats.note_unsupported(format!("{:?}", tins.ins).split('{').next().unwrap_or("?")); out.e(TRAP); degraded = true; }
                     Err(e) => { stats.unsupported += 1; stats.note_unsupported(&format!("ERR {} @ t32", e.0)); out.e(TRAP); degraded = true; }
                 }
-                map.push((reb(a), start as u32, if degraded {0} else {1}));
+                map.push((reb(a), (start as u32) * 4, if degraded {0} else {1}));
                 visited.insert(a);
 
                 // ---- stop rules ----
@@ -506,7 +506,7 @@ fn translate_pass(elf: &Elf32, dm: &DynMeta, farset: &[u32], window: u32) -> Res
             match &ins {
                 Ins::Unsupported { .. } => {
                     stats.unsupported += 1;
-                    map.push((reb(a), out.len() as u32, 1));
+                    map.push((reb(a), (out.len() as u32) * 4, 1));
                     out.e(TRAP);
                     visited.insert(a);
                     degraded = true;
@@ -525,7 +525,7 @@ fn translate_pass(elf: &Elf32, dm: &DynMeta, farset: &[u32], window: u32) -> Res
                     let target = a.wrapping_add(8).wrapping_add(*off as u32);
                     fixups.push(Fixup { at, kind: FixKind::B, target: reb(target), src: a });
                     stats.translated += 1;
-                    map.push((reb(a), start as u32, if degraded {0} else {1}));
+                    map.push((reb(a), (start as u32) * 4, if degraded {0} else {1}));
                     visited.insert(a);
                     a += 4;
                     continue;
@@ -554,7 +554,7 @@ fn translate_pass(elf: &Elf32, dm: &DynMeta, farset: &[u32], window: u32) -> Res
                 Ok(false) => { stats.unsupported += 1; stats.note_unsupported(format!("{:?}", ins).split('{').next().unwrap_or("?")); out.e(TRAP); degraded = true; }
                 Err(e) => { stats.unsupported += 1; stats.note_unsupported(&format!("ERR {} @ a32", e.0)); out.e(TRAP); degraded = true; }
             }
-            map.push((reb(a), start as u32, if degraded {0} else {1}));
+            map.push((reb(a), (start as u32) * 4, if degraded {0} else {1}));
             visited.insert(a);
 
             let stop = match &ins {
@@ -579,6 +579,18 @@ fn translate_pass(elf: &Elf32, dm: &DynMeta, farset: &[u32], window: u32) -> Res
         }
     }
 
+    if std::env::var_os("REARM_DBG2").is_some() {
+        let want = window.wrapping_add(0x2570); // compress2
+        let mut hits = Vec::new();
+        for (k, o, p) in map.iter() { if *k == want { hits.push((*o, *p)); } }
+        eprintln!("[dbg2] post-sweep: out.len()={} rt_prefix_check={:08x} map[compress2] hits={:?}",
+            out.len(), out.buf.get(0x88).copied().unwrap_or(0), hits);
+        // count entries with offsets < stub area start
+        let stub_end = 128 + 288 + imports.len() * 12; // bytes
+        let bad = map.iter().filter(|(_, o, _)| (*o as usize) < stub_end && (*o as usize) >= 128 + 288).count();
+        let inrt = map.iter().filter(|(_, o, _)| (*o as usize) < 128 + 288).count();
+        eprintln!("[dbg2] stub_end={} entries-in-stub-range={} entries-in-rt={} total={}", stub_end, bad, inrt, map.len());
+    }
     stats.functions = anchors.len();
     // priority-aware dedup: sort by (key asc, priority desc) then keep the
     // first entry per key — trusted translations win over suspect ones.
