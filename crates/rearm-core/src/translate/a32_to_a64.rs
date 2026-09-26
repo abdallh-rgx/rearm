@@ -622,20 +622,59 @@ pub fn translate_a32(ins: &Ins, pc: u32, out: &mut A64) -> Result<bool, Translat
         Ins::Ldst { store, size, signed, user: _, rt, rn, rm, shift: _, imm, index, add, wback } => {
             let scale = match size { Size::B8 => 0u8, Size::H16 => 1, _ => 2 };
             let a_size = match size { Size::B8 => 0u8, Size::H16 => 1, Size::W32 => 2, _ => 3 };
-            let _ = (index, wback);
-            let base = emit_memaddr_scaled(out, *rn, *rm, *imm, *add, scale, pc);
-            if *store {
-                out.ldst_uimm(a_size, 0, 0, base, x(*rt));
-            } else {
-                let (sz, opc) = match size {
-                    Size::B8 => (0u8, 1u8),
-                    Size::H16 => (1, 1),
-                    _ => (2, 1),
-                };
-                out.ldst_uimm(sz, opc, 0, base, x(*rt));
+            let (lsz, lopc) = match size { Size::B8 => (0u8, 1u8), Size::H16 => (1, 1), _ => (2, 1) };
+            let is_pre = *wback && *index;   // P=1 W=1
+            let is_post = *wback && !*index; // P=0 W=1
+            let do_sxt = |out: &mut A64| {
                 if *signed {
                     if *size == Size::B8 { out.sxt(false, 8, x(*rt), x(*rt)); }
                     if *size == Size::H16 { out.sxt(false, 16, x(*rt), x(*rt)); }
+                }
+            };
+            // ---- native imm9 post/pre-index (immediate, byte off in [-256, 255]) ----
+            let boff: i64 = if rm.is_none() { (*imm as i64) << scale } else { 0 };
+            if *wback && rm.is_none() && boff >= -256 && boff <= 255 {
+                let mode = if is_post { 1u8 } else { 2u8 }; // 1=post 2=pre
+                let i9 = (if *add { boff } else { -boff }) as i16;
+                if *store {
+                    out.ldst_imm9(a_size, 0, i9, mode, x(*rn), x(*rt));
+                } else {
+                    out.ldst_imm9(lsz, lopc, i9, mode, x(*rn), x(*rt));
+                    do_sxt(out);
+                }
+            } else if is_post {
+                // ---- post-index, register offset / big imm: access [rn], then wb ----
+                // wb value into x16 FIRST (rm read pre-access, as ARM specifies)
+                if let Some(rm_v) = rm {
+                    if scale > 0 {
+                        out.lsl_imm(true, x(rm_v), 17, scale);
+                        out.addsub_ext(true, if *add { 0 } else { 1 }, false, 17, 2, 0, x(*rn), 16);
+                    } else {
+                        out.addsub_ext(true, if *add { 0 } else { 1 }, false, x(rm_v), 2, 0, x(*rn), 16);
+                    }
+                } else {
+                    load_imm64(out, 17, boff.unsigned_abs());
+                    if boff >= 0 { out.addsub_reg(true, 0, false, 0, 0, x(*rn), 17, 16); }
+                    else { out.addsub_reg(true, 1, false, 0, 0, x(*rn), 17, 16); }
+                }
+                if *store {
+                    out.ldst_uimm(a_size, 0, 0, x(*rn), x(*rt));
+                } else {
+                    out.ldst_uimm(lsz, lopc, 0, x(*rn), x(*rt));
+                    do_sxt(out);
+                }
+                out.add_imm(true, 16, x(*rn), 0); // mov rn, x16 (writeback)
+            } else {
+                // ---- offset / pre-index ----
+                let base = emit_memaddr_scaled(out, *rn, *rm, *imm, *add, scale, pc);
+                if *store {
+                    out.ldst_uimm(a_size, 0, 0, base, x(*rt));
+                } else {
+                    out.ldst_uimm(lsz, lopc, 0, base, x(*rt));
+                    do_sxt(out);
+                }
+                if is_pre {
+                    out.add_imm(true, 16, x(*rn), 0); // mov rn, x16 (writeback)
                 }
             }
         }
