@@ -127,6 +127,8 @@ struct PassResult {
     /// (source PLT addr, target function vaddr) for locally-defined symbols
     /// called through the PLT — resolved to translated code after the sweep.
     local_plt: Vec<(u32, u32)>,
+    /// payload offset of rearm_plt_adapter (rt blob symbol)
+    adapter_off: u32,
 }
 
 /// One full translation pass. `farset` = source addresses of conditional
@@ -596,7 +598,7 @@ fn translate_pass(elf: &Elf32, dm: &DynMeta, farset: &[u32], window: u32) -> Res
     map.dedup_by_key(|e| e.0);
     fixups.sort_unstable_by_key(|f| f.target);
     stats.a64_words = out.len();
-    Ok(PassResult { out, map, fixups, stats, plt_adrp_fixups: Vec::new(), imports, local_plt })
+    Ok(PassResult { out, map, fixups, stats, plt_adrp_fixups: Vec::new(), imports, local_plt, adapter_off: adapter_off as u32 })
 }
 
 // register helper for Ins::Cbz (rn is a plain u8 register number)
@@ -765,6 +767,7 @@ pub fn build_payload(elf: &Elf32, window: u32, code_base: u32) -> Result<Payload
     put(60, window);
     put(64, imports_off);
     put(68, imports_len);
+    put(124, adapter_off);
 
     // ---- exports ----
     let mut exports = Vec::new();
