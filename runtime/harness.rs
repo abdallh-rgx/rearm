@@ -153,7 +153,7 @@ fn install_segv_debug() {
     unsafe {
         let sa = Box::into_raw(Box::new(KSigAction {
             handler: segv_handler as usize as u64,
-            flags: 0x10000004, // SA_RESTORER | SA_SIGINFO
+            flags: 0x04000004, // SA_RESTORER (aarch64) | SA_SIGINFO
             restorer: sig_restorer as usize as u64,
             mask: 0,
         }));
