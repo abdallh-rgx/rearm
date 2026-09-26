@@ -970,21 +970,13 @@ fn emit_memaddr_scaled(out: &mut A64, rn: R, rm: Option<R>, imm: i32, add: bool,
         // pc+8; in bias mode the shadow-image address is used instead.
         load_pc(out, 17, pc);
         if let Some(rm) = rm {
-            if scale > 0 {
-                out.lsl_imm(true, x(rm), 18, scale);
+            // reg offset: shift amount = IR imm (A32: 0 unshifted; T32: LSL 0-3)
+            let sh = imm.max(0) as u8;
+            if sh > 0 {
+                out.lsl_imm(true, x(rm), 18, sh);
                 out.addsub_ext(true, if add { 0 } else { 1 }, false, 18, 0, 0, 17, 16);
             } else {
                 out.addsub_ext(true, if add { 0 } else { 1 }, false, x(rm), 2, 0, 17, 16);
-            }
-            if imm != 0 {
-                let v = imm as i64;
-                if v >= 0 && v <= 4095 { out.add_imm(true, 16, 16, v as u16); }
-                else if v < 0 && -v <= 4095 { out.sub_imm(true, 16, 16, (-v) as u16); }
-                else {
-                    load_imm64(out, 18, v.unsigned_abs());
-                    if v >= 0 { out.addsub_reg(true, 0, false, 0, 0, 16, 18, 16); }
-                    else { out.addsub_reg(true, 1, false, 0, 0, 16, 18, 16); }
-                }
             }
             return 16;
         }
@@ -1002,16 +994,12 @@ fn emit_memaddr_scaled(out: &mut A64, rn: R, rm: Option<R>, imm: i32, add: bool,
     }
     let base = x(rn);
     if let Some(rm) = rm {
-        if scale > 0 {
-            out.lsl_imm(true, x(rm), 17, scale);
+        let sh = imm.max(0) as u8;
+        if sh > 0 {
+            out.lsl_imm(true, x(rm), 17, sh);
             out.addsub_ext(true, if add { 0 } else { 1 }, false, 17, 2, 0, base, 16);
         } else {
             out.addsub_ext(true, if add { 0 } else { 1 }, false, x(rm), 2, 0, base, 16);
-        }
-        if imm != 0 {
-            let v = imm as i64;
-            if v >= 0 && v <= 4095 { out.add_imm(true, 16, 16, v as u16); }
-            else if v < 0 && -v <= 4095 { out.sub_imm(true, 16, 16, (-v) as u16); }
         }
     } else {
         let v = imm as i64;

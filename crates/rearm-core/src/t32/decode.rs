@@ -722,7 +722,7 @@ fn decode_f8(w: u32) -> Result<Ins, DecodeErr> {
     if u {
         // imm12 form: hw2[11:0] = imm12 (in transfer units) — convert to BYTES.
         // (The register form only encodes with U=0, so U=1 → always imm12.)
-        return Ok(ld(!load, size, signed, rt, rn, bb(hw2, 11, 0) as i32 << scale));
+        return Ok(ld(!load, size, signed, rt, rn, (bb(hw2, 11, 0) as i32) << scale));
     }
     // U=0: register form (hw2[11:6] == 0) or mode nibble.
     if bb(hw2, 11, 6) == 0 {
