@@ -184,7 +184,7 @@ extern "C" fn trap_ctx_handler(_sig: i32, _info: usize, ctx: usize) {
     unsafe { raw_write(b"[TRAP] handler entered\n"); }
     let uc = ctx as *const u64;
     // dump 0x00..0x1D0 of the ucontext as hex — locate the register file by eye
-    let mut buf = [0u8; 16 * 3 * 12];
+    let mut buf = [0u8; 2048];
     let mut p = 0usize;
     let b = |d: &mut [u8], o: usize, c: u8| { d[o] = c; };
     for i in 0..58u32 {
