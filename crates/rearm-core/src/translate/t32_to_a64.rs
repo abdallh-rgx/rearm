@@ -314,10 +314,14 @@ fn translate_t32_inner(ins: &Ins, addr: u32, out: &mut A64) -> Result<bool, Tran
                 } else {
                     crate::translate::bias::bias_addr(out, 14, t2);
                 }
+                // map the (possibly foreign) target through the thunk
+                out.addsub_reg(true, 0, false, 0, 0, x(*rm), 31, 15); // mov x15, x(rm)
+                crate::translate::bias::emit_thunk_call(out);
+                out.br(15);
             } else {
                 load_imm_t32(out, 14, addr.wrapping_add(4) | 1);
+                out.blr(x(*rm));
             }
-            out.blr(x(*rm));
             Ok(true)
         }
 

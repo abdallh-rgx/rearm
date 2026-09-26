@@ -391,7 +391,7 @@ fn translate_pass(elf: &Elf32, dm: &DynMeta, farset: &[u32], window: u32) -> Res
                 }
 
                 // ---- far conditional forms (range-unbounded 2-word) ----
-                let far_here = it.is_none() && is_far(a);
+                let far_here = it.is_none() && (is_far(a) || branch_too_long(&tins.ins));
                 match (&tins.ins, far_here) {
                     (Ins::B { cond: c, off }, true) if *c != Cond::Al => {
                         out.bcond(c.invert(), 8).map_err(|_| "bcond".to_string())?; // skip the next word
@@ -504,14 +504,15 @@ fn translate_pass(elf: &Elf32, dm: &DynMeta, farset: &[u32], window: u32) -> Res
                     map.push((reb(a), out.len() as u32));
                     out.e(TRAP);
                     visited.insert(a);
-                    break; // undecodable = data-in-text: end this run
+                    a += 4;
+                    continue;
                 }
                 _ => {}
             }
 
             // far conditional (A32 B.cond)
             if let Ins::B { cond: c, off } = &ins {
-                if *c != Cond::Al && is_far(a) {
+                if *c != Cond::Al && (is_far(a) || (*off as i64).abs() >= 0xF0000) {
                     out.bcond(c.invert(), 8).map_err(|_| "bcond".to_string())?;
                     let at = out.len();
                     out.e(0);
@@ -591,6 +592,16 @@ fn translate_pass(elf: &Elf32, dm: &DynMeta, farset: &[u32], window: u32) -> Res
 }
 
 // register helper for Ins::Cbz (rn is a plain u8 register number)
+
+/** True when a conditional branch's raw source offset already exceeds the
+ * ±1 MiB A64 b.cond/cbz range — emit the far form immediately. */
+fn branch_too_long(ins: &Ins) -> bool {
+    match ins {
+        Ins::B { cond, off } if *cond != Cond::Al => (*off as i64).abs() >= 0xF0000,
+        Ins::Cbz { off, .. } => (*off as i64).abs() >= 0xF0000,
+        _ => false,
+    }
+}
 
 /// T32 branch target (source-relative), same base rules as record_branch_t32.
 fn t32_branch_target(addr: u32, len: u32, off: i32) -> u32 {

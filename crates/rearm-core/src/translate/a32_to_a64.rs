@@ -723,8 +723,9 @@ pub fn translate_a32(ins: &Ins, pc: u32, out: &mut A64) -> Result<bool, Translat
 
         // ======== branches ========
         Ins::B { cond, off } => { out.bcond(*cond, branch_off_or_zero(*off))?; }
-        Ins::Bl { off } => {
-            // A32 BL: LR = addr + 4 (the next instruction). Execution mode:
+        Ins::Bl { off } | Ins::Blx { off } => {
+            // A32 BL/BLX (imm): LR = addr + 4 (the next instruction — BLX
+            // imm has no thumb bit from ARM state). Execution mode:
             // the "next" A64 word right after the bl IS the translation of
             // the next source instruction — LR = adrp/add of that word, no
             // runtime relocation, no thunk.
