@@ -87,14 +87,6 @@ fn main() {
         }
     }
 
-    // ---- probe: payload_base_slot after init (addresses from current .so) ----
-    {
-        let v: u64 = unsafe { std::ptr::read_volatile((bias + 0x77718) as *const u64) };
-        let ia: u64 = unsafe { std::ptr::read_volatile((bias + 0x674e0) as *const u64) };
-        let c: u32 = unsafe { std::ptr::read_volatile(0x4000_0000 as *const u32) };
-        eprintln!("[probe] slot[0x77718]={:#x} initarr[0x674e0]={:#x} [C]={:#x}", v, ia, c);
-    }
-
     // ---- first: adler32 (pure, small — bisection point) ----
     {
         let adler32 = so.find_sym("adler32").expect("adler32 export");
@@ -188,7 +180,9 @@ extern "C" fn segv_ctx_handler(_sig: i32, _info: usize, ctx: usize) {
         eprintln!("[SEGV-CTX] pc={:#x} x13={:#x} x14={:#x} x15={:#x} x16={:#x} x17={:#x} x28={:#x} sp={:#x}",
             pc, x13, x14, x15, x16, x17, x28, sp);
         // dump the guest stack frame area [x13-0x30, x13+0x20]
+        // (only when x13 looks like a low-world pointer — the handler must not fault)
         let mut line = String::new();
+        if x13 >= 0xC000_0000 && x13 < 0x1_0000_0000 {
         for i in 0..20u32 {
             let addr = x13 - 0x30 + (i as u64) * 4;
             let v = std::ptr::read_volatile(addr as *const u32);
@@ -196,6 +190,7 @@ extern "C" fn segv_ctx_handler(_sig: i32, _info: usize, ctx: usize) {
             if i % 5 == 4 { eprintln!("[stack]{}", line); line.clear(); }
         }
         if !line.is_empty() { eprintln!("[stack]{}", line); }
+        }
     }
     std::process::exit(66);
 }
