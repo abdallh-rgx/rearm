@@ -179,17 +179,60 @@ extern "C" fn segv_ctx_handler(_sig: i32, _info: usize, ctx: usize) {
     std::process::exit(66);
 }
 
-extern "C" fn trap_handler(_sig: i32) {
-    let x28 = unsafe { std::ptr::read_volatile(0x0101_0000 as *const u64) };
-    let magic: u32 = unsafe { std::ptr::read_volatile(0x4000_0000 as *const u32) };
-    let count: u32 = unsafe { std::ptr::read_volatile(0x4000_000c as *const u32) };
-    eprintln!("[TRAP] stashed x28 = {:#x} | [C]={:#x} [C+12]={}", x28, magic, count);
-    let _x = magic;
+extern "C" fn trap_ctx_handler(_sig: i32, _info: usize, ctx: usize) {
+    // aarch64 ucontext: mcontext at +0xE8: regs[0..30], sp, pc, pstate
+    let uc = ctx as *const u64;
+    unsafe {
+        let x0 = *uc.add((0xE8 + 0*8) / 8);
+        let x8 = *uc.add((0xE8 + 8*8) / 8);
+        let x13 = *uc.add((0xE8 + 13*8) / 8);
+        let x14 = *uc.add((0xE8 + 14*8) / 8);
+        let x15 = *uc.add((0xE8 + 15*8) / 8);
+        let x16 = *uc.add((0xE8 + 16*8) / 8);
+        let x17 = *uc.add((0xE8 + 17*8) / 8);
+        let x28 = *uc.add((0xE8 + 28*8) / 8);
+        let sp = *uc.add((0xE8 + 31*8) / 8);
+        let pc = *uc.add((0xE8 + 32*8) / 8);
+        // instruction word at pc (read volatile — pc may be unmapped, but
+        // brk sites are always mapped executable)
+        let mut ins: u32 = 0;
+        let pcv = pc as *const u32;
+        if pc >= 0x1000 && pc < 0x7FFF_FFFF_FFFF && (pc & 1) == 0 {
+            // best-effort: only read if page is likely mapped (catch via plain
+            // read — qemu guest, faults here would mask the real trap)
+            ins = read_ins(pcv);
+        }
+        eprintln!("[TRAP-CTX] pc={:#x} ins={:#010x} x0={:#x} x8={:#x}", pc, ins, x0, x8);
+        eprintln!("[TRAP-CTX] x13={:#x} x14={:#x} x15={:#x} x16={:#x} x17={:#x} x28={:#x} sp={:#x}",
+            x13, x14, x15, x16, x17, x28, sp);
+    }
     std::process::exit(77);
 }
 
+#[inline(never)]
+unsafe fn read_ins(p: *const u32) -> u32 {
+    // separate fn: keeps the handler robust if p is unmapped (qemu would
+    // SIGSEGV here — acceptable, the PC/regs are already printed)
+    unsafe { std::ptr::read_volatile(p) }
+}
+
 fn install_segv_debug() {
-    unsafe { signal(5, trap_handler as usize); } // SIGTRAP
+    unsafe {
+        // SIGTRAP with SA_SIGINFO (ucontext in arg3)
+        let sa = Box::into_raw(Box::new(KSigAction {
+            handler: trap_ctx_handler as usize as u64,
+            flags: 0x04000004, // SA_RESTORER (aarch64) | SA_SIGINFO
+            restorer: sig_restorer as usize as u64,
+            mask: 0,
+        }));
+        let r: i64;
+        core::arch::asm!(
+            "svc #0",
+            in("x8") 134u64, in("x0") 5u64, in("x1") sa, in("x2") 0u64, in("x3") 0u64,
+            in("x4") 8u64, lateout("x0") r,
+        );
+        let _ = r;
+    }
     unsafe { signal(11, segv_ctx_handler as usize); } // SIGSEGV
 
     unsafe {
