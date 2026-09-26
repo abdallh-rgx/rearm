@@ -138,17 +138,16 @@ pub extern "C" fn rearm_rt_init() {
         );
     }
 
-    // ---- 2. guest image at W (skip the null-guard pages below 0x8000) ----
-    if h.shadow_len > 0x8000 {
-        let len = (h.shadow_len - 0x8000) as u64;
-        if mmap_exactly(w + 0x8000, len, PROT_READ | PROT_WRITE).is_none() {
+    // ---- 2. guest image at W (W is far above mmap_min_addr — no skip) ----
+    if h.shadow_len > 0 {
+        if mmap_exactly(w, h.shadow_len as u64, PROT_READ | PROT_WRITE).is_none() {
             die(b"rearm: guest window mmap failed\n");
         }
         unsafe {
             ptr::copy_nonoverlapping(
-                (ptr::addr_of!(payload_blob) as *const u8).add(h.shadow_off as usize + 0x8000),
-                (w + 0x8000) as *mut u8,
-                len as usize,
+                (ptr::addr_of!(payload_blob) as *const u8).add(h.shadow_off as usize),
+                w as *mut u8,
+                h.shadow_len as usize,
             );
         }
     }
