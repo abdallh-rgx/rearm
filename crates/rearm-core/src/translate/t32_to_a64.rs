@@ -309,14 +309,16 @@ fn translate_t32_inner(ins: &Ins, addr: u32, out: &mut A64) -> Result<bool, Tran
         // ======== BLX (register): LR = (addr+4) | 1 ========
         Ins::BlxReg { rm } => {
             if crate::translate::bias::bias_on() {
+                // FIXED 7-word sequence (deterministic sizes, so LR is exact):
+                //   [adrp+add x14 (LR = seq end)] [mov x15, x(rm)]
+                //   [adrp+add x17 (thunk) + blr]  [br x15]
+                // LR = payload offset of the first word after the sequence.
                 let l = out.len();
-                let t2 = ((l + 2) * 4) as u32;   // adrp+add+blr
-                if t2 & 0xFFF == 0 {
-                    crate::translate::bias::bias_addr(out, 14, ((l + 1) * 4) as u32);
-                } else {
-                    crate::translate::bias::bias_addr(out, 14, t2);
-                }
-                // map the (possibly foreign) target through the thunk
+                let lr = ((l + 7) * 4) as u32;
+                let here = (l * 4) as i32;
+                let tgt = lr as i32;
+                out.adrp(14, ((tgt & !0xFFF) - (here & !0xFFF)) >> 12);
+                out.add_imm(true, 14, 14, (lr & 0xFFF) as u16);
                 out.addsub_reg(true, 0, false, 0, 0, x(*rm), 31, 15); // mov x15, x(rm)
                 crate::translate::bias::emit_thunk_call(out);
                 out.br(15);
