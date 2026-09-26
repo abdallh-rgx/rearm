@@ -307,7 +307,10 @@ fn translate_pass(elf: &Elf32, dm: &DynMeta, farset: &[u32], window: u32) -> Res
         let mut it: Option<ItTracker> = None;
 
         while a + 4 <= sec_end {
-            if a != addr0 && visited.contains(&a) { break; } // merged path
+            if a != addr0 {
+                if visited.contains(&a) { break; } // merged path
+                if anchors.binary_search_by_key(&a, |(x, _)| *x).is_ok() { break; } // function boundary
+            }
             let rel = (a - sec_start) as usize;
             let base_off = sec_off + rel;
 
@@ -501,8 +504,7 @@ fn translate_pass(elf: &Elf32, dm: &DynMeta, farset: &[u32], window: u32) -> Res
                     map.push((reb(a), out.len() as u32));
                     out.e(TRAP);
                     visited.insert(a);
-                    a += 4;
-                    continue;
+                    break; // undecodable = data-in-text: end this run
                 }
                 _ => {}
             }
