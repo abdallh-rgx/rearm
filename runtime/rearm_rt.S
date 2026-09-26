@@ -1,30 +1,7 @@
 // rearm runtime v2.1 — payload-resident thunk + adapters + return glue.
-//
-// Lives at the start of every translated payload (after the 64-byte header),
-// fully position independent: addressed through x28 (= payload base, set by
-// the .so trampolines) and the payload header at [x28].
-//
-// Memory model ("low world"): EVERYTHING the guest can name — translated
-// code, the source image (shadow), per-thread ARM stacks, heap, bridge
-// stubs — lives below 4 GB as plain 32-bit addresses, exactly like a real
-// ARM32 machine. Foreign A64 addresses (libc, ART) are the only values with
-// upper bits set; they never flow through 32-bit guest slots (bridge stubs
-// handle foreign function pointers stored in guest data).
-//
-// Payload header (offsets in bytes from the payload base):
-//    0: magic "REARM1\0\0"
-//    8: u32 map_off       12: u32 map_count
-//   16: u32 reloc_off     20: u32 reloc_count
-//   24: u32 got64_off     28: u32 n_imports
-//   32: u32 init          (rebased guest addr of DT_INIT, 0 = none)
-//   36: u32 init_array    (rebased guest addr, 0 = none)
-//   40: u32 init_array_sz (byte count)
-//   44: u32 shadow_off    (payload-internal offset of the shadow blob)
-//   48: u32 shadow_len    (bytes; covers memsz incl. .bss)
-//   52: u32 payload_size  (total blob bytes)
-//   56: u32 glue_off      (= offset of rearm_return_glue)
-//   60: u32 window        (guest-image window base W, absolute low)
+// See payload.rs for the header layout and memory model.
 
+    .text
     .globl rearm_return_glue
     .type rearm_return_glue, %function
 rearm_return_glue:
@@ -32,23 +9,19 @@ rearm_return_glue:
     br   x16
     .size rearm_return_glue, . - rearm_return_glue
 
-    .text
     .globl rearm_thunk
     .type rearm_thunk, %function
-// x15 in: target address (guest: upper32==0; foreign: upper32!=0).
-// x15 out: branchable runtime address.
-// Preserves everything except x15 and the x16..x19 scratches.
 rearm_thunk:
-    // invariant: x28 must point at the payload header ("REAR" + count)
+    // invariant: x28 must point at the payload header ("REAR" + count>0)
     movz w19, #0x4152
     movk w19, #0x5241, lsl 16
     ldr  w17, [x28]
     cmp  w17, w19
-    b.ne .Lbadhdr
+    b.ne badhdr1
     ldr  w17, [x28, #12]
-    cbz  w17, .Lbadhdr
+    cbz  w17, badhdr2
     lsr  x17, x15, #32
-    cbnz x17, .Lforeign           // foreign A64 address: calling adapter
+    cbnz x17, .Lforeign
     stp  x9, x10, [sp, #-16]!
     ldr  w9,  [x28, #8]           // map_off
     ldr  w17, [x28, #12]          // map_count
@@ -58,32 +31,41 @@ rearm_thunk:
     mov  w9, #0                    // lo
 .Lbs:
     cmp  x9, x10
-    b.hi .Lmiss
+    b.hi miss
     add  w17, w9, w10
     lsr  w17, w17, #1             // mid
-    add  x18, x16, x17, lsl #3    // &pair[mid]
-    ldr  w19, [x18]               // pair.src (rebased guest addr)
+    add  x18, x16, w17, uxtw #3
+    ldr  w19, [x18]               // pair.src
     cmp  w15, w19
-    b.lo .Lbs_left
-    b.hi .Lbs_right
-    ldr  w17, [x18, #4]           // pair.off (payload offset)
-    add  x15, x28, w17, uxtw      // x15 = payload_base + off
+    b.lo bsleft
+    b.hi bsright
+    ldr  w17, [x18, #4]           // pair.off
+    add  x15, x28, w17, uxtw
     ldp  x9, x10, [sp], #16
     ret
-.Lbs_left:
+bsleft:
     sub  w10, w17, #1
     b    .Lbs
-.Lbs_right:
+bsright:
     add  w9, w17, #1
     b    .Lbs
-.Lmiss:
-    // Not translated code: keep the guest address (data / undiscovered).
+miss:
     ldp  x9, x10, [sp], #16
     ret
 .Lforeign:
     mov  x16, x15                  // target
     mov  w15, #1                   // flag: return via x14 (ARM LR)
     b    rearm_foreign_adapter
+badhdr1:
+    movz x16, #0x0000
+    movk x16, #0x0101, lsl 16
+    str  x28, [x16]
+    brk  #0xBEE1
+badhdr2:
+    movz x16, #0x0000
+    movk x16, #0x0101, lsl 16
+    str  x28, [x16]
+    brk  #0xBEE2
     .size rearm_thunk, . - rearm_thunk
 
     .globl rearm_plt_adapter
@@ -130,5 +112,3 @@ rearm_foreign_adapter:
     br   x14                       // foreign: return to the ARM LR
 1:  ret                            // PLT: return to the translated caller
     .size rearm_plt_adapter, . - rearm_plt_adapter
-.Lbadhdr:
-    brk  #0xBEEF
