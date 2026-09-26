@@ -301,6 +301,9 @@ fn translate_pass(elf: &Elf32, dm: &DynMeta, farset: &[u32], window: u32) -> Res
     }
 
     let mut visited: std::collections::HashSet<u32> = std::collections::HashSet::new();
+    // literal-pool addresses discovered from LDR (literal) targets — runs
+    // must stop when they walk into a pool (data-in-text)
+    let mut pools: std::collections::HashSet<u32> = std::collections::HashSet::new();
     let is_far = |src: u32| farset.binary_search(&src).is_ok();
 
     while let Some((addr0, thumb0)) = queue.pop_front() {
@@ -315,6 +318,7 @@ fn translate_pass(elf: &Elf32, dm: &DynMeta, farset: &[u32], window: u32) -> Res
             if a != addr0 {
                 if visited.contains(&a) { break; } // merged path
                 if anchors.binary_search_by_key(&a, |(x, _)| *x).is_ok() { break; } // function boundary
+                if pools.contains(&a) { break; } // literal pool: data
             }
             let rel = (a - sec_start) as usize;
             let base_off = sec_off + rel;
@@ -431,6 +435,11 @@ fn translate_pass(elf: &Elf32, dm: &DynMeta, farset: &[u32], window: u32) -> Res
                     _ => {}
                 }
 
+                // ---- literal-pool discovery: LDR (literal) targets ----
+                if let Ins::Ldst { store: false, rn: 15, imm, .. } = &tins.ins {
+                    pools.insert(t32_pc_aligned(a).wrapping_add(*imm as u32));
+                }
+
                 // ---- ADR-like ADD (register, PC): seed code targets ----
                 match &tins.ins {
                     Ins::DpImmT32 { op: DpOp::Add, rn: 15, imm12, plain, .. } => {
@@ -530,6 +539,11 @@ fn translate_pass(elf: &Elf32, dm: &DynMeta, farset: &[u32], window: u32) -> Res
                     a += 4;
                     continue;
                 }
+            }
+
+            // literal-pool discovery (A32): LDR (literal)
+            if let Ins::Ldst { store: false, rn: 15, imm, .. } = &ins {
+                pools.insert(a.wrapping_add(8).wrapping_add(*imm as u32));
             }
 
             // ADR-like: ADD rd, PC, #imm (rot form)
