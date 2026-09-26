@@ -155,7 +155,7 @@ fn decode_t16(hw: u16) -> Result<Ins, DecodeErr> {
                     }
                 }
                 _ => { // 01001x: LDR literal (rt = bits 10:8) — imm UNSCALED (emit scales)
-                    Ok(ld(false, Size::W32, false, rfn, 15, imm5 as i32 * 0 + imm8 as i32))
+                    Ok(ld(false, Size::W32, false, rfn, 15, imm8 as i32))
                 }
             }
         }
@@ -168,10 +168,10 @@ fn decode_t16(hw: u16) -> Result<Ins, DecodeErr> {
                 Ok(ld(!is_load, Size::W32, false, rd, rn, imm5 as i32)) // STR/LDR
             }
         }
-        // ===== 1000: STRH/LDRH imm5 ×2 =====
+        // ===== 1000: STRH/LDRH imm5 (imm UNSCALED; emit scales ×2) =====
         0x8 => {
             let is_load = bt(w, 11);
-            Ok(ld(!is_load, Size::H16, false, rd, rn, (imm5 * 2) as i32))
+            Ok(ld(!is_load, Size::H16, false, rd, rn, imm5 as i32))
         }
         // ===== 1001: STR/LDR SP-relative imm8 (imm UNSCALED; emit scales ×4) =====
         0x9 => {
