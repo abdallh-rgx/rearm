@@ -87,6 +87,22 @@ fn main() {
         }
     }
 
+    // ---- first: adler32 (pure, small — bisection point) ----
+    {
+        let adler32 = so.find_sym("adler32").expect("adler32 export");
+        let data: &[u8] = b"Wikipedia"; // canonical example: adler32 = 0x11E60398
+        let tbuf2 = sys_mmap(0x9100_0000, 0x1000, 3, 0x8022, -1, 0);
+        unsafe { std::ptr::copy_nonoverlapping(data.as_ptr(), tbuf2 as *mut u8, data.len()); }
+        println!("[harness] adler32 @ {:#x}", bias + adler32);
+        let r = unsafe {
+            std::mem::transmute::<u64, extern "C" fn(u32, *const u8, u32) -> u32>(bias + adler32)(
+                1, tbuf2 as *const u8, data.len() as u32,
+            )
+        };
+        println!("[harness] adler32(Wikipedia) = {:#010x} (expected 0x11e60398) {}",
+            r, if r == 0x11e60398 { "*** CORRECT ***" } else { "MISMATCH" });
+    }
+
     // ---- call compress2 (zlib self-test) with LOW-WORLD buffers ----
     let src_bytes: &[u8] = b"Hello rearm! Hello rearm! Hello rearm! Hello rearm! 1234567890";
     // guest-visible buffers below 4 GiB (translated code does 32-bit pointer math!)
