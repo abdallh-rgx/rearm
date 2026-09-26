@@ -1,0 +1,4 @@
+[harness] init_array = Some((418976, 8))
+[harness] init[0] = 0x700000051864
+[harness] running init[0x700000051864] …
+qemu: uncaught target signal 5 (Trace/breakpoint trap) - core dumped

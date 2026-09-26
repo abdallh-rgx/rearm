@@ -165,7 +165,18 @@ extern "C" fn segv_handler(_sig: i32, info: *mut u8, ctx: *mut u8) {
     std::process::exit(9);
 }
 
+extern "C" fn trap_handler(_sig: i32) {
+    let x28 = unsafe { std::ptr::read_volatile(0x0101_0000 as *const u64) };
+    let magic: u32 = unsafe { std::ptr::read_volatile(0x4000_0000 as *const u32) };
+    let count: u32 = unsafe { std::ptr::read_volatile(0x4000_000c as *const u32) };
+    eprintln!("[TRAP] stashed x28 = {:#x} | [C]={:#x} [C+12]={}", x28, magic, count);
+    let _x = magic;
+    std::process::exit(77);
+}
+
 fn install_segv_debug() {
+    unsafe { signal(5, trap_handler as usize); } // SIGTRAP
+
     unsafe {
         let sa = Box::into_raw(Box::new(KSigAction {
             handler: segv_handler as usize as u64,
@@ -313,6 +324,7 @@ impl<'a> So<'a> {
 
 extern "C" {
     fn mmap(addr: u64, len: u64, prot: i32, flags: i32, fd: i32, off: u64) -> i64;
+    fn signal(sig: i32, h: usize) -> usize;
 }
 
 #[allow(improper_ctypes_definitions)]

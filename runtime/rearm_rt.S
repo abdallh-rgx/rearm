@@ -13,7 +13,7 @@ rearm_return_glue:
     .type rearm_thunk, %function
 rearm_thunk:
     // invariant: x28 must point at the payload header ("REAR" + count>0)
-    movz w19, #0x4152
+    movz w19, #0x4552
     movk w19, #0x5241, lsl 16
     ldr  w17, [x28]
     cmp  w17, w19
