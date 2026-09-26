@@ -120,8 +120,10 @@ impl ItTracker {
 }
 
 /// Rewrite the `b.cond` word at index `at` to skip `words` following words.
+/// NB: the branch offset is relative to the GUARD's own address, so skipping
+/// `words` body words (which start at at+1) needs offset 4*(words+1).
 fn patch_bcond(out: &mut A64, at: usize, cond: Cond, words: usize) {
-    let off = (words as i32) * 4;
+    let off = ((words as i32) + 1) * 4;
     out.buf[at] = 0x54 << 24 | (((off >> 2) as u32 & 0x7FFFF) << 5) | cond.bits() as u32;
 }
 
