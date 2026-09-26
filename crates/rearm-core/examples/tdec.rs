@@ -1,29 +1,35 @@
 use rearm_core::a64::encode::A64;
+use rearm_core::t32::decode::decode_t32;
+use rearm_core::translate::t32_to_a64::{translate_t32, ItTracker};
 use rearm_core::a32::ins::*;
-use rearm_core::a32::ins::{LdmMode, RegList};
 
 fn main() {
-    // push {r7, lr} = LdmStm Db
-    let ins = Ins::LdmStm { load: false, rn: 13, mode: LdmMode::Db, wback: true, user: false, list: RegList::from_bitmap(0x4080) };
+    let data = std::fs::read("/home/z/my-project/pubg/lib/armeabi-v7a/libzlib.so").unwrap();
+    // walk from deflateInit2_'s entry 0x2aac, like the sweep does
+    let mut a: u32 = 0x2aac;
+    let mut it: Option<ItTracker> = None;
     let mut out = A64::new();
-    match rearm_core::translate::a32_to_a64::translate_a32(&ins, 0x2a88, &mut out) {
-        Ok(true) => println!("OK, {} words", out.len()),
-        Ok(false) => println!("UNSUPPORTED (Ok(false))"),
-        Err(e) => println!("ERR {}", e.0),
-    }
-    // also via translate_t32 (the payload path)
-    let mut out2 = A64::new();
-    match rearm_core::translate::t32_to_a64::translate_t32(&ins, 0x2a88, &mut out2, None) {
-        Ok(true) => println!("t32 OK, {} words", out2.len()),
-        Ok(false) => println!("t32 UNSUPPORTED (Ok(false))"),
-        Err(e) => println!("t32 ERR {}", e.0),
-    }
-    // pop {r7, pc}
-    let pop = Ins::LdmStm { load: true, rn: 13, mode: LdmMode::Ia, wback: true, user: false, list: RegList::from_bitmap(0x8080) };
-    let mut out3 = A64::new();
-    match rearm_core::translate::t32_to_a64::translate_t32(&pop, 0x2aa8, &mut out3, None) {
-        Ok(true) => println!("pop OK, {} words", out3.len()),
-        Ok(false) => println!("pop UNSUPPORTED"),
-        Err(e) => println!("pop ERR {}", e.0),
+    for _step in 0..16 {
+        let hw1 = u16::from_le_bytes([data[0x2aac + (a-0x2aac) as usize], data[0x2aad + (a-0x2aac) as usize]]);
+        let base = 0x2aac + (a-0x2aac) as usize;
+        let hw1 = u16::from_le_bytes([data[base], data[base+1]]);
+        let hw2 = u16::from_le_bytes([data[base+2], data[base+3]]);
+        let t = decode_t32(hw1, hw2).unwrap();
+        let len = t.len as u32;
+        if let Ins::It { first_cond, mask } = &t.ins {
+            println!("guest {a:#x}: IT {first_cond:?} mask={mask:#x} (len {len})");
+            it = Some(ItTracker::new(*first_cond, *mask));
+            a += len;
+            continue;
+        }
+        let cond = match &mut it { Some(tr) => tr.next(), None => None };
+        let start = out.len();
+        let r = translate_t32(&t.ins, a, &mut out, cond);
+        println!("guest {a:#x} (len {len}, cond={cond:?}) -> {} words, ok={:?} start_word_idx={}",
+            out.len()-start, r, start);
+        for i in start..out.len() {
+            println!("   [{:#06x}] = {:#010x}", i*4, out.buf[i]);
+        }
+        a += len;
     }
 }
