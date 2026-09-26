@@ -174,15 +174,20 @@ pub fn gen_trampoline_s(soname: &str, p: &Payload) -> String {
         let off = e.payload_off as u32;
         s.push_str(&format!(
 ".globl {sym}\n.type {sym}, %function\n{sym}:\n\
-    stp x29, x30, [sp, #-160]!\n\
-    stp x0, x1, [sp, #16]\n\
-    stp x2, x3, [sp, #32]\n\
-    stp x4, x5, [sp, #48]\n\
-    stp x6, x7, [sp, #64]\n\
-    stp d0, d1, [sp, #80]\n\
-    stp d2, d3, [sp, #96]\n\
-    stp d4, d5, [sp, #112]\n\
-    stp d6, d7, [sp, #128]\n\
+    stp x29, x30, [sp, #-256]!\n\
+    stp x19, x20, [sp, #16]\n\
+    stp x21, x22, [sp, #32]\n\
+    stp x23, x24, [sp, #48]\n\
+    stp x25, x26, [sp, #64]\n\
+    stp x27, x28, [sp, #80]\n\
+    stp x0, x1, [sp, #96]\n\
+    stp x2, x3, [sp, #112]\n\
+    stp x4, x5, [sp, #128]\n\
+    stp x6, x7, [sp, #144]\n\
+    stp d0, d1, [sp, #160]\n\
+    stp d2, d3, [sp, #176]\n\
+    stp d4, d5, [sp, #192]\n\
+    stp d6, d7, [sp, #208]\n\
     adrp x16, payload_base_slot\n\
     ldr x28, [x16, #:lo12:payload_base_slot]\n\
     mov x0, x13\n\
@@ -197,15 +202,20 @@ pub fn gen_trampoline_s(soname: &str, p: &Payload) -> String {
     movz w17, #{lo}\n\
     movk w17, #{hi}, lsl 16\n\
     add x17, x28, w17, uxtw\n\
-    ldp x0, x1, [sp, #16]\n\
-    ldp x2, x3, [sp, #32]\n\
-    ldp x4, x5, [sp, #48]\n\
-    ldp x6, x7, [sp, #64]\n\
-    ldp d0, d1, [sp, #80]\n\
-    ldp d2, d3, [sp, #96]\n\
-    ldp d4, d5, [sp, #112]\n\
-    ldp d6, d7, [sp, #128]\n\
-    ldp x29, x30, [sp], #160\n\
+    ldp x0, x1, [sp, #96]\n\
+    ldp x2, x3, [sp, #112]\n\
+    ldp x4, x5, [sp, #128]\n\
+    ldp x6, x7, [sp, #144]\n\
+    ldp d0, d1, [sp, #160]\n\
+    ldp d2, d3, [sp, #176]\n\
+    ldp d4, d5, [sp, #192]\n\
+    ldp d6, d7, [sp, #208]\n\
+    ldp x27, x28, [sp, #80]\n\
+    ldp x25, x26, [sp, #64]\n\
+    ldp x23, x24, [sp, #48]\n\
+    ldp x21, x22, [sp, #32]\n\
+    ldp x19, x20, [sp, #16]\n\
+    ldp x29, x30, [sp], #256\n\
     br x17\n\
 .size {sym}, . - {sym}\n\n",
             sym = sym, lo = off & 0xFFFF, hi = (off >> 16) & 0xFFFF,
