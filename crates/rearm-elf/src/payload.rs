@@ -29,8 +29,8 @@
 //!
 //! Payload layout (byte offsets):
 //! ```text
-//!   0x00  header (64 B) — see runtime/rearm_rt.S
-//!   0x40  rearm_rt blob (glue @ 64, thunk @ 72, adapters)
+//!   0x00  header (128 B) — see runtime/rearm_rt.S
+//!   0x80  rearm_rt blob (glue @ 128, thunk @ 136, adapters)
 //!         PLT stubs (3 words × imports)
 //!         translated code (the sweep output)
 //!         [4 KiB-aligned] map: u32 count + (u32 key, u32 off) pairs
@@ -140,8 +140,8 @@ fn translate_pass(elf: &Elf32, dm: &DynMeta, farset: &[u32], window: u32) -> Res
     let mut map: Vec<(u32, u32)> = Vec::new();
     let mut fixups: Vec<Fixup> = Vec::new();
 
-    // ---- header space (16 words, patched by the driver) ----
-    for _ in 0..16 { out.e(0); }
+    // ---- header space (32 words, patched by the driver) ----
+    for _ in 0..32 { out.e(0); }
 
     // ---- runtime blob (glue @64, thunk @72, adapters) ----
     let rt_obj = Obj64::parse(include_bytes!("../../../runtime/rearm_rt.o"))
@@ -151,11 +151,11 @@ fn translate_pass(elf: &Elf32, dm: &DynMeta, farset: &[u32], window: u32) -> Res
     for w in 0..(rt.bytes.len() / 4) {
         out.e(u32::from_le_bytes([rt.bytes[w * 4], rt.bytes[w * 4 + 1], rt.bytes[w * 4 + 2], rt.bytes[w * 4 + 3]]));
     }
-    let thunk_off = 64 + 8; // glue (2 words) precedes the thunk
+    let thunk_off = 128 + 8; // glue (2 words) precedes the thunk
     bias::THUNK.store(thunk_off, std::sync::atomic::Ordering::Relaxed);
     let adapter_off = rt_obj.symbols.iter()
         .find(|s| s.name == "rearm_plt_adapter" && s.typ == 2)
-        .map(|s| 64 + s.value as u32)
+        .map(|s| 128 + s.value as u32)
         .ok_or("rearm_rt.o: no rearm_plt_adapter symbol")? as i32;
 
     // ---- imports: JUMP_SLOT + CALL/JUMP24 + GOT-referenced undefined syms ----
@@ -196,7 +196,7 @@ fn translate_pass(elf: &Elf32, dm: &DynMeta, farset: &[u32], window: u32) -> Res
         let here = (out.len() * 4) as i32;
         out.b(adapter_off - here).map_err(|_| "plt b range".to_string())?;
     }
-    let plt_stub_base = (64 + rt.bytes.len() as u32) as u32; // byte offset of stub 0
+    let plt_stub_base = 128 + rt.bytes.len() as u32; // byte offset of stub 0
 
     // ---- original PLT entry → stub / local target ----
     if std::env::var_os("REARM_DBG").is_some() {
@@ -670,6 +670,17 @@ pub fn build_payload(elf: &Elf32, window: u32, code_base: u32) -> Result<Payload
     let reloc_off = (map_off + 4 + map_count * 8 + 0xFFF) & !0xFFF;
     let got64_off = (reloc_off + reloc_count * 12 + 0xFFF) & !0xFFF;
 
+    // ---- import names blob ----
+    let mut names: Vec<u8> = Vec::new();
+    let mut name_offs: Vec<u32> = Vec::new();
+    for n in p.imports.iter() {
+        name_offs.push(names.len() as u32);
+        names.extend_from_slice(n.as_bytes());
+        names.push(0);
+    }
+    let imports_off = (got64_off + p.imports.len() as u32 * 8 + 0xFFF) & !0xFFF;
+    let imports_len = 4 + p.imports.len() as u32 * 4 + names.len() as u32;
+
     // ---- shadow blob (source image, vaddr-indexed, covering memsz) ----
     let mut shadow_len: u32 = 0;
     for seg in dm.segments.iter() {
@@ -684,7 +695,7 @@ pub fn build_payload(elf: &Elf32, window: u32, code_base: u32) -> Result<Payload
         if end > shadow_bytes.len() { shadow_bytes.resize(end, 0); }
         shadow_bytes[start..end].copy_from_slice(&elf.data[seg.off as usize..(seg.off + seg.filesz) as usize]);
     }
-    let shadow_off = (got64_off + p.imports.len() as u32 * 8 + 0xFFF) & !0xFFF;
+    let shadow_off = (imports_off + imports_len + 0xFFF) & !0xFFF;
     let payload_size = shadow_off + shadow_len;
 
     // ---- assemble the payload bytes ----
@@ -703,12 +714,18 @@ pub fn build_payload(elf: &Elf32, window: u32, code_base: u32) -> Result<Payload
         bytes.extend_from_slice(&r.aux.to_le_bytes());
     }
     bytes.resize(got64_off as usize, 0);
+    bytes.resize(imports_off as usize, 0);
+    bytes.extend_from_slice(&(p.imports.len() as u32).to_le_bytes());
+    for o in name_offs.iter() {
+        bytes.extend_from_slice(&o.to_le_bytes());
+    }
+    bytes.extend_from_slice(&names);
     bytes.resize(shadow_off as usize, 0);
     bytes.extend_from_slice(&shadow_bytes);
 
-    // ---- header ----
-    let hdr = &mut bytes[0..64];
-    hdr.copy_from_slice(&[0u8; 64]);
+    // ---- header (128 B) ----
+    let hdr = &mut bytes[0..128];
+    hdr.copy_from_slice(&[0u8; 128]);
     hdr[0..8].copy_from_slice(b"REARM1\0\0");
     let mut put = |o: usize, v: u32| hdr[o..o + 4].copy_from_slice(&v.to_le_bytes());
     put(8, map_off);
@@ -725,6 +742,8 @@ pub fn build_payload(elf: &Elf32, window: u32, code_base: u32) -> Result<Payload
     put(52, payload_size);
     put(56, code_base);
     put(60, window);
+    put(64, imports_off);
+    put(68, imports_len);
 
     // ---- exports ----
     let mut exports = Vec::new();
