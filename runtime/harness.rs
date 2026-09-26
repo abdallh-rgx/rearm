@@ -97,6 +97,16 @@ fn main() {
         std::ptr::write_bytes((tbuf + 0x8000) as *mut u8, 0, 0x1000);
         std::ptr::write_volatile((tbuf + 0x8000) as *mut u64, 0x1000); // dstLen = 4096
     }
+    // sanity: payload header at C
+    {
+        let c = 0x4000_0000u64;
+        let magic: u64 = unsafe { std::ptr::read_volatile(c as *const u64) };
+        let map_off = unsafe { std::ptr::read_volatile((c + 8) as *const u32) };
+        let map_count = unsafe { std::ptr::read_volatile((c + 12) as *const u32) };
+        let window = unsafe { std::ptr::read_volatile((c + 60) as *const u32) };
+        eprintln!("[harness] payload hdr: magic={:#018x} map_off={:#x} map_count={} window={:#x}",
+            magic, map_off, map_count, window);
+    }
     let compress2 = so.find_sym("compress2").expect("compress2 export");
     println!("[harness] compress2 @ {:#x} (bias {:#x}) buffers @ {:#x}", compress2, bias, tbuf);
     let rc = unsafe {
