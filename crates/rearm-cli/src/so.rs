@@ -126,3 +126,21 @@ pub fn cmd_payload(args: &[String]) -> Result<(), String> {
     println!("{:#?}", p.stats);
     Ok(())
 }
+
+/// `rearm so64 <in.so> <out.so> [window_hex] [code_base_hex]` — full native
+/// .so: payload + trampolines + runtime loader, linked with rust-lld.
+pub fn cmd_so64(args: &[String]) -> Result<(), String> {
+    if args.len() < 2 { return Err("usage: rearm so64 <in.so> <out.so> [window_hex] [code_base_hex]".into()); }
+    let window: u32 = args.get(2).and_then(|s| u32::from_str_radix(s.trim_start_matches("0x"), 16).ok()).unwrap_or(0x0100_0000);
+    let code_base: u32 = args.get(3).and_then(|s| u32::from_str_radix(s.trim_start_matches("0x"), 16).ok()).unwrap_or(0x4000_0000);
+    let tools = rearm_elf::soemit::SoToolPaths::find()?;
+    let data = std::fs::read(&args[0]).map_err(|e| format!("{}: {}", args[0], e))?;
+    let elf = Elf32::parse(data)?;
+    let t0 = std::time::Instant::now();
+    let p = rearm_elf::soemit::build_so(&elf, &args[1], window, code_base, &tools, Some("/tmp/rearm-so"))?;
+    println!("so64: {} -> {} in {:.1}s ({} exports, {} imports)",
+        args[0], args[1], t0.elapsed().as_secs_f32(), p.exports.len(), p.imports.len());
+    println!("window={:#010x} code_base={:#010x} payload={} bytes", p.window, p.code_base, p.bytes.len());
+    println!("{:#?}", p.stats);
+    Ok(())
+}

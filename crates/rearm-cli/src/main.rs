@@ -26,11 +26,12 @@ fn main() {
         "so" => so::cmd_so(&args[2..]),
         "verify-so" => so::cmd_verify_so(&args[2..]),
         "payload" => so::cmd_payload(&args[2..]),
+        "so64" => so::cmd_so64(&args[2..]),
         "coverage" => cmd_coverage(&args[2..]),
         "bench" => cmd_bench(&args[2..]),
         _ => {
             eprintln!("unknown command: {}", cmd);
-            eprintln!("usage: rearm <disasm|recompile|verify|verify-t32|so|verify-so|coverage|bench> [args]");
+            eprintln!("usage: rearm <disasm|recompile|verify|verify-t32|so|so64|verify-so|payload|coverage|bench> [args]");
             std::process::exit(2);
         }
     };

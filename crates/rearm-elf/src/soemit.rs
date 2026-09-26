@@ -1,4 +1,263 @@
-//! rearm-elf v2 — native ELF64 ET_DYN (.so) emitter for translated libraries.
-//! Filled in the next phase: trampolines, dynsym exports, PT_DYNAMIC.
+//! rearm-elf v2.1 — native ELF64 ET_DYN (.so) emitter.
+//!
+//! Pipeline for one library:
+//!  1. `payload::build_payload` → the execution payload (translated code,
+//!     map, relocs, GOT64, guest image).
+//!  2. Emit `payload_data.o` — an ET_REL object with the payload in `.rodata`
+//!     under the global symbol `payload_blob`.
+//!  3. Generate `trampolines.S` — one stub per exported function (saves the
+//!     A64 arg/return registers, calls `rearm_rt_enter` for a per-thread low
+//!     ARM stack, builds the fake return frame, jumps into the payload),
+//!     plus `.init_array` with `rearm_rt_init`.
+//!  4. Assemble with llvm-mc and link everything with rust-lld:
+//!     `ld.lld -shared loader.o trampolines.o payload_data.o`.
+//!
+//! Tool locations: env `LLVM_MC` / `LD_LLD` override; defaults look in
+//! ~/bin/llvm-mc and the rustup toolchain's rust-lld.
 
-// (phase 2 — see build_so())
+use crate::payload::{build_payload, Payload};
+use crate::Elf32;
+use std::io::Write;
+use std::process::Command;
+
+pub struct SoToolPaths {
+    pub llvm_mc: String,
+    pub ld_lld: String,
+}
+
+impl SoToolPaths {
+    pub fn find() -> Result<SoToolPaths, String> {
+        let llvm_mc = std::env::var("LLVM_MC").ok()
+            .filter(|p| std::path::Path::new(p).exists())
+            .unwrap_or_else(|| {
+                let home = std::env::var("HOME").unwrap_or_else(|_| "/home/z".into());
+                format!("{home}/bin/llvm-mc")
+            });
+        let ld_lld = std::env::var("LD_LLD").ok()
+            .filter(|p| std::path::Path::new(p).exists())
+            .unwrap_or_else(|| find_rust_lld());
+        if !std::path::Path::new(&llvm_mc).exists() {
+            return Err(format!("llvm-mc not found at {llvm_mc} (set LLVM_MC)"));
+        }
+        if !std::path::Path::new(&ld_lld).exists() {
+            return Err(format!("rust-lld not found at {ld_lld} (set LD_LLD)"));
+        }
+        Ok(SoToolPaths { llvm_mc, ld_lld })
+    }
+}
+
+fn find_rust_lld() -> String {
+    if let Ok(home) = std::env::var("HOME") {
+        // newest toolchain first
+        let rustup = format!("{home}/.rustup/toolchains");
+        if let Ok(mut dirs) = std::fs::read_dir(&rustup) {
+            let mut paths: Vec<_> = dirs.flatten()
+                .map(|d| d.path())
+                .filter(|p| p.file_name().map(|n| n.to_string_lossy().contains("x86_64")).unwrap_or(false))
+                .collect();
+            paths.sort();
+            for p in paths.iter().rev() {
+                let c = p.join("lib/rustlib/x86_64-unknown-linux-gnu/bin/rust-lld");
+                if c.exists() { return c.to_string_lossy().into_owned(); }
+            }
+        }
+    }
+    "rust-lld".into()
+}
+
+// ==================== payload data object ====================
+
+/// ET_REL ELF64 with the payload in `.rodata` as the global symbol
+/// `payload_blob` (+ size).
+pub fn emit_payload_obj(p: &Payload) -> Vec<u8> {
+    let data = &p.bytes;
+    let shstrtab: &[u8] = b"\0.rodata\0.symtab\0.strtab\0.shstrtab\0";
+    let n_rodata = 1usize;
+    let n_symtab = 8usize;
+    let n_strtab = 16usize;
+    let n_shstrtab = 23usize;
+
+    let mut strtab: Vec<u8> = vec![0];
+    let payload_blob_name = strtab.len() as u32;
+    strtab.extend_from_slice(b"payload_blob");
+    strtab.push(0);
+
+    let mut buf: Vec<u8> = Vec::with_capacity(data.len() + 4096);
+
+    // ELF64 header
+    buf.extend_from_slice(b"\x7fELF");
+    buf.extend_from_slice(&[2, 1, 1, 0]);
+    buf.extend_from_slice(&[0u8; 8]);
+    buf.extend_from_slice(&1u16.to_le_bytes());     // ET_REL
+    buf.extend_from_slice(&0xB7u16.to_le_bytes());   // EM_AARCH64
+    buf.extend_from_slice(&1u32.to_le_bytes());      // EV_CURRENT
+    buf.extend_from_slice(&0u64.to_le_bytes());      // entry
+    buf.extend_from_slice(&0u64.to_le_bytes());      // phoff
+    let shoff_pos = buf.len();
+    buf.extend_from_slice(&0u64.to_le_bytes());     // shoff (patch)
+    buf.extend_from_slice(&0u32.to_le_bytes());     // flags
+    buf.extend_from_slice(&64u16.to_le_bytes());    // ehsize
+    buf.extend_from_slice(&0u16.to_le_bytes());     // phentsize/phnum
+    buf.extend_from_slice(&64u16.to_le_bytes());    // shentsize
+    buf.extend_from_slice(&5u16.to_le_bytes());     // shnum
+    buf.extend_from_slice(&4u16.to_le_bytes());     // shstrndx
+    debug_assert_eq!(buf.len(), 64);
+
+    let rodata_off = buf.len();
+    buf.extend_from_slice(data);
+    let sym_off = buf.len();
+    // null symbol + payload_blob
+    let mut sym: Vec<u8> = vec![0u8; 24];
+    sym[0..4].copy_from_slice(&payload_blob_name.to_le_bytes());
+    sym[8..16].copy_from_slice(&0u64.to_le_bytes()); // value 0 (ET_REL)
+    sym[16..20].copy_from_slice(&(data.len() as u32).to_le_bytes());
+    sym[20] = 0x11; // STB_GLOBAL | STT_OBJECT
+    sym[21] = 1;    // shndx = .rodata
+    buf.extend_from_slice(&sym);
+    let str_off = buf.len();
+    buf.extend_from_slice(&strtab);
+    let shstr_off = buf.len();
+    buf.extend_from_slice(shstrtab);
+
+    let shoff = buf.len() as u64;
+    let push_sh = |buf: &mut Vec<u8>, name: u32, typ: u32, off: u64, size: u64, link: u32, entsize: u64| {
+        buf.extend_from_slice(&name.to_le_bytes());
+        buf.extend_from_slice(&typ.to_le_bytes());
+        buf.extend_from_slice(&0u64.to_le_bytes());  // flags
+        buf.extend_from_slice(&0u64.to_le_bytes());  // addr
+        buf.extend_from_slice(&off.to_le_bytes());
+        buf.extend_from_slice(&size.to_le_bytes());
+        buf.extend_from_slice(&link.to_le_bytes());
+        buf.extend_from_slice(&0u32.to_le_bytes());  // info
+        buf.extend_from_slice(&1u64.to_le_bytes());  // align
+        buf.extend_from_slice(&entsize.to_le_bytes());
+    };
+    buf.extend_from_slice(&[0u8; 64]); // null section
+    push_sh(&mut buf, n_rodata as u32, 1, rodata_off as u64, data.len() as u64, 0, 0);
+    push_sh(&mut buf, n_symtab as u32, 2, sym_off as u64, 48, 3, 24);
+    push_sh(&mut buf, n_strtab as u32, 3, str_off as u64, strtab.len() as u64, 0, 0);
+    push_sh(&mut buf, n_shstrtab as u32, 3, shstr_off as u64, shstrtab.len() as u64, 0, 0);
+    buf[shoff_pos..shoff_pos + 8].copy_from_slice(&shoff.to_le_bytes());
+    buf
+}
+
+// ==================== trampolines ====================
+
+fn sanitize(name: &str) -> String {
+    name.chars().map(|c| if c.is_ascii_alphanumeric() || c == '_' { c } else { '_' }).collect()
+}
+
+pub fn gen_trampoline_s(soname: &str, p: &Payload) -> String {
+    let mut s = String::with_capacity(64 * 1024);
+    s.push_str("// rearm-generated trampolines (per-export entry stubs)\n");
+    s.push_str(".text\n");
+    for e in p.exports.iter() {
+        let sym = sanitize(&e.name);
+        let off = e.payload_off as u32;
+        s.push_str(&format!(
+".globl {sym}\n.type {sym}, %function\n{sym}:\n\
+    stp x29, x30, [sp, #-160]!\n\
+    stp x0, x1, [sp, #16]\n\
+    stp x2, x3, [sp, #32]\n\
+    stp x4, x5, [sp, #48]\n\
+    stp x6, x7, [sp, #64]\n\
+    stp d0, d1, [sp, #80]\n\
+    stp d2, d3, [sp, #96]\n\
+    stp d4, d5, [sp, #112]\n\
+    stp d6, d7, [sp, #128]\n\
+    adrp x16, payload_base_slot\n\
+    ldr x28, [x16, #:lo12:payload_base_slot]\n\
+    mov x0, x13\n\
+    mov x1, x30\n\
+    bl rearm_rt_enter\n\
+    mov x16, x0\n\
+    add x17, x28, #128\n\
+    str x17, [x16]\n\
+    str x30, [x16, #8]\n\
+    mov x13, x16\n\
+    mov x14, x17\n\
+    movz w17, #{lo}\n\
+    movk w17, #{hi}, lsl 16\n\
+    add x17, x28, w17, uxtw\n\
+    ldp x0, x1, [sp, #16]\n\
+    ldp x2, x3, [sp, #32]\n\
+    ldp x4, x5, [sp, #48]\n\
+    ldp x6, x7, [sp, #64]\n\
+    ldp d0, d1, [sp, #80]\n\
+    ldp d2, d3, [sp, #96]\n\
+    ldp d4, d5, [sp, #112]\n\
+    ldp d6, d7, [sp, #128]\n\
+    ldp x29, x30, [sp], #160\n\
+    br x17\n\
+.size {sym}, . - {sym}\n\n",
+            sym = sym, lo = off & 0xFFFF, hi = (off >> 16) & 0xFFFF,
+        ));
+    }
+    // init_array: run the loader at dlopen
+    s.push_str(".section .init_array,\"aw\"\n");
+    s.push_str(".xword rearm_rt_init\n");
+    let _ = soname;
+    s
+}
+
+// ==================== driver ====================
+
+pub fn build_so(
+    elf: &Elf32,
+    out_path: &str,
+    window: u32,
+    code_base: u32,
+    tools: &SoToolPaths,
+    keep_dir: Option<&str>,
+) -> Result<Payload, String> {
+    let p = build_payload(elf, window, code_base)?;
+
+    let dir = match keep_dir {
+        Some(d) => std::path::PathBuf::from(d),
+        None => {
+            let d = std::env::temp_dir().join(format!("rearm-so-{}", std::process::id()));
+            std::fs::create_dir_all(&d).map_err(|e| e.to_string())?;
+            d
+        }
+    };
+
+    // 1. payload data object
+    let po = dir.join("payload_data.o");
+    std::fs::write(&po, emit_payload_obj(&p)).map_err(|e| e.to_string())?;
+
+    // 2. trampolines
+    let ts = dir.join("trampolines.S");
+    std::fs::write(&ts, gen_trampoline_s(&p.soname, &p)).map_err(|e| e.to_string())?;
+    let to = dir.join("trampolines.o");
+    let out = Command::new(&tools.llvm_mc)
+        .args(["--triple=aarch64-linux-gnu", "--filetype=obj", "-o"])
+        .arg(&to)
+        .arg(&ts)
+        .output()
+        .map_err(|e| format!("llvm-mc spawn: {e}"))?;
+    if !out.status.success() {
+        return Err(format!("llvm-mc failed: {}", String::from_utf8_lossy(&out.stderr)));
+    }
+
+    // 3. loader object (embedded, written out)
+    let lo = dir.join("loader.o");
+    std::fs::write(&lo, include_bytes!("../../../runtime/loader.o"))
+        .map_err(|e| e.to_string())?;
+
+    // 4. link
+    let mut cmd = Command::new(&tools.ld_lld);
+    cmd.args(["-flavor", "gnu", "-shared", "-o", out_path]);
+    if !p.soname.is_empty() {
+        cmd.arg(format!("--soname={}", p.soname));
+    }
+    for n in p.needed.iter() {
+        cmd.arg(format!("-needed={n}"));
+    }
+    cmd.arg("-z").arg("now");
+    cmd.arg(&lo).arg(&to).arg(&po);
+    let out = cmd.output().map_err(|e| format!("rust-lld spawn: {e}"))?;
+    if !out.status.success() {
+        return Err(format!("rust-lld failed:\n{}", String::from_utf8_lossy(&out.stderr)));
+    }
+    Ok(p)
+}
