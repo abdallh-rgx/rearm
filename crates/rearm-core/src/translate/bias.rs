@@ -54,8 +54,8 @@ pub fn bias_src(out: &mut A64, dst: XR, src: u32) {
     if v < 0x10000 {
         out.movz(true, 0, v as u16, dst);
     } else {
-        out.movz(true, 0, (v >> 16) as u16, dst);
-        out.movk(true, 1, (v & 0xFFFF) as u16, dst);
+        out.movz(true, 0, (v & 0xFFFF) as u16, dst);
+        out.movk(true, 1, (v >> 16) as u16, dst);
     }
 }
 
