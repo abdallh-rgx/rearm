@@ -402,10 +402,9 @@ fn decode_e8(w: u32) -> Result<Ins, DecodeErr> {
             } else if bb(hw2, 7, 4) == 7 && bb(hw2, 3, 0) == 0xF {
                 Ok(Ins::ExclLoadD { rt, rt2: bb(hw2, 11, 8) as u8, rn })
             } else {
-                let rt_l = bb(hw2, 11, 8) as u8;
-                let rt2 = rt;
+                let rt2 = bb(hw2, 11, 8) as u8; // Rt2: [Rn+4]
                 let imm8 = bb(hw2, 7, 0) as i32 * 4;
-                Ok(Ins::LdrdStrd { store: false, rt: rt_l, rt2, rn, imm: imm8, index: true, add: true, wback: false })
+                Ok(Ins::LdrdStrd { store: false, rt, rt2, rn, imm: imm8, index: true, add: true, wback: false })
             }
         }
         (true, true, false, false) => {
@@ -418,19 +417,18 @@ fn decode_e8(w: u32) -> Result<Ins, DecodeErr> {
             } else if bb(hw2, 7, 4) == 7 {
                 Ok(Ins::ExclStoreD { rs, rt, rt2: bb(hw2, 11, 8) as u8, rn })
             } else {
-                let rt_l = bb(hw2, 11, 8) as u8;
-                let rt2 = rt;
+                let rt2 = bb(hw2, 11, 8) as u8; // Rt2: [Rn+4]
                 let imm8 = bb(hw2, 7, 0) as i32 * 4;
-                Ok(Ins::LdrdStrd { store: true, rt: rt_l, rt2, rn, imm: imm8, index: true, add: true, wback: false })
+                Ok(Ins::LdrdStrd { store: true, rt, rt2, rn, imm: imm8, index: true, add: true, wback: false })
             }
         }
-        // LDRD/STRD (imm8 ×4): P=1 offset/pre-index, P=0 post; Rt at [11:8], Rt2 at [15:12]
+        // LDRD/STRD (imm8 ×4): P=1 offset/pre-index, P=0 post.
+        // Rt = hw2[15:12] → [Rn]; Rt2 = hw2[11:8] → [Rn+4] (ARM ARM order).
         _ => {
-            let rt_l = bb(hw2, 11, 8) as u8;
-            let rt2 = rt;
+            let rt2 = bb(hw2, 11, 8) as u8;
             let imm8 = bb(hw2, 7, 0) as i32 * 4;
             let imm = if u { imm8 } else { -imm8 };
-            Ok(Ins::LdrdStrd { store: !load, rt: rt_l, rt2, rn, imm, index: p, add: u, wback: wb })
+            Ok(Ins::LdrdStrd { store: !load, rt, rt2, rn, imm, index: p, add: u, wback: wb })
         }
     }
 }
