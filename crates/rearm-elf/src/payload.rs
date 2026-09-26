@@ -462,8 +462,8 @@ fn translate_pass(elf: &Elf32, dm: &DynMeta, farset: &[u32], window: u32) -> Res
                             _ => {}
                         }
                     }
-                    Ok(false) => { stats.unsupported += 1; out.e(TRAP); }
-                    Err(_) => { stats.unsupported += 1; out.e(TRAP); }
+                    Ok(false) => { stats.unsupported += 1; stats.note_unsupported(format!("{:?}", tins.ins).split('{').next().unwrap_or("?")); out.e(TRAP); }
+                    Err(e) => { stats.unsupported += 1; stats.note_unsupported(&format!("ERR {} @ t32", e.0)); out.e(TRAP); }
                 }
                 map.push((reb(a), start as u32));
                 visited.insert(a);
@@ -544,8 +544,8 @@ fn translate_pass(elf: &Elf32, dm: &DynMeta, farset: &[u32], window: u32) -> Res
                         _ => {}
                     }
                 }
-                Ok(false) => { stats.unsupported += 1; out.e(TRAP); }
-                Err(_) => { stats.unsupported += 1; out.e(TRAP); }
+                Ok(false) => { stats.unsupported += 1; stats.note_unsupported(format!("{:?}", ins).split('{').next().unwrap_or("?")); out.e(TRAP); }
+                Err(e) => { stats.unsupported += 1; stats.note_unsupported(&format!("ERR {} @ a32", e.0)); out.e(TRAP); }
             }
             map.push((reb(a), start as u32));
             visited.insert(a);
