@@ -443,12 +443,13 @@ fn encode_t32_word(ins: &Ins) -> Result<u32, EncodeErr> {
             enc_f8_ldst(*store, *size, *signed, *user, *rt, *rn, *rm, *shift, *imm, *index, *add, *wback)?
         }
         LdrdStrd { store, rt, rt2, rn, imm, index, add, wback } => {
-            // imm must be a multiple of 4 in ±1020
+            // imm (BYTES) must be a multiple of 4 in ±1020.
+            // Rt = hw2[15:12] → [Rn]; Rt2 = hw2[11:8] → [Rn+4] (ARM ARM order).
             if *imm % 4 != 0 || *imm > 1020 || *imm < -1020 { return Err(enc_err("ldrd imm")); }
             let imm8 = (imm.unsigned_abs() / 4) as u32;
             let (p, u, w, l) = (*index as u32, *add as u32, *wback as u32, !*store as u32);
             0xE800_0000 | (p << 24) | (u << 23) | (1 << 22) | (w << 21) | (l << 20)
-                | ((*rn as u32) << 16) | ((*rt2 as u32) << 12) | ((*rt as u32) << 8) | imm8
+                | ((*rn as u32) << 16) | ((*rt as u32) << 12) | ((*rt2 as u32) << 8) | imm8
         }
         LdmStm { load, rn, mode, wback, user: _, list } => {
             let (p, u) = mode.pu();
