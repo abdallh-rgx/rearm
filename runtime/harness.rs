@@ -165,6 +165,20 @@ extern "C" fn segv_handler(_sig: i32, info: *mut u8, ctx: *mut u8) {
     std::process::exit(9);
 }
 
+extern "C" fn segv_ctx_handler(_sig: i32, _info: usize, ctx: usize) {
+    // aarch64 ucontext: mcontext at +0xE8: regs[0..30], sp, pc, pstate
+    let uc = ctx as *const u64;
+    unsafe {
+        let x16 = *uc.add((0xE8 + 16*8) / 8);
+        let x18 = *uc.add((0xE8 + 18*8) / 8);
+        let x28 = *uc.add((0xE8 + 28*8) / 8);
+        let sp = *uc.add((0xE8 + 31*8) / 8);
+        let pc = *uc.add((0xE8 + 32*8) / 8);
+        eprintln!("[SEGV-CTX] pc={:#x} x16={:#x} x18={:#x} x28={:#x} sp={:#x}", pc, x16, x18, x28, sp);
+    }
+    std::process::exit(66);
+}
+
 extern "C" fn trap_handler(_sig: i32) {
     let x28 = unsafe { std::ptr::read_volatile(0x0101_0000 as *const u64) };
     let magic: u32 = unsafe { std::ptr::read_volatile(0x4000_0000 as *const u32) };
@@ -176,6 +190,7 @@ extern "C" fn trap_handler(_sig: i32) {
 
 fn install_segv_debug() {
     unsafe { signal(5, trap_handler as usize); } // SIGTRAP
+    unsafe { signal(11, segv_ctx_handler as usize); } // SIGSEGV
 
     unsafe {
         let sa = Box::into_raw(Box::new(KSigAction {
