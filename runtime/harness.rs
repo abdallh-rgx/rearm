@@ -112,7 +112,7 @@ fn main() {
         // verify against the harness's own deflate (host zlib via musl? not available) —
         // print a CRC for the python check instead
         let mut crc: u32 = 0xFFFFFFFF;
-        for b in out.iter() { for k in (0..8).rev() { let bit = (crc ^ ((*b >> k) & 1)) & 1; crc = (crc >> 1) ^ (0xEDB8_8320u32).wrapping_mul(bit); } }
+        for b in out.iter() { for k in (0..8).rev() { let bit = (crc ^ ((*b as u32 >> k) & 1)) & 1; crc = (crc >> 1) ^ (0xEDB8_8320u32).wrapping_mul(bit); } }
         println!("[harness] compressed crc32={:#010x} len={}", !crc, out_len);
         std::process::exit(0);
     }
