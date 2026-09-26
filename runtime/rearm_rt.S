@@ -41,6 +41,7 @@ rearm_thunk:
     b.ne badhdr1
     ldr  w17, [x28, #12]
     cbz  w17, badhdr2
+    bic  x15, x15, #1              // strip the Thumb bit (function pointers |1)
     lsr  x17, x15, #32
     cbnz x17, .Lforeign
     stp  x9, x10, [sp, #-32]!
@@ -106,6 +107,12 @@ badhdr2:
     .globl rearm_plt_adapter
     .type rearm_plt_adapter, %function
 rearm_plt_adapter:
+    // debug: stash the incoming args + idx (0x93000000, RW)
+    movz x17, #0x0000
+    movk x17, #0x9300, lsl 16
+    stp  x0, x1, [x17]
+    stp  x2, x3, [x17, #16]
+    str  x15, [x17, #32]
     ldr  w17, [x28, #24]          // got64_off
     add  x17, x17, x15, lsl #3
     ldr  x16, [x28, x17]          // GOT64[idx] = target

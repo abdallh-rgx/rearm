@@ -15,6 +15,8 @@ fn main() {
     }
     let data = fs::read(&args[1]).expect("read .so");
     install_segv_debug();
+    let dbg_page = sys_mmap(0x9300_0000, 0x1000, 3, 0x8022, -1, 0);
+    if dbg_page != 0x9300_0000 { panic!("dbg page"); }
 
     let so = So::parse(&data);
     println!("[harness] {} loaded: {} segments, {} dynsyms", args[1], so.segs.len(), so.syms.len());
@@ -193,6 +195,13 @@ extern "C" fn segv_ctx_handler(_sig: i32, info: usize, ctx: usize) {
         let pc = *uc.add((0xB8 + 32*8) / 8);
         eprintln!("[SEGV-CTX] pc={:#x} si_addr={:#x} x13={:#x} x14={:#x} x15={:#x} x16={:#x} x17={:#x} x28={:#x} sp={:#x}",
             pc, si_addr, x13, x14, x15, x16, x17, x28, sp);
+        let d = 0x9300_0000u64;
+        let a0 = std::ptr::read_volatile(d as *const u64);
+        let a1 = std::ptr::read_volatile((d+8) as *const u64);
+        let a2 = std::ptr::read_volatile((d+16) as *const u64);
+        let a3 = std::ptr::read_volatile((d+24) as *const u64);
+        let a4 = std::ptr::read_volatile((d+32) as *const u64);
+        eprintln!("[adapter-args] x0={:#x} x1={:#x} x2={:#x} x3={:#x} idx={:#x}", a0, a1, a2, a3, a4);
         // dump the guest stack frame area [x13-0x30, x13+0x20]
         // (only when x13 looks like a low-world pointer — the handler must not fault)
         let mut line = String::new();
@@ -470,7 +479,9 @@ extern "C" fn fake_dlsym(_h: *mut u8, name: *const u8) -> *mut u8 {
         "__android_log_print" => fake_log as *mut u8,
         // ARM EABI helpers
         "__aeabi_memcpy" | "__aeabi_memcpy4" | "__aeabi_memcpy8" => memcpy as *mut u8,
-        "__aeabi_memclr" | "__aeabi_memclr4" | "__aeabi_memclr8" => memset as *mut u8,
+        "__aeabi_memclr" => eabi_memclr as *mut u8,
+        "__aeabi_memclr4" => eabi_memclr4 as *mut u8,
+        "__aeabi_memclr8" => eabi_memclr8 as *mut u8,
         "__aeabi_memmove" | "__aeabi_memmove4" | "__aeabi_memmove8" => memcpy as *mut u8,
         // misc libc
         "memchr" => memchr_impl as *mut u8,
@@ -510,6 +521,9 @@ extern "C" fn fake_snprintf() -> i32 { 0 }
 extern "C" fn fake_strerror(_e: i32) -> *mut u8 { b"strerror\0".as_ptr() as *mut u8 }
 extern "C" fn fake_errno() -> *mut u8 { static mut E: u32 = 0; unsafe { std::ptr::addr_of_mut!(E) as *mut u8 } }
 extern "C" fn fake_io_stub() -> i64 { -1 }
+extern "C" fn eabi_memclr(d: *mut u8, n: u64) { unsafe { memset(d, 0, n); } }
+extern "C" fn eabi_memclr4(d: *mut u8, n: u64) { unsafe { memset(d, 0, n); } }
+extern "C" fn eabi_memclr8(d: *mut u8, n: u64) { unsafe { memset(d, 0, n); } }
 extern "C" fn fake_abort() -> ! { std::process::abort() }
 extern "C" fn fake_find_exidx() -> i64 { 0 }
 extern "C" fn fake_cxa_atexit() -> i32 { 0 }
