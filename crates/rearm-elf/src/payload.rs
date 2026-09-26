@@ -502,7 +502,9 @@ fn translate_pass(elf: &Elf32, dm: &DynMeta, farset: &[u32], window: u32) -> Res
                         seed(&mut queue, a.wrapping_add(4) & !3u32, false);
                         true
                     }
-                    Ins::Bx { .. } | Ins::BlxReg { .. } => true,
+                    Ins::Bx { .. } => true,
+                    // BlxReg = an indirect CALL (LR set) — NOT terminal: the
+                    // return path continues; keep sweeping past it.
                     Ins::Blx { off } => { // mode switch: flip and continue
                         let base = (a.wrapping_add(4) & !3u32).wrapping_add(*off as u32);
                         seed(&mut queue, base, !thumb);
@@ -590,7 +592,8 @@ fn translate_pass(elf: &Elf32, dm: &DynMeta, farset: &[u32], window: u32) -> Res
 
             let stop = match &ins {
                 Ins::B { cond: Cond::Al, .. } => true,
-                Ins::Bx { .. } | Ins::BlxReg { .. } => true,
+                Ins::Bx { .. } => true,
+                // BlxReg = an indirect CALL — keep sweeping past it.
                 Ins::Blx { off } => {
                     let target = a.wrapping_add(8).wrapping_add(*off as u32);
                     seed(&mut queue, target, !thumb);
