@@ -632,7 +632,8 @@ pub fn translate_a32(ins: &Ins, pc: u32, out: &mut A64) -> Result<bool, Translat
                 }
             };
             // ---- native imm9 post/pre-index (immediate, byte off in [-256, 255]) ----
-            let boff: i64 = if rm.is_none() { (*imm as i64) << scale } else { 0 };
+            // `imm` is in BYTES (all decoders normalized) — imm9 is also bytes.
+            let boff: i64 = if rm.is_none() { *imm as i64 } else { 0 };
             if *wback && rm.is_none() && boff >= -256 && boff <= 255 {
                 let mode = if is_post { 1u8 } else { 2u8 }; // 1=post 2=pre
                 let i9 = (if *add { boff } else { -boff }) as i16;
@@ -962,9 +963,11 @@ fn emit_memaddr(out: &mut A64, rn: R, rm: Option<R>, imm: i32) -> XR {
 }
 
 fn emit_memaddr_scaled(out: &mut A64, rn: R, rm: Option<R>, imm: i32, add: bool, scale: u8, pc: u32) -> XR {
-    // PC base (A32 literal loads / PC-relative addressing): x15 reads as
-    // pc+8; in bias mode the shadow-image address is used instead.
+    // `imm` is in BYTES (all decoders normalize to bytes).
+    // Compute [rn ± rm<<scale ± imm] into x16 — no implicit scaling of imm.
     if rn == 15 {
+        // PC base (A32 literal loads / PC-relative addressing): x15 reads as
+        // pc+8; in bias mode the shadow-image address is used instead.
         load_pc(out, 17, pc);
         if let Some(rm) = rm {
             if scale > 0 {
@@ -973,9 +976,19 @@ fn emit_memaddr_scaled(out: &mut A64, rn: R, rm: Option<R>, imm: i32, add: bool,
             } else {
                 out.addsub_ext(true, if add { 0 } else { 1 }, false, x(rm), 2, 0, 17, 16);
             }
+            if imm != 0 {
+                let v = imm as i64;
+                if v >= 0 && v <= 4095 { out.add_imm(true, 16, 16, v as u16); }
+                else if v < 0 && -v <= 4095 { out.sub_imm(true, 16, 16, (-v) as u16); }
+                else {
+                    load_imm64(out, 18, v.unsigned_abs());
+                    if v >= 0 { out.addsub_reg(true, 0, false, 0, 0, 16, 18, 16); }
+                    else { out.addsub_reg(true, 1, false, 0, 0, 16, 18, 16); }
+                }
+            }
             return 16;
         }
-        let v = (imm as i64) << scale;
+        let v = imm as i64;
         if v >= 0 && v <= 4095 {
             out.add_imm(true, 17, 16, v as u16);
         } else if v < 0 && -v <= 4095 {
@@ -995,8 +1008,13 @@ fn emit_memaddr_scaled(out: &mut A64, rn: R, rm: Option<R>, imm: i32, add: bool,
         } else {
             out.addsub_ext(true, if add { 0 } else { 1 }, false, x(rm), 2, 0, base, 16);
         }
+        if imm != 0 {
+            let v = imm as i64;
+            if v >= 0 && v <= 4095 { out.add_imm(true, 16, 16, v as u16); }
+            else if v < 0 && -v <= 4095 { out.sub_imm(true, 16, 16, (-v) as u16); }
+        }
     } else {
-        let v = (imm as i64) << scale;
+        let v = imm as i64;
         if v >= 0 && v <= 4095 {
             out.add_imm(true, base, 16, v as u16);
         } else if v < 0 && -v <= 4095 {

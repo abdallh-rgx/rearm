@@ -154,29 +154,29 @@ fn decode_t16(hw: u16) -> Result<Ins, DecodeErr> {
                         _ => Err(DecodeErr(w)),
                     }
                 }
-                _ => { // 01001x: LDR literal (rt = bits 10:8) — imm UNSCALED (emit scales)
-                    Ok(ld(false, Size::W32, false, rfn, 15, imm8 as i32))
+                _ => { // 01001x: LDR literal (rt = bits 10:8) — imm in BYTES
+                    Ok(ld(false, Size::W32, false, rfn, 15, (imm8 * 4) as i32))
                 }
             }
         }
-        // ===== 0110-0111: STR/LDR imm5 (imm UNSCALED — transfer units; emit scales) =====
+        // ===== 0110-0111: STR/LDR imm5 (imm in BYTES = imm5 ×4) =====
         0x6 | 0x7 => {
             let is_load = bt(w, 11);
             if bt(w, 12) {
-                Ok(ld(!is_load, Size::B8, false, rd, rn, imm5 as i32)) // STRB/LDRB
+                Ok(ld(!is_load, Size::B8, false, rd, rn, imm5 as i32)) // STRB/LDRB (×1)
             } else {
-                Ok(ld(!is_load, Size::W32, false, rd, rn, imm5 as i32)) // STR/LDR
+                Ok(ld(!is_load, Size::W32, false, rd, rn, (imm5 * 4) as i32)) // STR/LDR (×4)
             }
         }
-        // ===== 1000: STRH/LDRH imm5 (imm UNSCALED; emit scales ×2) =====
+        // ===== 1000: STRH/LDRH imm5 (imm in BYTES = imm5 ×2) =====
         0x8 => {
             let is_load = bt(w, 11);
-            Ok(ld(!is_load, Size::H16, false, rd, rn, imm5 as i32))
+            Ok(ld(!is_load, Size::H16, false, rd, rn, (imm5 * 2) as i32))
         }
-        // ===== 1001: STR/LDR SP-relative imm8 (imm UNSCALED; emit scales ×4) =====
+        // ===== 1001: STR/LDR SP-relative imm8 (imm in BYTES = imm8 ×4) =====
         0x9 => {
             let is_load = bt(w, 11);
-            Ok(ld(!is_load, Size::W32, false, rfn, 13, imm8 as i32))
+            Ok(ld(!is_load, Size::W32, false, rfn, 13, (imm8 * 4) as i32))
         }
         // ===== 1010: ADR (bit11=0) / ADD Rd, SP, #imm8×4 (bit11=1) =====
         0xA => {
@@ -712,19 +712,17 @@ fn decode_f8(w: u32) -> Result<Ins, DecodeErr> {
     if rt == 15 && load {
         return decode_pl(w);
     }
-    // LDR literal: Rn=15 + word + unsigned → imm12 (sign from U).
+    // LDR literal: Rn=15 + word + unsigned → imm12 ×4 (BYTES; sign from U).
     if rn == 15 && size == Size::W32 && !signed {
         let imm12 = bb(hw2, 11, 0) as i32;
         let imm = if u { imm12 } else { -imm12 };
-        return Ok(ld(false, Size::W32, false, rt, 15, imm));
+        return Ok(ld(false, Size::W32, false, rt, 15, imm * 4));
     }
+    let scale = match size { Size::B8 => 0i32, Size::H16 => 1, _ => 2 };
     if u {
-        // imm12 form: hw2[11:0] = imm12 — UNLESS the register form
-        // (hw2[11:4] top = 0x00-0x0F with [11:6]=0). Register form only
-        // exists with U=0? No — reg form has U either; from corpus the reg
-        // form always shows U=0 (f851 0002): the reg form is only
-        // encodable with U=0. So U=1 → always imm12.
-        return Ok(ld(!load, size, signed, rt, rn, bb(hw2, 11, 0) as i32));
+        // imm12 form: hw2[11:0] = imm12 (in transfer units) — convert to BYTES.
+        // (The register form only encodes with U=0, so U=1 → always imm12.)
+        return Ok(ld(!load, size, signed, rt, rn, bb(hw2, 11, 0) as i32 << scale));
     }
     // U=0: register form (hw2[11:6] == 0) or mode nibble.
     if bb(hw2, 11, 6) == 0 {
@@ -739,7 +737,7 @@ fn decode_f8(w: u32) -> Result<Ins, DecodeErr> {
     let mode = bb(hw2, 11, 8);
     let imm8 = bb(hw2, 7, 0) as i32;
     let (p, uu, wb, t) = ((mode >> 2) & 1 == 1, (mode >> 1) & 1 == 1, mode & 1 == 1, mode == 0b1110);
-    let imm = if uu { imm8 } else { -imm8 };
+    let imm = if uu { imm8 << scale } else { -(imm8 << scale) }; // BYTES
     Ok(Ins::Ldst {
         store: !load, size, signed, user: t,
         rt, rn, rm: None, shift: Shift::Lsl,
