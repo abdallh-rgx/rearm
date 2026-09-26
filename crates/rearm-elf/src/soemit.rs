@@ -327,6 +327,7 @@ pub fn build_so(
         cmd.arg(format!("--soname={}", p.soname));
     }
     cmd.arg("--no-as-needed");
+    cmd.arg("-Bsymbolic");
     cmd.arg("-z").arg("now");
     cmd.arg(&lo).arg(&to).arg(&po);
     for sp in stub_paths.iter() {
