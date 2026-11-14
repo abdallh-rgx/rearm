@@ -249,7 +249,11 @@ pub fn build_so(
     let p = build_payload(elf, window, code_base)?;
 
     let dir = match keep_dir {
-        Some(d) => std::path::PathBuf::from(d),
+        Some(d) => {
+            let d = std::path::PathBuf::from(d);
+            std::fs::create_dir_all(&d).map_err(|e| e.to_string())?;
+            d
+        }
         None => {
             let d = std::env::temp_dir().join(format!("rearm-so-{}", std::process::id()));
             std::fs::create_dir_all(&d).map_err(|e| e.to_string())?;

@@ -463,7 +463,7 @@ def rsa_verify(openssl: str, spki_der: bytes, payload: bytes,
                signature: bytes) -> Tuple[bool, str]:
     """Verify an RSASSA-PKCS1-v1_5 SHA-256 signature with the given SPKI."""
     with tempfile.TemporaryDirectory() as td:
-        proc = run_openssl(openssl, ["pkey", "-pubin", "-outform", "PEM"],
+        proc = run_openssl(openssl, ["pkey", "-pubin", "-inform", "DER", "-outform", "PEM"],
                            input_bytes=spki_der)
         if proc.returncode != 0:
             return False, "openssl pkey: " + proc.stderr.decode("utf-8", "replace")

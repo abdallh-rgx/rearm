@@ -691,6 +691,245 @@ fn translate_pass(elf: &Elf32, dm: &DynMeta, farset: &[u32], window: u32) -> Res
         }
     }
 
+    // ---- linear-fill: recover code missed by recursive descent ----
+    // Computed jumps / opaque function pointers leave unvisited spans in
+    // exec sections.  Walk each section linearly; for each unvisited run,
+    // greedily decode as far as possible in BOTH modes from the run start
+    // and keep the mode that gets further (handles mixed Thumb/ARM without
+    // mapping symbols — e.g. libUE4).  Then translate the chosen mode over
+    // the run with the same rules as the main sweep.
+    {
+        let mut fill_seeded = 0usize;
+        for &(sec_start, sec_end, sec_off) in exec_secs.iter() {
+            let mut a = sec_start;
+            while a + 4 <= sec_end {
+                if visited.contains(&a) { a += 4; continue; }
+                let run_start = a;
+                let mut run_end = a;
+                while run_end + 4 <= sec_end && !visited.contains(&run_end) {
+                    run_end += 4;
+                }
+                let run_words = ((run_end - run_start) / 4) as usize;
+                if run_words >= 1 {
+                    let rel = (run_start - sec_start) as usize;
+                    let base_off = sec_off + rel;
+                    // Greedy sequential score: how many consecutive words
+                    // decode from run_start in each mode before first failure.
+                    let mut thumb_score = 0usize;
+                    let mut arm_score = 0usize;
+                    for i in 0..run_words.min(4096) {
+                        let o = base_off + i * 4;
+                        if o + 4 > elf.data.len() { break; }
+                        if thumb_score == i {
+                            let hw1 = u16::from_le_bytes([elf.data[o], elf.data[o + 1]]);
+                            let hw2 = u16::from_le_bytes([elf.data[o + 2], elf.data[o + 3]]);
+                            if decode_t32(hw1, hw2).is_ok() { thumb_score += 1; }
+                        }
+                        if arm_score == i {
+                            let w = u32::from_le_bytes([
+                                elf.data[o], elf.data[o + 1],
+                                elf.data[o + 2], elf.data[o + 3]]);
+                            if rearm_core::a32::decode::decode_a32(w).is_ok() { arm_score += 1; }
+                        }
+                        if thumb_score < i && arm_score < i { break; }
+                    }
+                    // Pick the longer run; ties prefer mode_at (anchor default).
+                    let default_thumb = mode_at(run_start);
+                    let thumb = if thumb_score > arm_score {
+                        true
+                    } else if arm_score > thumb_score {
+                        false
+                    } else {
+                        default_thumb
+                    };
+                    let score = if thumb { thumb_score } else { arm_score };
+                    // Seed anything that decodes at least one word — even
+                    // single-word holes between visited runs are real code.
+                    if score >= 1 {
+                        let mid = run_start + ((run_words as u32 / 2) * 4);
+                        for t in [run_start, mid] {
+                            if t + 4 <= sec_end && !visited.contains(&t) {
+                                seed(&mut queue, t, thumb);
+                                fill_seeded += 1;
+                            }
+                        }
+                    }
+                }
+                a = run_end.max(a + 4);
+            }
+        }
+        if fill_seeded > 0 {
+            eprintln!("[rearm] linear-fill: {} seed(s) from unvisited spans", fill_seeded);
+        }
+
+        // Drain fill seeds with the same translation rules as the main sweep.
+        while let Some((addr0, thumb0)) = queue.pop_front() {
+            if !visited.insert(addr0) { continue; }
+            let Some((sec_start, sec_end, sec_off)) = sec_of(addr0) else { continue };
+            let mut thumb = thumb0;
+            let mut a = addr0;
+            let mut it: Option<ItTracker> = None;
+            let mut steps = 0usize;
+            while a + 4 <= sec_end && steps < 500_000 {
+                if a != addr0 {
+                    if visited.contains(&a) { break; }
+                    if anchors.binary_search_by_key(&a, |(x, _)| *x).is_ok() { break; }
+                    if pools.contains(&a) { break; }
+                }
+                let rel = (a - sec_start) as usize;
+                let base_off = sec_off + rel;
+                if base_off + 4 > elf.data.len() { break; }
+                let start = out.len();
+
+                if thumb {
+                    let hw1 = u16::from_le_bytes([elf.data[base_off], elf.data[base_off + 1]]);
+                    let hw2 = if base_off + 4 <= sec_off + (sec_end - sec_start) as usize {
+                        u16::from_le_bytes([elf.data[base_off + 2], elf.data[base_off + 3]])
+                    } else { 0 };
+                    let Ok(tins) = decode_t32(hw1, hw2) else { stats.undefined_enc += 1; break; };
+                    let len = tins.len as u32;
+                    if let Ins::It { first_cond, mask } = &tins.ins {
+                        it = Some(ItTracker::new(*first_cond, *mask));
+                        stats.it_blocks += 1;
+                        map.push((reb(a), (out.len() as u32) * 4, 1));
+                        visited.insert(a);
+                        a += len;
+                        steps += 1;
+                        continue;
+                    }
+                    let _cond = match &mut it { Some(tr) => tr.next(), None => None };
+                    stats.t32_ins += 1;
+                    if let Ins::Unsupported { group } = &tins.ins {
+                        stats.unsupported += 1;
+                        stats.note_unsupported(&format!("fill-t32 {}", group));
+                        map.push((reb(a), (out.len() as u32) * 4, 1));
+                        out.e(TRAP);
+                        visited.insert(a);
+                        a += len;
+                        steps += 1;
+                        continue;
+                    }
+                    match translate_t32(&tins.ins, a, &mut out, None) {
+                        Ok(true) => { stats.translated += 1; }
+                        Ok(false) => {
+                            stats.unsupported += 1;
+                            stats.note_unsupported(&format!("{:?}", tins.ins).split('{').next().unwrap_or("?"));
+                            out.e(TRAP);
+                        }
+                        Err(e) => {
+                            stats.unsupported += 1;
+                            stats.note_unsupported(&format!("ERR {} @ fill-t32", e.0));
+                            out.e(TRAP);
+                        }
+                    }
+                    match &tins.ins {
+                        Ins::B { cond, off } => {
+                            let tgt = a.wrapping_add(4).wrapping_add(*off as u32);
+                            if in_exec(tgt & !1) && !visited.contains(&(tgt & !1)) {
+                                seed(&mut queue, tgt, mode_at(tgt & !1));
+                            }
+                            map.push((reb(a), (start as u32) * 4, 1));
+                            visited.insert(a);
+                            if *cond == Cond::Al { break; }
+                            a += len;
+                            steps += 1;
+                            continue;
+                        }
+                        Ins::Bl { off } => {
+                            let tgt = a.wrapping_add(4).wrapping_add(*off as u32);
+                            if in_exec(tgt & !1) && !visited.contains(&(tgt & !1)) {
+                                seed(&mut queue, tgt, mode_at(tgt & !1));
+                            }
+                        }
+                        Ins::Blx { off } => {
+                            let tgt = (a.wrapping_add(4) & !3u32).wrapping_add(*off as u32);
+                            if in_exec(tgt & !1) && !visited.contains(&(tgt & !1)) {
+                                seed(&mut queue, tgt, false);
+                            }
+                        }
+                        Ins::Cbz { off, .. } => {
+                            let tgt = a.wrapping_add(4).wrapping_add(*off as u32);
+                            if in_exec(tgt & !1) && !visited.contains(&(tgt & !1)) {
+                                seed(&mut queue, tgt, true);
+                            }
+                        }
+                        Ins::Bx { .. } => {
+                            map.push((reb(a), (start as u32) * 4, 1));
+                            visited.insert(a);
+                            break;
+                        }
+                        _ => {}
+                    }
+                    map.push((reb(a), (start as u32) * 4, 1));
+                    visited.insert(a);
+                    a += len;
+                } else {
+                    let w = u32::from_le_bytes([
+                        elf.data[base_off], elf.data[base_off + 1],
+                        elf.data[base_off + 2], elf.data[base_off + 3]]);
+                    let Ok(ins) = rearm_core::a32::decode::decode_a32(w) else {
+                        stats.undefined_enc += 1; break;
+                    };
+                    stats.a32_ins += 1;
+                    if let Ins::Unsupported { group } = &ins {
+                        // Decoder gap: trap and continue (mode already chosen
+                        // by the greedy probe — don't abandon the run).
+                        stats.unsupported += 1;
+                        stats.note_unsupported(&format!("fill-a32 {}", group));
+                        map.push((reb(a), (start as u32) * 4, 1));
+                        out.e(TRAP);
+                        visited.insert(a);
+                        a += 4;
+                        steps += 1;
+                        continue;
+                    }
+                    match rearm_core::translate::a32_to_a64::translate_a32(&ins, a, &mut out) {
+                        Ok(true) => {
+                            stats.translated += 1;
+                            record_branch_a32(&ins, a, &mut fixups, start, reb);
+                            match &ins {
+                                Ins::B { off, .. } | Ins::Bl { off } => {
+                                    let tgt = a.wrapping_add(8).wrapping_add(*off as u32);
+                                    if in_exec(tgt & !1) && !visited.contains(&(tgt & !1)) {
+                                        seed(&mut queue, tgt, false);
+                                    }
+                                }
+                                Ins::Blx { off } => {
+                                    let tgt = (a.wrapping_add(8) & !3u32).wrapping_add(*off as u32);
+                                    if in_exec(tgt & !1) && !visited.contains(&(tgt & !1)) {
+                                        seed(&mut queue, tgt, true);
+                                    }
+                                }
+                                _ => {}
+                            }
+                        }
+                        Ok(false) => {
+                            stats.unsupported += 1;
+                            stats.note_unsupported(&format!("{:?}", ins).split('{').next().unwrap_or("?"));
+                            out.e(TRAP);
+                        }
+                        Err(e) => {
+                            stats.unsupported += 1;
+                            stats.note_unsupported(&format!("ERR {} @ fill-a32", e.0));
+                            out.e(TRAP);
+                        }
+                    }
+                    map.push((reb(a), (start as u32) * 4, 1));
+                    visited.insert(a);
+                    let stop = match &ins {
+                        Ins::B { cond: Cond::Al, .. } | Ins::Bx { .. } => true,
+                        Ins::LdmStm { load: true, list, .. } if list.0.contains(&15) => true,
+                        Ins::Svc { .. } => true,
+                        _ => false,
+                    };
+                    if stop { break; }
+                    a += 4;
+                }
+                steps += 1;
+            }
+        }
+    }
+
     if std::env::var_os("REARM_DBG2").is_some() {
         let want = window.wrapping_add(0x2570); // compress2
         let mut hits = Vec::new();

@@ -22,7 +22,19 @@ use rearm_core::translate::t32_to_a64::{translate_t32, thumb_expand_imm};
 
 pub fn z3_path() -> String {
     std::env::var("REARM_Z3").unwrap_or_else(|_| {
-        format!("{}/bin/z3", std::env::var("HOME").unwrap_or_else(|_| "/home/z".into()))
+        // Prefer $HOME/bin/z3 (historical), then PATH lookup, then common locations.
+        let home_z3 = format!("{}/bin/z3", std::env::var("HOME").unwrap_or_else(|_| "/home/z".into()));
+        if std::path::Path::new(&home_z3).exists() { return home_z3; }
+        if let Ok(path) = std::env::var("PATH") {
+            for dir in path.split(':') {
+                let c = format!("{dir}/z3");
+                if std::path::Path::new(&c).exists() { return c; }
+            }
+        }
+        for c in ["/opt/homebrew/bin/z3", "/usr/local/bin/z3", "/usr/bin/z3"] {
+            if std::path::Path::new(c).exists() { return c.to_string(); }
+        }
+        home_z3
     })
 }
 
